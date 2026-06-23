@@ -1,5 +1,6 @@
 import { config, allowedUserIds } from "./config.js";
 import { buildBot } from "./bot.js";
+import { sessions } from "./session/manager.js";
 import { log } from "./logger.js";
 
 async function main(): Promise<void> {
@@ -24,19 +25,45 @@ async function main(): Promise<void> {
     { command: "cd", description: "Change working directory" },
     { command: "pwd", description: "Show current directory" },
     { command: "status", description: "Show session info" },
+    { command: "diff", description: "Review changes, commit or discard" },
+    { command: "commit", description: "Stage all changes and commit" },
+    { command: "usage", description: "Show cost & activity" },
     { command: "stop", description: "Abort the running request" },
     { command: "mode", description: "safe (approval) or auto" },
     { command: "help", description: "Show help" },
   ]);
 
-  process.once("SIGINT", () => {
-    log.info("SIGINT — shutting down");
-    bot.stop("SIGINT");
-  });
-  process.once("SIGTERM", () => {
-    log.info("SIGTERM — shutting down");
-    bot.stop("SIGTERM");
-  });
+  const shutdown = (signal: "SIGINT" | "SIGTERM") => {
+    log.info(`${signal} — shutting down`);
+
+    // Abort any in-flight turns so the SDK child processes (and the stdio
+    // pipes that keep the event loop alive) are released. Without this the
+    // process hangs and systemd ends up SIGKILLing it after TimeoutStopSec.
+    let aborted = 0;
+    for (const s of sessions.all()) {
+      if (s.busy && s.abort) {
+        s.abort.abort();
+        aborted++;
+      }
+    }
+    if (aborted) log.info("Aborted in-flight turns on shutdown", { count: aborted });
+
+    // Flush any debounced session/usage state before we go.
+    sessions.flush();
+
+    bot.stop(signal);
+
+    // Backstop: if some handle still pins the loop, exit anyway rather than
+    // wait for the service-manager kill. unref so this timer itself can't
+    // hold the process open.
+    setTimeout(() => {
+      log.info("Forcing exit");
+      process.exit(0);
+    }, 3000).unref();
+  };
+
+  process.once("SIGINT", () => shutdown("SIGINT"));
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
 
   log.info("Bot starting (long polling)…");
   // launch() resolves only once polling stops; log just before it begins.

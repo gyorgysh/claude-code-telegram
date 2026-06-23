@@ -9,8 +9,10 @@ import { TelegramStreamer, type Streamer } from "./telegram/streamer.js";
 import { DraftStreamer } from "./telegram/draftStreamer.js";
 import { RichDraftStreamer } from "./telegram/richDraftStreamer.js";
 import { PermissionManager } from "./telegram/permissions.js";
-import { downloadIncomingFile } from "./telegram/files.js";
+import { downloadIncomingFile, isViewableImage, readImageInput } from "./telegram/files.js";
+import { isGitCallback, resolveGitCallback } from "./telegram/gitFlow.js";
 import { escapeHtml } from "./telegram/formatting.js";
+import type { ImageInput } from "./claude/runner.js";
 import { sessions } from "./session/manager.js";
 import { log, preview } from "./logger.js";
 
@@ -28,6 +30,11 @@ export function buildBot(): Telegraf {
     if (data && permissions.isApprovalCallback(data)) {
       log.debug("Approval button pressed", { chatId: ctx.chat?.id, data });
       const toast = await permissions.resolve(data);
+      await ctx.answerCbQuery(toast.slice(0, 200)).catch(() => {});
+    } else if (data && isGitCallback(data) && ctx.chat) {
+      log.debug("Git button pressed", { chatId: ctx.chat.id, data });
+      const messageId = ctx.callbackQuery.message?.message_id;
+      const toast = await resolveGitCallback(ctx.telegram, ctx.chat.id, data, messageId);
       await ctx.answerCbQuery(toast.slice(0, 200)).catch(() => {});
     } else {
       await ctx.answerCbQuery().catch(() => {});
@@ -50,9 +57,11 @@ export function buildBot(): Telegraf {
       const prompt = caption
         ? `${caption}\n\n(The user uploaded a file, saved at: ${path})`
         : `The user uploaded a file, saved at: ${path}. Take a look.`;
+      // Image documents are shown to the model inline; everything else by path.
+      const images = isViewableImage(path) ? await imageInputs(path) : undefined;
       // Fire-and-forget: must NOT block the polling loop, or approval button
       // presses can never be fetched (Telegraf awaits handlers before getUpdates).
-      void runUserPrompt(permissions, ctx.chat.id, prompt, ctx.telegram);
+      void runUserPrompt(permissions, ctx.chat.id, prompt, ctx.telegram, images);
     } catch (err) {
       log.error("File download failed", { chatId: ctx.chat.id, error: errText(err) });
       await ctx.reply(`⚠️ Could not download file: ${errText(err)}`);
@@ -73,9 +82,9 @@ export function buildBot(): Telegraf {
       log.info("Photo received", { chatId: ctx.chat.id, path });
       const caption = ctx.message.caption?.trim();
       const prompt = caption
-        ? `${caption}\n\n(The user sent an image, saved at: ${path})`
-        : `The user sent an image, saved at: ${path}. Take a look.`;
-      void runUserPrompt(permissions, ctx.chat.id, prompt, ctx.telegram);
+        ? `${caption}\n\n(The user sent an image, also saved at: ${path})`
+        : `The user sent this image (also saved at: ${path}).`;
+      void runUserPrompt(permissions, ctx.chat.id, prompt, ctx.telegram, await imageInputs(path));
     } catch (err) {
       log.error("Photo download failed", { chatId: ctx.chat.id, error: errText(err) });
       await ctx.reply(`⚠️ Could not download image: ${errText(err)}`);
@@ -107,8 +116,9 @@ function runUserPrompt(
   chatId: number,
   prompt: string,
   tg: Telegraf["telegram"],
+  images?: ImageInput[],
 ): void {
-  handleUserPrompt(permissions, chatId, prompt, tg).catch((err) => {
+  handleUserPrompt(permissions, chatId, prompt, tg, images).catch((err) => {
     const session = sessions.get(chatId);
     session.busy = false;
     session.abort = undefined;
@@ -123,6 +133,7 @@ async function handleUserPrompt(
   chatId: number,
   prompt: string,
   tg: Telegraf["telegram"],
+  images?: ImageInput[],
 ): Promise<void> {
   const session = sessions.get(chatId);
   if (session.busy) {
@@ -188,6 +199,7 @@ async function handleUserPrompt(
   try {
     const res = await runTurn({
       prompt,
+      images,
       cwd: session.cwd,
       resume: session.sessionId,
       permissionMode: session.mode === "auto" ? "bypassPermissions" : "default",
@@ -207,6 +219,7 @@ async function handleUserPrompt(
 
     // Timing is still tracked (logged below), just no longer shown in the reply.
     await streamer.finalize();
+    sessions.recordUsage(chatId, res.costUsd ?? 0, res.durationMs ?? 0);
     log.info("Turn complete", {
       chatId,
       ms: Date.now() - startedAt,
@@ -229,6 +242,17 @@ async function handleUserPrompt(
     clearInterval(typing);
     session.busy = false;
     session.abort = undefined;
+  }
+}
+
+/** Read a saved image into the inline-vision payload; undefined if unreadable. */
+async function imageInputs(path: string): Promise<ImageInput[] | undefined> {
+  try {
+    const img = await readImageInput(path);
+    return img ? [img] : undefined;
+  } catch (err) {
+    log.error("Failed to read image for vision", { path, error: errText(err) });
+    return undefined;
   }
 }
 

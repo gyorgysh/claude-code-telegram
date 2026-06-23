@@ -25,7 +25,7 @@ ESM throughout (`"type": "module"`), so **relative imports must use the `.js` ex
 
 Request lifecycle for one user message (`handleUserPrompt` in `src/bot.ts`):
 1. `auth.ts` middleware drops anyone not in `allowedUserIds`.
-2. A per-chat `Session` (`src/session/manager.ts`) holds `sessionId` (Claude resume token), `cwd`, `busy` flag, `abort` controller, `mode`, and the per-session "always allow" tool set. Sessions are in-memory only — restarting the process loses all state.
+2. A per-chat `Session` (`src/session/manager.ts`) holds `sessionId` (Claude resume token), `cwd`, `busy` flag, `abort` controller, `mode`, the per-session "always allow" tool set, and `usage` counters. The durable fields (everything but `busy`/`abort`) are persisted to `STATE_FILE` (JSON, default `data/state.json`) via `src/session/store.ts` — loaded on boot, written debounced on mutation, and flushed on shutdown — so sessions survive a restart.
 3. A placeholder message is sent, wrapped in a `TelegramStreamer`.
 4. `runTurn` (`src/claude/runner.ts`) calls the SDK `query()` and iterates its async message stream, fanning events to callbacks: `onText` (streaming deltas), `onToolUse` (status line), `onSessionId` (capture resume token), and the final `result` (cost/duration).
 5. Streamer edits the message in place (throttled) and the loop ends; `busy`/`abort` are cleared in `finally`.
@@ -40,7 +40,9 @@ Key cross-cutting pieces:
   - The two draft backends share `baseDraftStreamer.ts` (throttled flush + 20s keepalive so the 30s ephemeral preview doesn't lapse; stable non-zero `draft_id` so updates animate). Drafts are **private-chat only** and **ephemeral** — nothing persists until the `finalize` send. `send.ts` holds the shared final-send (markdown→HTML, 4096 split, plain-text fallback on "can't parse entities"); `formatting.ts` does the markdown→HTML conversion used by the non-rich paths.
   - Bot API 9.3/10.1 methods have no telegraf wrapper (4.16.3), so they're called raw via `tg.callApi(<method>, …)` (typed loosely as `RawApi`).
 - **MCP send_file** (`src/mcp/sendFile.ts`): an in-process MCP server giving Claude a `send_file` tool to push files back to the chat. It's in `AUTO_ALLOWED_TOOLS` because it's a deliberate user-facing action.
-- **Incoming files** (`src/telegram/files.ts`): uploaded docs/photos are downloaded into the session `cwd`, then a synthetic prompt tells Claude where the file landed.
+- **Incoming files** (`src/telegram/files.ts`): uploaded docs/photos are downloaded into the session `cwd`, then a synthetic prompt tells Claude where the file landed. Images (`isViewableImage`) are additionally read back as base64 (`readImageInput`) and passed to the runner as inline vision content blocks — `runTurn` switches from a string prompt to a one-shot streaming-input `SDKUserMessage` (`imagePrompt` in `runner.ts`) when `images` are present, so the model sees the picture directly instead of via a `Read` round-trip.
+- **Git review flow** (`src/git.ts` + `src/telegram/gitFlow.ts`): `/diff` renders the working-tree status+diff (sent as a `.diff` document when large) with inline Commit/Discard buttons; `/commit <msg>` stages and commits. Button presses are routed through the shared `callback_query` handler in `bot.ts` (`isGitCallback`/`resolveGitCallback`), namespaced `git:<action>`; Discard requires a second confirm press and only touches tracked files. All git calls go through `execFile` (no shell) and never throw — failures come back as `{ ok: false }`.
+- **Usage tracking**: `runTurn`'s `result` cost/duration is folded into per-session lifetime + per-day buckets (`sessions.recordUsage`, persisted); `/usage` reports today + lifetime for the chat.
 
 The SDK is configured with `settingSources: ["user", "project", "local"]` so the driven agent loads real CLAUDE.md / settings from whatever `cwd` it runs in — i.e. this bot behaves like a genuine Claude Code session in the target project, not a sandbox.
 

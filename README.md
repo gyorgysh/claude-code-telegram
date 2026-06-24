@@ -17,14 +17,13 @@ The usual loop for touching a server is: open a terminal, SSH in, run something,
 | ![Inline approval buttons for a Write](images/tg-claude-4.webp) | ![A denied request, answered inline instead](images/tg-claude-5.webp) |
 | Every non-read-only tool call pauses for **✅ Approve · ❌ Deny · ♾️ Always allow**. | Deny it and Claude adapts — here handing back the script inline instead of writing the file. |
 
-![A full task: writing and running a script, with formatted code output](images/tg-claude-3.webp)
-
-*Asking for a script, approving the write, and getting formatted code with notes back — a full task end to end.*
-
 ## Features
 
 - **Live streaming, the native way** — uses Telegram's streaming APIs: **Rich Messages** (Bot API 10.1) and **message drafts** (Bot API 9.3) so replies stream in as an animated preview and land as cleanly formatted, structured messages. A legacy edit-in-place mode is available as a fallback. See [Streaming modes](#streaming-modes).
-- **Management panel (optional)** — a small embedded web dashboard for the operator: live **system health** (CPU/per-core, memory, swap, disk usage & I/O), a **sub-agent workers** board (named autonomous agents that run on demand or a schedule, with live streaming output and run history), a **Trello-style task board**, a **skills** library + on-disk `.claude` file editor, an editor for the operator playbook, plus sessions, schedules and usage. Off by default; token-gated; light/dark. See [Management panel](#management-panel).
+- **Management panel (optional)** — a full embedded web dashboard with a left-sidebar layout: **chat with the agent** in the browser, live **system health**, a **model-backend status** page, **sub-agent workers**, a **task board** (with delegate-to-agent), a **skills** library, **durable memory**, a **secret vault**, **heartbeat** monitoring, schedules, sessions, usage, live logs and more. Off by default; token-gated; light / dark / hacker themes. See [Management panel](#management-panel).
+- **Durable memory** — the agent remembers durable facts across conversations and recalls the relevant ones into each turn automatically (own `memory_*` tools; editable in the panel). It can also distil reusable workflows into the **skills** library itself.
+- **Proactive monitoring** — an optional **heartbeat** watches host health (CPU/mem/swap/disk) and stalled task cards and pings you on Telegram when something's noteworthy — deterministic alerts, or an autonomous turn that investigates and acts.
+- **Secret vault** — AES-256-GCM encrypted secrets with the master key in the macOS Keychain (file fallback on Linux); reference them as `vault:<id>` so provider tokens never sit in plaintext.
 - **Permission-first** — nothing runs without your say-so. Read-only tools (Read/Glob/Grep…) run automatically; anything that touches the system (`Bash`/`Write`/`Edit`…) pauses for **✅ Approve · ❌ Deny · ♾️ Always allow** inline buttons. "Always allow" whitelists that tool for the rest of the session; approvals auto-deny on timeout so nothing hangs.
 - **A capable, on-task personality** — smart, resourceful, and concise for a phone screen, with the occasional joke but work first, fun later. Tunable in `src/prompt.ts`.
 - **Operator playbook (`work.md`)** — define how recurring jobs should be done ("restart Apache", crontab edits, deploys, schedules) once, and the bot follows your conventions every time. See [work.md](#workmd--your-operator-playbook).
@@ -133,6 +132,8 @@ scripts/
 | `PANEL_TOKEN` | when panel on | Shared secret required on every panel request/WS — startup fails if the panel is enabled without it |
 | `PANEL_HOST` | no | Bind address (default `127.0.0.1` — loopback) |
 | `PANEL_PORT` | no | Port (default `8787`) |
+| `PANEL_CHAT_ENABLED` | no | `false` to hide the panel Chat view and disable its endpoints (default `true`) |
+| `PANEL_CHAT_BYPASS` | no | `true` to unlock the Chat's auto (no-approval) mode; otherwise risky tools prompt for approval in the panel (default `false`) |
 
 ### Streaming modes
 
@@ -179,18 +180,25 @@ npm start
 #      panel HMR:   npm run panel:dev (Vite dev server with hot reload, proxies the API)
 ```
 
-Open `http://127.0.0.1:8787` and unlock with your `PANEL_TOKEN`. What's inside:
+Open `http://127.0.0.1:8787` and unlock with your `PANEL_TOKEN`. It's a left-sidebar dashboard grouped into **Monitor**, **Operate**, **Configure** and **Others**, with light / dark / hacker themes and a URL per view (so a refresh reloads the same page). What's inside:
 
+- **Chat** — talk to the agent right in the browser. It's a dedicated, persistent Claude session (separate from Telegram) that streams live; risky tools pause for **Approve / Deny** in the panel, unless you unlock an auto (no-prompt) mode via `PANEL_CHAT_BYPASS`. Disable the whole view with `PANEL_CHAT_ENABLED=false`.
 - **System** — live CPU (overall + per-core), memory, swap, disk usage and disk I/O, pushed over a WebSocket.
+- **Status** — the public Claude service status (no API key needed) plus reachability, auth and model lists for each configured provider and any running local backend (LM Studio / Ollama).
 - **Agents** — configure both the **main agent** and **sub-agent workers** on one page:
   - **Main agent** (drives your Telegram chats): switch its **model** (Opus/Sonnet/Haiku or a local model) and **provider** at runtime — changes apply on the next message. Plus **New context** (abort any running turn and clear conversation history) and **Restart service** (full respawn, when running under systemd/launchd).
   - **Workers** — persisted **sub-agents**: name, working directory, task prompt, model, optional persona/skill, and an optional schedule (`30m`/`2h`/`HH:MM`). Run on demand or on the timer; runs are **concurrent** and autonomous (no approval prompts), with **live streaming output** and per-worker run history (status, cost, duration). Picking Haiku makes cheap background agents practical.
   - **Local models** — define a **provider** (an Anthropic-compatible base URL + auth token, e.g. **LM Studio** `http://localhost:1234` or **Ollama**) with one-click presets, and **fetch its model list** with a button. Point the main agent or any worker at it with a free-text model name (`qwen/qwen3.6-35b-a3b`, …), so you can mix cloud and local freely. (You can also run the whole bot on a local model from `.env` via `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`.)
-- **Tasks** — a Trello-style board (Backlog / In progress / Done) with drag-and-drop.
-- **Skills** — a reusable **prompt library**, plus a scoped editor for the on-disk `.claude/{agents,skills,commands}/*.md` and `CLAUDE.md` files the agent loads from your working dirs.
+- **Tasks** — a board (Backlog / In progress / Done) with drag-and-drop, priority, WIP limits, card aging, and **delegate-to-agent**: hand a card to an autonomous run that streams progress and moves it to Done (and can break it into subtasks).
+- **Schedules** — create, view and delete timed autonomous prompts (the same jobs as `/schedule`).
+- **Heartbeat** — proactive monitoring: pick **off / alert / active**, set health thresholds and the stalled-card window, see recent alerts, or run a check now.
+- **Skills** — a reusable **prompt library** (the agent can add to it itself), plus a scoped editor for the on-disk `.claude/{agents,skills,commands}/*.md` and `CLAUDE.md` files the agent loads from your working dirs.
+- **Memory** — browse, search, edit and delete the durable facts the agent has learned.
+- **Vault** — AES-256-GCM encrypted secrets; reveal/edit, and **scan & import** to move plaintext provider tokens onto `vault:<id>` references.
+- **Connectors** — placeholders for Gmail / Google Calendar / Drive / Notion (registration surface + vault-backed credential slot; not wired up yet).
 - **Prompt** — view the built-in personality and edit the operator playbook (`work.md`) live.
 - **Logs** — a live tail of the bot's activity (turns, tool calls, errors, worker lifecycle), streamed over the WebSocket with level filters. (The agent runs headless via the SDK — there's no terminal to attach to — so this is the "remote view".)
-- **Sessions / Schedules / Usage** — read-only views of the bot's live state.
+- **Sessions / Usage / Updates** — live session state, cost/usage charts, and current version.
 
 Every request and WebSocket handshake requires the token (sent as a `Bearer` header / `?token=`), and write actions are recorded to an audit log (`data/audit.jsonl`). Keep the bind on loopback and reach it remotely only behind a reverse proxy or a private network (e.g. Tailscale) — never expose it raw.
 
@@ -258,16 +266,28 @@ src/
     events.ts         narrow type guards over SDK messages
   core/               telegraf-free layer shared by the bot and the panel
     health.ts         system-health snapshot (CPU/mem/swap/disk/IO)
-    snapshot.ts       read-only session/schedule/usage views
+    status.ts         public Claude status + provider/local-backend probes
+    snapshot.ts       read-only session/usage views
+    chat.ts           the panel's dedicated Claude chat session
+    memory.ts         durable fact store (memory.json) recalled into each turn
+    vault.ts          AES-256-GCM secrets (keychain/file master key)
+    heartbeat.ts      proactive host/kanban monitoring loop
+    connectors.ts     external-connector catalog (placeholders)
     playbook.ts       read/write the operator playbook (work.md)
     skills.ts         reusable prompt library (skills.json)
     claudeFiles.ts    scoped browser/editor for on-disk .claude/* + CLAUDE.md
-    tasks.ts          Trello task board store (tasks.json)
+    tasks.ts          task board store (tasks.json) · taskRunner.ts  delegate-to-agent
     workers.ts        persisted sub-agents: registry + concurrent run manager
+    providers.ts      local/proxy model-endpoint presets · providerModels.ts  model listing
+    mainSettings.ts   main-agent model/provider override · agentControl.ts  service restart
     jsonStore.ts      atomic JSON store helper · audit.ts  append-only audit log
   panel/              embedded management panel (optional, PANEL_ENABLED)
     server.ts         in-process Fastify: token auth, REST API, static SPA
-    hub.ts            WebSocket fan-out (worker run events + health push)
+    hub.ts            WebSocket fan-out (worker/chat/task events + health/log push)
+  mcp/
+    sendFile.ts       send a file back to the Telegram chat
+    memory.ts         memory_write/search/list · tasks.ts  task_create/list/update
+    skills.ts         skill_save/patch/list (the "skill factory")
   telegram/
     streamer.ts          edit-in-place streaming backend ("edit")
     baseDraftStreamer.ts  shared draft machinery (throttle + keepalive)
@@ -281,7 +301,6 @@ src/
     voice.ts           voice-note transcription dispatcher (openai | vosk)
     vosk.ts            local offline transcription (ffmpeg decode + Vosk)
     files.ts           incoming file downloads + image decoding for vision
-  mcp/sendFile.ts     in-process MCP tool so Claude can send files back
 
 panel/                management-panel frontend (React + Vite + Tailwind),
                       built to panel/dist and served by src/panel/server.ts

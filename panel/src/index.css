@@ -39,12 +39,12 @@
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
 }
 
-/* Light theme (default) — warm paper, indigo-violet accent. */
+/* Light theme (default) — clean white, indigo-violet accent. */
 :root {
-  --page: #fbfcf7;
+  --page: #f8f9fb;
   --surface: #ffffff;
-  --surface-2: #f3f2ec;
-  --line: #e7e5da;
+  --surface-2: #f1f3f5;
+  --line: #e4e7eb;
   --input: #ffffff;
   --fg: #18181b;
   --fg-muted: #52525b;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { api, AuthError, type Provider, type Worker, type WorkerRun } from "../api.ts";
 import { useWorkerEvents, type LiveRun } from "../lib/useWorkerEvents.ts";
 import { Badge, Button, Card, Empty, Input, Label, TextArea } from "./ui.tsx";
@@ -290,6 +290,22 @@ function WorkerForm({
   const [form, setForm] = useState<Form>(initial);
   const [enabled, setEnabled] = useState(initialEnabled);
   const [busy, setBusy] = useState(false);
+  const [fetched, setFetched] = useState<string[]>([]);
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const listId = useId();
+
+  const fetchModels = async () => {
+    if (!form.providerId) return;
+    setFetchingModels(true);
+    try {
+      const r = await api.providerModels(form.providerId);
+      setFetched(r.models);
+    } catch (e) {
+      if (e instanceof AuthError) onAuthError();
+    } finally {
+      setFetchingModels(false);
+    }
+  };
 
   const submit = async () => {
     setBusy(true);
@@ -353,17 +369,27 @@ function WorkerForm({
         </div>
         <div>
           <Label>Model</Label>
-          <Input
-            list="cct-model-suggestions"
-            value={form.model}
-            onChange={(e) => setForm({ ...form, model: e.target.value })}
-            placeholder={form.providerId ? "local model name" : "default (CLAUDE_MODEL)"}
-          />
-          <datalist id="cct-model-suggestions">
-            {MODEL_SUGGESTIONS.map((m) => (
+          <div className="flex gap-2">
+            <Input
+              list={listId}
+              value={form.model}
+              onChange={(e) => setForm({ ...form, model: e.target.value })}
+              placeholder={form.providerId ? "local model name" : "default (CLAUDE_MODEL)"}
+            />
+            {form.providerId && (
+              <Button onClick={fetchModels} disabled={fetchingModels} className="shrink-0">
+                {fetchingModels ? "…" : "Fetch"}
+              </Button>
+            )}
+          </div>
+          <datalist id={listId}>
+            {[...new Set([...(form.providerId ? fetched : MODEL_SUGGESTIONS), ...fetched])].map((m) => (
               <option key={m} value={m} />
             ))}
           </datalist>
+          {form.providerId && fetched.length > 0 && (
+            <p className="mt-1 text-xs text-fg-faint">{fetched.length} models available</p>
+          )}
         </div>
         <div>
           <Label>Skill (optional)</Label>
@@ -416,12 +442,33 @@ function WorkerForm({
 
 const blankProvider = { name: "", baseUrl: "", authToken: "" };
 
+// Common local endpoints, one click to prefill. Auth tokens are placeholders
+// (LM Studio / Ollama don't check them locally).
+const PROVIDER_PRESETS = [
+  { name: "LM Studio", baseUrl: "http://localhost:1234", authToken: "lmstudio" },
+  { name: "Ollama", baseUrl: "http://localhost:11434", authToken: "ollama" },
+];
+
 /** Collapsible manager for local/proxy model endpoints (LM Studio, Ollama, …). */
 function Providers({ onChange, onAuthError }: { onChange: () => void; onAuthError: () => void }) {
   const [open, setOpen] = useState(false);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [form, setForm] = useState(blankProvider);
+  const [probe, setProbe] = useState<{ busy: boolean; models?: string[]; error?: string }>({
+    busy: false,
+  });
+
+  const fetchModels = async () => {
+    setProbe({ busy: true });
+    try {
+      const r = await api.fetchModels(form.baseUrl, form.authToken);
+      setProbe({ busy: false, models: r.models });
+    } catch (e) {
+      if (e instanceof AuthError) return onAuthError();
+      setProbe({ busy: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  };
 
   const load = () =>
     api
@@ -468,6 +515,20 @@ function Providers({ onChange, onAuthError }: { onChange: () => void; onAuthErro
         <div className="space-y-3">
           {editing ? (
             <div className="space-y-3 rounded-lg border border-line bg-input p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-fg-dim">Prefill:</span>
+                {PROVIDER_PRESETS.map((p) => (
+                  <Button
+                    key={p.name}
+                    onClick={() => {
+                      setForm(p);
+                      setProbe({ busy: false });
+                    }}
+                  >
+                    {p.name}
+                  </Button>
+                ))}
+              </div>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div>
                   <Label>Name</Label>
@@ -494,12 +555,22 @@ function Providers({ onChange, onAuthError }: { onChange: () => void; onAuthErro
                   />
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button variant="primary" onClick={save} disabled={!form.name.trim() || !form.baseUrl.trim()}>
                   Save
                 </Button>
+                <Button onClick={fetchModels} disabled={!form.baseUrl.trim() || probe.busy}>
+                  {probe.busy ? "Fetching…" : "Test / fetch models"}
+                </Button>
                 <Button onClick={() => setEditing(null)}>Cancel</Button>
               </div>
+              {probe.error && <p className="text-xs text-red-400">{probe.error}</p>}
+              {probe.models && (
+                <p className="text-xs text-emerald-400">
+                  ✓ {probe.models.length} model{probe.models.length === 1 ? "" : "s"}:{" "}
+                  <span className="font-mono text-fg-dim">{probe.models.join(", ")}</span>
+                </p>
+              )}
             </div>
           ) : (
             <Button

@@ -232,4 +232,7 @@ export const api = {
   updateProvider: (id: string, p: Partial<Provider>) =>
     req<Provider>("PUT", `/api/providers/${id}`, p),
   deleteProvider: (id: string) => req<{ ok: boolean }>("DELETE", `/api/providers/${id}`),
+  fetchModels: (baseUrl: string, authToken: string) =>
+    req<{ models: string[] }>("POST", "/api/providers/models", { baseUrl, authToken }),
+  providerModels: (id: string) => get<{ models: string[] }>(`/api/providers/${id}/models`),
 };

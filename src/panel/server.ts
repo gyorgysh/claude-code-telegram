@@ -22,10 +22,12 @@ import {
 import { workers, describeWorkerSchedule, type Worker } from "../core/workers.js";
 import {
   listProviders,
+  getProvider,
   createProvider,
   updateProvider,
   deleteProvider,
 } from "../core/providers.js";
+import { fetchProviderModels } from "../core/providerModels.js";
 import { recentAudit } from "../core/audit.js";
 import { PanelHub } from "./hub.js";
 
@@ -225,6 +227,26 @@ function registerApi(app: FastifyInstance): void {
 
   // --- model providers (local LM Studio/Ollama, proxies) ---
   app.get("/api/providers", async () => ({ providers: listProviders() }));
+  // Fetch the model list for an unsaved endpoint (provider form).
+  app.post("/api/providers/models", async (req, reply) => {
+    const { baseUrl, authToken } = (req.body ?? {}) as { baseUrl?: string; authToken?: string };
+    if (!baseUrl) return reply.code(400).send({ error: "baseUrl required" });
+    try {
+      return { models: await fetchProviderModels(baseUrl, authToken) };
+    } catch (err) {
+      return reply.code(502).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+  // Fetch the model list for a saved provider (worker form).
+  app.get("/api/providers/:id/models", async (req, reply) => {
+    const p = getProvider((req.params as { id: string }).id);
+    if (!p) return reply.code(404).send({ error: "not found" });
+    try {
+      return { models: await fetchProviderModels(p.baseUrl, p.authToken) };
+    } catch (err) {
+      return reply.code(502).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
   app.post("/api/providers", async (req) => createProvider(req.body as never));
   app.put("/api/providers/:id", async (req, reply) => {
     const updated = updateProvider((req.params as { id: string }).id, req.body as never);

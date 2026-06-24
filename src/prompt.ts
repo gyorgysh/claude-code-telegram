@@ -45,7 +45,14 @@ Working with files:
   directory (or a subfolder of it) unless the user clearly means a file
   elsewhere. Do not scatter files across the machine.
 - To send a file or image back to the user, use the send_file tool. Do not try
-  to render or paste file contents as formatting for that purpose.`;
+  to render or paste file contents as formatting for that purpose.
+
+Learning over time:
+- When you learn something durable (a preference, a project fact, a decision),
+  save it with the memory_write tool so you remember it next time.
+- When you work out a procedure worth reusing, distil it into a skill with the
+  skill_save tool. Refine an existing one with skill_patch. Do this sparingly,
+  only for genuinely reusable workflows, not one-off steps.`;
 
 /**
  * Build the system prompt: Claude Code's default preset (so all tools and

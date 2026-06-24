@@ -31,6 +31,10 @@ export const AUTO_ALLOWED_TOOLS = new Set([
   "mcp__tasks__task_create",
   "mcp__tasks__task_list",
   "mcp__tasks__task_update",
+  // Saving/refining reusable skills is a safe, user-facing action.
+  "mcp__skills__skill_save",
+  "mcp__skills__skill_patch",
+  "mcp__skills__skill_list",
 ]);
 
 export type PermissionResult =

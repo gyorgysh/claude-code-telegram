@@ -3,6 +3,7 @@ import { config } from "../config.js";
 import { runTurn } from "../claude/runner.js";
 import { memoryMcp } from "../mcp/memory.js";
 import { tasksMcp } from "../mcp/tasks.js";
+import { skillsMcp } from "../mcp/skills.js";
 import { getTask, setDelegate, updateTask } from "./tasks.js";
 import { audit } from "./audit.js";
 import { log } from "../logger.js";
@@ -78,7 +79,7 @@ export class TaskDelegator {
         cwd: config.WORKDIR,
         permissionMode: "bypassPermissions",
         abortController: abort,
-        mcpServers: { memory: memoryMcp, tasks: tasksMcp },
+        mcpServers: { memory: memoryMcp, tasks: tasksMcp, skills: skillsMcp },
         canUseTool: async (_n, input) => ({ behavior: "allow", updatedInput: input }),
         onText: (d) => {
           output = (output + d).slice(-OUTPUT_CAP);

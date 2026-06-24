@@ -1,7 +1,9 @@
-import { useState } from "react";
-import { clearToken, getToken } from "./api.ts";
+import { useEffect, useRef, useState } from "react";
+import { api, clearToken, getToken } from "./api.ts";
 import { useTheme } from "./lib/useTheme.ts";
 import { Login } from "./components/Login.tsx";
+import { Sidebar, tabLabel, type Tab } from "./components/Sidebar.tsx";
+import { ChatView } from "./components/Chat.tsx";
 import { HealthView } from "./components/Health.tsx";
 import { SessionsView } from "./components/Sessions.tsx";
 import { SchedulesView } from "./components/Schedules.tsx";
@@ -12,33 +14,41 @@ import { TasksView } from "./components/Tasks.tsx";
 import { WorkersView } from "./components/Workers.tsx";
 import { LogsView } from "./components/Logs.tsx";
 
-type Tab =
-  | "health"
-  | "workers"
-  | "tasks"
-  | "skills"
-  | "prompt"
-  | "logs"
-  | "sessions"
-  | "schedules"
-  | "usage";
-
-const TABS: Array<{ id: Tab; label: string; icon: string }> = [
-  { id: "health", label: "System", icon: "▦" },
-  { id: "workers", label: "Agents", icon: "◈" },
-  { id: "tasks", label: "Tasks", icon: "▤" },
-  { id: "skills", label: "Skills", icon: "✦" },
-  { id: "prompt", label: "Prompt", icon: "❝" },
-  { id: "logs", label: "Logs", icon: "≣" },
-  { id: "sessions", label: "Sessions", icon: "◇" },
-  { id: "schedules", label: "Schedules", icon: "◷" },
-  { id: "usage", label: "Usage", icon: "↗" },
-];
-
 export function App() {
   const [authed, setAuthed] = useState(Boolean(getToken()));
   const [tab, setTab] = useState<Tab>("health");
-  const { theme, toggle } = useTheme();
+  const [drawer, setDrawer] = useState(false);
+  const [chatEnabled, setChatEnabled] = useState(true);
+  const { theme, toggle, set } = useTheme();
+
+  // Learn which optional features are on (chat can be disabled via env).
+  useEffect(() => {
+    if (!authed) return;
+    api.me().then((m) => setChatEnabled(m.chatEnabled)).catch(() => {});
+  }, [authed]);
+
+  // Don't strand the user on a hidden tab.
+  useEffect(() => {
+    if (!chatEnabled && tab === "chat") setTab("health");
+  }, [chatEnabled, tab]);
+
+  // Hidden easter egg: flipping the light/dark theme 9 times unlocks (and the
+  // next flip leaves) the matrix theme.
+  const flips = useRef(0);
+  const onToggleTheme = () => {
+    if (theme === "matrix") {
+      flips.current = 0;
+      set("dark");
+      return;
+    }
+    flips.current += 1;
+    if (flips.current >= 9) {
+      flips.current = 0;
+      set("matrix");
+      return;
+    }
+    toggle();
+  };
 
   const onAuthError = () => {
     clearToken();
@@ -47,81 +57,100 @@ export function App() {
 
   if (!authed) return <Login onAuthed={() => setAuthed(true)} />;
 
+  const select = (t: Tab) => {
+    setTab(t);
+    setDrawer(false);
+  };
+
   return (
-    <div className="mx-auto flex min-h-full max-w-5xl flex-col px-4 py-5">
-      <header className="mb-5 flex items-center justify-between">
-        <div>
-          <h1 className="text-base font-semibold text-fg">Claude Code · Control</h1>
-          <p className="text-xs text-fg-faint">embedded management panel</p>
+    <div className="flex min-h-full">
+      {/* Desktop / tablet sidebar — icon rail on md, full on lg. */}
+      <aside className="sticky top-0 hidden h-screen w-16 shrink-0 border-r border-line md:block lg:w-60">
+        <Sidebar
+          tab={tab}
+          onSelect={select}
+          theme={theme}
+          onToggleTheme={onToggleTheme}
+          onSignOut={onAuthError}
+          chatEnabled={chatEnabled}
+        />
+      </aside>
+
+      {/* Mobile drawer */}
+      {drawer && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setDrawer(false)}
+          />
+          <aside className="absolute left-0 top-0 h-full w-64 border-r border-line shadow-xl">
+            <Sidebar
+              tab={tab}
+              onSelect={select}
+              theme={theme}
+              onToggleTheme={onToggleTheme}
+              onSignOut={onAuthError}
+              chatEnabled={chatEnabled}
+              expanded
+            />
+          </aside>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={toggle}
-            aria-label="Toggle theme"
-            title={theme === "dark" ? "Switch to light" : "Switch to dark"}
-            className="rounded-lg border border-line px-2.5 py-1.5 text-sm text-fg-muted hover:bg-surface-2"
-          >
-            {theme === "dark" ? "☀" : "☾"}
-          </button>
-          <button
-            onClick={onAuthError}
-            className="rounded-lg border border-line px-3 py-1.5 text-xs text-fg-muted hover:bg-surface-2"
-          >
-            Sign out
-          </button>
-        </div>
-      </header>
+      )}
 
-      <nav className="mb-5 flex flex-wrap gap-1 rounded-xl border border-line bg-surface p-1">
-        {TABS.map((t) => (
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Mobile top bar */}
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-surface px-4 md:hidden">
           <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm transition-colors ${
-              tab === t.id
-                ? "bg-surface-2 text-fg"
-                : "text-fg-dim hover:text-fg-muted"
-            }`}
+            onClick={() => setDrawer(true)}
+            aria-label="Open menu"
+            className="text-lg text-fg-muted"
           >
-            <span className="text-fg-faint">{t.icon}</span>
-            {t.label}
+            ☰
           </button>
-        ))}
-      </nav>
+          <span className="mono text-sm font-medium text-fg">
+            <span className="text-accent">%</span>
+            <span className="ml-1.5">cct panel</span>
+            <span className="ml-0.5 text-fg-dim">/ {tabLabel(tab).toLowerCase()}</span>
+          </span>
+        </header>
 
-      <main className="flex-1">
-        {tab === "health" && <HealthView />}
-        {tab === "workers" && <WorkersView onAuthError={onAuthError} />}
-        {tab === "tasks" && <TasksView onAuthError={onAuthError} />}
-        {tab === "skills" && <SkillsView onAuthError={onAuthError} />}
-        {tab === "prompt" && <PromptView_ onAuthError={onAuthError} />}
-        {tab === "logs" && <LogsView onAuthError={onAuthError} />}
-        {tab === "sessions" && <SessionsView onAuthError={onAuthError} />}
-        {tab === "schedules" && <SchedulesView onAuthError={onAuthError} />}
-        {tab === "usage" && <UsageView onAuthError={onAuthError} />}
-      </main>
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6">
+          {tab === "chat" && <ChatView onAuthError={onAuthError} />}
+          {tab === "health" && <HealthView />}
+          {tab === "workers" && <WorkersView onAuthError={onAuthError} />}
+          {tab === "tasks" && <TasksView onAuthError={onAuthError} />}
+          {tab === "skills" && <SkillsView onAuthError={onAuthError} />}
+          {tab === "prompt" && <PromptView_ onAuthError={onAuthError} />}
+          {tab === "logs" && <LogsView onAuthError={onAuthError} />}
+          {tab === "sessions" && <SessionsView onAuthError={onAuthError} />}
+          {tab === "schedules" && <SchedulesView onAuthError={onAuthError} />}
+          {tab === "usage" && <UsageView onAuthError={onAuthError} />}
 
-      <footer className="mt-8 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-xs text-fg-faint">
-        <span>Made with Claude &amp; Coffee ☕</span>
-        <span className="text-fg-faint/50">·</span>
-        <a
-          href="https://gyorgy.sh"
-          target="_blank"
-          rel="noreferrer"
-          className="text-fg-dim hover:text-fg-muted"
-        >
-          gyorgy.sh
-        </a>
-        <span className="text-fg-faint/50">·</span>
-        <a
-          href="https://github.com/gyorgysh/claude-code-telegram"
-          target="_blank"
-          rel="noreferrer"
-          className="text-fg-dim hover:text-fg-muted"
-        >
-          GitHub
-        </a>
-      </footer>
+          {tab !== "chat" && (
+          <footer className="mt-10 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-xs text-fg-faint">
+            <span>Made open source with Claude &amp; Coffee ☕</span>
+            <span className="text-fg-faint/50">·</span>
+            <a
+              href="https://gyorgy.sh"
+              target="_blank"
+              rel="noreferrer"
+              className="text-fg-dim hover:text-fg-muted"
+            >
+              gyorgy.sh
+            </a>
+            <span className="text-fg-faint/50">·</span>
+            <a
+              href="https://github.com/gyorgysh/claude-code-telegram"
+              target="_blank"
+              rel="noreferrer"
+              className="text-fg-dim hover:text-fg-muted"
+            >
+              GitHub
+            </a>
+          </footer>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

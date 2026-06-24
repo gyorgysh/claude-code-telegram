@@ -37,7 +37,7 @@ export function UsageView({ onAuthError }: { onAuthError: () => void }) {
             {recent.map((d) => (
               <div key={d.day} className="group flex flex-1 flex-col items-center justify-end">
                 <div
-                  className="w-full rounded-t bg-blue-500/70 transition-all group-hover:bg-blue-400"
+                  className="w-full rounded-t bg-accent/70 transition-all group-hover:bg-accent"
                   style={{ height: `${(d.costUsd / maxCost) * 100}%` }}
                   title={`${d.day}: ${usd(d.costUsd)} · ${d.turns} turns`}
                 />

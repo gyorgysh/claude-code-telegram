@@ -1,27 +1,40 @@
 import { useCallback, useState } from "react";
 
-type Theme = "light" | "dark";
+export type Theme = "light" | "dark" | "matrix";
 const KEY = "cct.panel.theme";
 
 function current(): Theme {
-  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+  const t = document.documentElement.getAttribute("data-theme");
+  return t === "light" || t === "matrix" ? t : "dark";
 }
 
-/** Read/toggle the light/dark theme; the `.dark` class on <html> is the source
- *  of truth (set pre-paint by an inline script), persisted to localStorage. */
-export function useTheme(): { theme: Theme; toggle: () => void } {
+function persist(t: Theme) {
+  document.documentElement.setAttribute("data-theme", t);
+  try {
+    localStorage.setItem(KEY, t);
+  } catch {
+    /* storage unavailable — theme still applies for the session */
+  }
+}
+
+/** Read/set the theme; `data-theme` on <html> is the source of truth (set
+ *  pre-paint by an inline script), persisted to localStorage. `toggle` flips
+ *  light/dark; `set` can also reach the hidden `matrix` easter-egg theme. */
+export function useTheme(): {
+  theme: Theme;
+  toggle: () => void;
+  set: (t: Theme) => void;
+} {
   const [theme, setTheme] = useState<Theme>(current);
 
-  const toggle = useCallback(() => {
-    const next: Theme = current() === "dark" ? "light" : "dark";
-    document.documentElement.classList.toggle("dark", next === "dark");
-    try {
-      localStorage.setItem(KEY, next);
-    } catch {
-      /* storage unavailable — theme still applies for the session */
-    }
-    setTheme(next);
+  const set = useCallback((t: Theme) => {
+    persist(t);
+    setTheme(t);
   }, []);
 
-  return { theme, toggle };
+  const toggle = useCallback(() => {
+    set(current() === "light" ? "dark" : "light");
+  }, [set]);
+
+  return { theme, toggle, set };
 }

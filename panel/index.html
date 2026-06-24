@@ -3,17 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CCT · Control</title>
+    <title>cct panel</title>
     <script>
       // Apply the saved theme before first paint to avoid a flash.
       // Defaults to dark when nothing is stored.
       (function () {
+        var t = "dark";
         try {
-          var t = localStorage.getItem("cct.panel.theme");
-          if (t !== "light") document.documentElement.classList.add("dark");
-        } catch (e) {
-          document.documentElement.classList.add("dark");
-        }
+          var s = localStorage.getItem("cct.panel.theme");
+          if (s === "light" || s === "dark" || s === "matrix") t = s;
+        } catch (e) {}
+        document.documentElement.setAttribute("data-theme", t);
       })();
     </script>
   </head>

@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { api, AuthError, type MainAgent } from "../api.ts";
-import { Badge, Button, Card, Input, Label } from "./ui.tsx";
+import { Badge, Button, Card, Input, Label, Select } from "./ui.tsx";
 
 const MODEL_SUGGESTIONS = ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-8"];
 
@@ -102,18 +102,14 @@ export function MainAgentCard({ onAuthError }: { onAuthError: () => void }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <Label>Provider</Label>
-          <select
-            value={providerId}
-            onChange={(e) => setProviderId(e.target.value)}
-            className="w-full rounded-lg border border-line bg-input px-3 py-2 text-sm text-fg outline-none focus:border-blue-500"
-          >
+          <Select value={providerId} onChange={(e) => setProviderId(e.target.value)}>
             <option value="">Anthropic (default / .env)</option>
             {agent.providers.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <div>
           <Label>Model</Label>

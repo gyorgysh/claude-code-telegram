@@ -40,13 +40,13 @@ export function Login({ onAuthed }: { onAuthed: () => void }) {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder="PANEL_TOKEN"
-          className="mt-4 w-full rounded-lg border border-line bg-input px-3 py-2 text-sm text-fg outline-none focus:border-blue-500"
+          className="mt-4 w-full rounded-lg border border-line bg-input px-3 py-2 text-sm text-fg outline-none focus:border-accent"
         />
         {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
         <button
           type="submit"
           disabled={busy}
-          className="mt-4 w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+          className="mt-4 w-full rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
         >
           {busy ? "Checking…" : "Unlock"}
         </button>

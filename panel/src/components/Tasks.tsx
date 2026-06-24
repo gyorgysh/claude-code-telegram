@@ -4,7 +4,7 @@ import { Button, Empty, Input, TextArea } from "./ui.tsx";
 
 const COLUMN_META: Record<Column, { label: string; tone: string }> = {
   backlog: { label: "Backlog", tone: "text-fg-dim" },
-  doing: { label: "In progress", tone: "text-blue-400" },
+  doing: { label: "In progress", tone: "text-accent" },
   done: { label: "Done", tone: "text-emerald-400" },
 };
 
@@ -130,7 +130,7 @@ function Card({
 
   if (editing) {
     return (
-      <div className="rounded-lg border border-blue-500/40 bg-input p-2">
+      <div className="rounded-lg border border-accent/40 bg-input p-2">
         <Input value={title} onChange={(e) => setTitle(e.target.value)} className="mb-2" />
         <TextArea
           rows={3}

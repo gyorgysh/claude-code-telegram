@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { api, AuthError, type Provider, type Worker, type WorkerRun } from "../api.ts";
 import { useWorkerEvents, type LiveRun } from "../lib/useWorkerEvents.ts";
-import { Badge, Button, Callout, Card, Empty, Input, Label, TextArea } from "./ui.tsx";
+import { Badge, Button, Callout, Card, Empty, Input, Label, Select, TextArea } from "./ui.tsx";
 import { MainAgentCard } from "./MainAgent.tsx";
 import { ms, relTime, usd } from "../lib/format.ts";
 
@@ -377,10 +377,9 @@ function WorkerForm({
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <Label>Provider (optional)</Label>
-          <select
+          <Select
             value={form.providerId}
             onChange={(e) => setForm({ ...form, providerId: e.target.value })}
-            className="w-full rounded-lg border border-line bg-input px-3 py-2 text-sm text-fg outline-none focus:border-blue-500"
           >
             <option value="">Anthropic (default)</option>
             {providers.map((p) => (
@@ -388,7 +387,7 @@ function WorkerForm({
                 {p.name}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <div>
           <Label>Model</Label>
@@ -416,10 +415,9 @@ function WorkerForm({
         </div>
         <div>
           <Label>Skill (optional)</Label>
-          <select
+          <Select
             value={form.skillId}
             onChange={(e) => setForm({ ...form, skillId: e.target.value })}
-            className="w-full rounded-lg border border-line bg-input px-3 py-2 text-sm text-fg outline-none focus:border-blue-500"
           >
             <option value="">— none —</option>
             {skills.map((s) => (
@@ -427,7 +425,7 @@ function WorkerForm({
                 {s.name}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <div>
           <Label>Schedule (optional)</Label>
@@ -443,7 +441,7 @@ function WorkerForm({
               type="checkbox"
               checked={enabled}
               onChange={(e) => setEnabled(e.target.checked)}
-              className="h-4 w-4 accent-blue-600"
+              className="h-4 w-4 accent-[var(--accent)]"
             />
             Enabled
           </label>

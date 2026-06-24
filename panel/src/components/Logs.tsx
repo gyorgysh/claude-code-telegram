@@ -98,7 +98,7 @@ export function LogsView({ onAuthError }: { onAuthError: () => void }) {
             type="checkbox"
             checked={follow}
             onChange={(e) => setFollow(e.target.checked)}
-            className="h-3.5 w-3.5 accent-blue-600"
+            className="h-3.5 w-3.5 accent-[var(--accent)]"
           />
           Follow
         </label>

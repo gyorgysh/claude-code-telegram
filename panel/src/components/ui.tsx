@@ -76,7 +76,7 @@ export function Badge({
     zinc: "bg-surface-2 text-fg-muted",
     green: "bg-emerald-500/15 text-emerald-400",
     amber: "bg-amber-500/15 text-amber-400",
-    blue: "bg-blue-500/15 text-blue-400",
+    blue: "bg-accent/15 text-accent",
   };
   return (
     <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${tones[tone]}`}>
@@ -97,7 +97,7 @@ type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 
 export function Button({ variant = "ghost", className = "", ...props }: ButtonProps) {
   const styles: Record<string, string> = {
-    primary: "bg-blue-600 text-white hover:bg-blue-500",
+    primary: "bg-accent text-accent-fg hover:opacity-90",
     ghost: "border border-line text-fg-muted hover:bg-surface-2",
     danger: "border border-red-500/30 text-red-400 hover:bg-red-500/10",
   };
@@ -110,10 +110,30 @@ export function Button({ variant = "ghost", className = "", ...props }: ButtonPr
 }
 
 const fieldClass =
-  "w-full rounded-lg border border-line bg-input px-3 py-2 text-sm text-fg outline-none focus:border-blue-500";
+  "w-full rounded-lg border border-line bg-input px-3 py-2 text-sm text-fg outline-none focus:border-accent";
 
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${fieldClass} ${props.className ?? ""}`} />;
+}
+
+/** Select with native chrome stripped so its height matches Input exactly,
+ *  plus a custom chevron. `currentColor` follows the muted text token. */
+export function Select({
+  className = "",
+  children,
+  ...props
+}: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  const chevron =
+    "bg-[length:1rem] bg-[right_0.6rem_center] bg-no-repeat pr-9 " +
+    "bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2016%2016%22%20fill=%22none%22%20stroke=%22%2371717a%22%20stroke-width=%221.5%22%3E%3Cpath%20d=%22M4%206l4%204%204-4%22/%3E%3C/svg%3E')]";
+  return (
+    <select
+      {...props}
+      className={`${fieldClass} h-[38px] cursor-pointer appearance-none ${chevron} ${className}`}
+    >
+      {children}
+    </select>
+  );
 }
 
 export function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
@@ -141,9 +161,9 @@ export function Callout({
   const [hidden, setHidden] = useState(() => (key ? localStorage.getItem(key) === "1" : false));
   if (hidden) return null;
   return (
-    <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-3 text-sm">
+    <div className="rounded-xl border border-accent/30 bg-accent/5 p-3 text-sm">
       <div className="mb-1 flex items-center justify-between">
-        <span className="font-medium text-blue-400">💡 {title}</span>
+        <span className="font-medium text-accent">💡 {title}</span>
         {key && (
           <button
             onClick={() => {

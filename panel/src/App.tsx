@@ -16,6 +16,7 @@ import { VaultView } from "./components/Vault.tsx";
 import { TasksView } from "./components/Tasks.tsx";
 import { WorkersView } from "./components/Workers.tsx";
 import { LogsView } from "./components/Logs.tsx";
+import { HeartbeatView_ } from "./components/Heartbeat.tsx";
 
 export function App() {
   const [authed, setAuthed] = useState(Boolean(getToken()));
@@ -130,6 +131,7 @@ export function App() {
           {tab === "logs" && <LogsView onAuthError={onAuthError} />}
           {tab === "sessions" && <SessionsView onAuthError={onAuthError} />}
           {tab === "schedules" && <SchedulesView onAuthError={onAuthError} />}
+          {tab === "heartbeat" && <HeartbeatView_ onAuthError={onAuthError} />}
           {tab === "usage" && <UsageView onAuthError={onAuthError} />}
 
           {tab !== "chat" && (

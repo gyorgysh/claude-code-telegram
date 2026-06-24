@@ -2,6 +2,7 @@ import { config, allowedUserIds } from "./config.js";
 import { buildBot } from "./bot.js";
 import { sessions } from "./session/manager.js";
 import { schedules } from "./schedule/manager.js";
+import { heartbeat } from "./core/heartbeat.js";
 import { startPanel } from "./panel/server.js";
 import { log } from "./logger.js";
 
@@ -58,6 +59,7 @@ async function main(): Promise<void> {
 
     // Stop the scheduler and flush any debounced session/usage state before we go.
     schedules.stop();
+    heartbeat.stop();
     sessions.flush();
     void stopPanel?.();
 

@@ -1,0 +1,205 @@
+import { getHealth } from "./health.js";
+import { listTasks } from "./tasks.js";
+import { loadJson, saveJson } from "./jsonStore.js";
+import { audit } from "./audit.js";
+import { log } from "../logger.js";
+
+const FILE = "heartbeat.json";
+const TICK_MS = 60_000; // wake-up granularity; actual cadence is config.intervalMs
+const ALERT_COOLDOWN_MS = 3 * 3_600_000; // don't repeat the same alert within 3h
+const ALERT_HISTORY = 50;
+
+export type HeartbeatMode = "off" | "alert" | "active";
+
+export interface HeartbeatConfig {
+  mode: HeartbeatMode;
+  /** How often to evaluate signals. */
+  intervalMs: number;
+  /** Percent thresholds that trip an alert. */
+  cpuPct: number;
+  memPct: number;
+  swapPct: number;
+  diskPct: number;
+  /** A card sitting in "doing" longer than this many hours is "stalled". */
+  staleCardHours: number;
+}
+
+interface Signal {
+  key: string;
+  text: string;
+}
+
+interface AlertRecord {
+  ts: number;
+  text: string;
+}
+
+interface HeartbeatFile {
+  version: 1;
+  config: HeartbeatConfig;
+  lastTickAt?: number;
+  lastAlertAt: Record<string, number>;
+  alerts: AlertRecord[];
+}
+
+const DEFAULTS: HeartbeatConfig = {
+  mode: "off",
+  intervalMs: 30 * 60_000,
+  cpuPct: 90,
+  memPct: 90,
+  swapPct: 50,
+  diskPct: 90,
+  staleCardHours: 48,
+};
+
+export interface HeartbeatDeps {
+  /** Push a plain alert to the user(s). */
+  notify: (text: string) => Promise<void>;
+  /** Run an autonomous agent turn with the given prompt; false if skipped (busy). */
+  runActive: (prompt: string) => Promise<boolean>;
+}
+
+/**
+ * Proactive monitoring loop. Off by default. In `alert` mode it evaluates host
+ * health + kanban signals deterministically and messages the user when a
+ * threshold trips (deduped). In `active` mode it instead hands a snapshot to an
+ * autonomous agent turn so the agent can investigate and act, messaging only
+ * when noteworthy. Cadence is `config.intervalMs`, polled on a 60s tick.
+ */
+export class HeartbeatManager {
+  private state = loadJson<HeartbeatFile>(FILE, {
+    version: 1,
+    config: { ...DEFAULTS },
+    lastAlertAt: {},
+    alerts: [],
+  });
+  private timer?: ReturnType<typeof setInterval>;
+  private deps?: HeartbeatDeps;
+  private running = false;
+
+  start(deps: HeartbeatDeps): void {
+    this.deps = deps;
+    if (this.timer) return;
+    this.timer = setInterval(() => void this.maybeTick(), TICK_MS);
+    this.timer.unref?.();
+    log.info("Heartbeat started", { mode: this.state.config.mode });
+  }
+
+  stop(): void {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = undefined;
+  }
+
+  view() {
+    return {
+      config: this.state.config,
+      lastTickAt: this.state.lastTickAt,
+      alerts: this.state.alerts.slice(0, ALERT_HISTORY),
+    };
+  }
+
+  setConfig(patch: Partial<HeartbeatConfig>): HeartbeatConfig {
+    const c = this.state.config;
+    if (patch.mode && ["off", "alert", "active"].includes(patch.mode)) c.mode = patch.mode;
+    if (typeof patch.intervalMs === "number") c.intervalMs = Math.max(60_000, patch.intervalMs);
+    for (const k of ["cpuPct", "memPct", "swapPct", "diskPct", "staleCardHours"] as const) {
+      if (typeof patch[k] === "number") c[k] = Math.max(0, patch[k]!);
+    }
+    this.persist();
+    audit("heartbeat.config", { mode: c.mode, intervalMs: c.intervalMs });
+    return c;
+  }
+
+  private async maybeTick(): Promise<void> {
+    const { mode, intervalMs } = this.state.config;
+    if (mode === "off" || this.running) return;
+    const now = Date.now();
+    if (this.state.lastTickAt && now - this.state.lastTickAt < intervalMs) return;
+    await this.runOnce("scheduled");
+  }
+
+  /** Force an evaluation now (panel "Run check"). */
+  async runOnce(_source: string): Promise<{ signals: number }> {
+    if (this.running || !this.deps) return { signals: 0 };
+    this.running = true;
+    try {
+      const signals = await this.collectSignals();
+      this.state.lastTickAt = Date.now();
+      if (signals.length === 0) {
+        this.persist();
+        return { signals: 0 };
+      }
+      if (this.state.config.mode === "active") {
+        await this.handleActive(signals);
+      } else {
+        await this.handleAlert(signals);
+      }
+      this.persist();
+      return { signals: signals.length };
+    } catch (err) {
+      log.error("Heartbeat tick failed", { error: err instanceof Error ? err.message : String(err) });
+      return { signals: 0 };
+    } finally {
+      this.running = false;
+    }
+  }
+
+  private async collectSignals(): Promise<Signal[]> {
+    const c = this.state.config;
+    const out: Signal[] = [];
+    try {
+      const h = await getHealth();
+      if (h.cpu.load >= c.cpuPct) out.push({ key: "cpu", text: `CPU load ${h.cpu.load.toFixed(0)}% (≥ ${c.cpuPct}%)` });
+      const memPct = h.mem.total ? (h.mem.used / h.mem.total) * 100 : 0;
+      if (memPct >= c.memPct) out.push({ key: "mem", text: `Memory ${memPct.toFixed(0)}% used (≥ ${c.memPct}%)` });
+      const swapPct = h.swap.total ? (h.swap.used / h.swap.total) * 100 : 0;
+      if (swapPct >= c.swapPct) out.push({ key: "swap", text: `Swap ${swapPct.toFixed(0)}% used (≥ ${c.swapPct}%)` });
+      for (const d of h.disks) {
+        if (d.usePct >= c.diskPct) out.push({ key: `disk:${d.mount}`, text: `Disk ${d.mount} ${d.usePct.toFixed(0)}% full (≥ ${c.diskPct}%)` });
+      }
+    } catch (err) {
+      log.warn("Heartbeat health probe failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+    const staleMs = c.staleCardHours * 3_600_000;
+    const now = Date.now();
+    for (const t of listTasks()) {
+      if (t.column === "doing" && now - t.updatedAt > staleMs) {
+        const days = Math.floor((now - t.updatedAt) / 86_400_000);
+        out.push({ key: `stale:${t.id}`, text: `Task "${t.title}" stalled in Doing for ${days}d` });
+      }
+    }
+    return out;
+  }
+
+  /** Deterministic alerts, deduped by signal key within the cooldown window. */
+  private async handleAlert(signals: Signal[]): Promise<void> {
+    const now = Date.now();
+    const fresh = signals.filter((s) => now - (this.state.lastAlertAt[s.key] ?? 0) > ALERT_COOLDOWN_MS);
+    if (fresh.length === 0) return;
+    for (const s of fresh) this.state.lastAlertAt[s.key] = now;
+    const text = `🫀 Heartbeat\n${fresh.map((s) => `• ${s.text}`).join("\n")}`;
+    this.recordAlert(text);
+    await this.deps!.notify(text);
+  }
+
+  /** Hand the snapshot to an autonomous agent turn (it decides what to do). */
+  private async handleActive(signals: Signal[]): Promise<void> {
+    const prompt =
+      "Proactive heartbeat check. The following signals were detected on the host:\n" +
+      signals.map((s) => `- ${s.text}`).join("\n") +
+      "\n\nBriefly investigate if useful. Message me only if something genuinely needs my attention or action; otherwise stay silent.";
+    const started = await this.deps!.runActive(prompt);
+    if (started) this.recordAlert(`🫀 Active check dispatched (${signals.length} signal(s))`);
+  }
+
+  private recordAlert(text: string): void {
+    this.state.alerts.unshift({ ts: Date.now(), text });
+    if (this.state.alerts.length > ALERT_HISTORY) this.state.alerts.length = ALERT_HISTORY;
+  }
+
+  private persist(): void {
+    saveJson<HeartbeatFile>(FILE, this.state);
+  }
+}
+
+export const heartbeat = new HeartbeatManager();

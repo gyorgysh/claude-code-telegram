@@ -13,6 +13,7 @@ export type Tab =
   | "logs"
   | "sessions"
   | "schedules"
+  | "heartbeat"
   | "usage";
 
 type Item = { id: Tab; label: string; icon: string };
@@ -36,6 +37,7 @@ export const NAV: Group[] = [
       { id: "workers", label: "Agents", icon: "◈" },
       { id: "tasks", label: "Tasks", icon: "▤" },
       { id: "schedules", label: "Schedules", icon: "◷" },
+      { id: "heartbeat", label: "Heartbeat", icon: "♡" },
     ],
   },
   {

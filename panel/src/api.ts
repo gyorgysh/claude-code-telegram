@@ -169,6 +169,22 @@ export interface WorkerRun {
   output: string;
 }
 
+export type HeartbeatMode = "off" | "alert" | "active";
+export interface HeartbeatConfig {
+  mode: HeartbeatMode;
+  intervalMs: number;
+  cpuPct: number;
+  memPct: number;
+  swapPct: number;
+  diskPct: number;
+  staleCardHours: number;
+}
+export interface HeartbeatView {
+  config: HeartbeatConfig;
+  lastTickAt?: number;
+  alerts: Array<{ ts: number; text: string }>;
+}
+
 export interface BackendStatus {
   id: string;
   name: string;
@@ -297,6 +313,10 @@ export const api = {
   workerRuns: (id: string) => get<{ runs: WorkerRun[] }>(`/api/workers/${id}/runs`),
 
   status: () => get<StatusSnapshot>("/api/status"),
+
+  heartbeat: () => get<HeartbeatView>("/api/heartbeat"),
+  saveHeartbeat: (c: Partial<HeartbeatConfig>) => req<HeartbeatView>("PUT", "/api/heartbeat", c),
+  runHeartbeat: () => req<{ signals: number }>("POST", "/api/heartbeat/run"),
 
   vault: () => get<{ secrets: SecretView[] }>("/api/vault"),
   createSecret: (s: { name: string; value: string; description?: string }) =>

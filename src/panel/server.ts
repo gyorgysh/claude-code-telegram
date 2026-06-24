@@ -23,6 +23,7 @@ import { workers, describeWorkerSchedule, type Worker } from "../core/workers.js
 import { chat } from "../core/chat.js";
 import { memory } from "../core/memory.js";
 import { getStatus } from "../core/status.js";
+import { heartbeat } from "../core/heartbeat.js";
 import { vault, importProviderSecrets, resolveSecret } from "../core/vault.js";
 import {
   listProviders,
@@ -189,6 +190,14 @@ function registerApi(app: FastifyInstance): void {
       return reply.code(404).send({ error: "not found" });
     return { ok: true };
   });
+
+  // --- heartbeat (proactive monitoring) ---
+  app.get("/api/heartbeat", async () => heartbeat.view());
+  app.put("/api/heartbeat", async (req) => {
+    heartbeat.setConfig((req.body ?? {}) as never);
+    return heartbeat.view();
+  });
+  app.post("/api/heartbeat/run", async () => heartbeat.runOnce("panel"));
 
   // --- durable memory ---
   app.get("/api/memories", async (req) => {

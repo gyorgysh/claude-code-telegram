@@ -1,6 +1,6 @@
 import { Telegraf } from "telegraf";
 import { message } from "telegraf/filters";
-import { config } from "./config.js";
+import { config, allowedUserIds } from "./config.js";
 import { authMiddleware } from "./auth.js";
 import { registerCommands } from "./commands.js";
 import { AUTO_ALLOWED_TOOLS, runTurn, type PermissionResult } from "./claude/runner.js";
@@ -15,6 +15,7 @@ import { isGitCallback, resolveGitCallback } from "./telegram/gitFlow.js";
 import { isProjectCallback, resolveProjectCallback } from "./telegram/projects.js";
 import { transcribeAudio, voiceEnabled, voiceSetupHint } from "./telegram/voice.js";
 import { schedules, type ScheduleRunner } from "./schedule/manager.js";
+import { heartbeat } from "./core/heartbeat.js";
 import { resolveMainRun } from "./core/mainSettings.js";
 import { escapeHtml, normalizeAgentText } from "./telegram/formatting.js";
 import type { ImageInput } from "./claude/runner.js";
@@ -163,6 +164,24 @@ export function buildBot(): Telegraf {
     return true;
   };
   schedules.start(runScheduled);
+
+  // --- Heartbeat: proactive host/kanban monitoring (off unless enabled) ---
+  const alertTargets = [...allowedUserIds];
+  heartbeat.start({
+    notify: async (text) => {
+      for (const chatId of alertTargets) {
+        await bot.telegram
+          .sendMessage(chatId, `<i>${escapeHtml(text)}</i>`, { parse_mode: "HTML" })
+          .catch(() => {});
+      }
+    },
+    runActive: async (prompt) => {
+      const chatId = alertTargets[0];
+      if (chatId === undefined || sessions.get(chatId).busy) return false;
+      runUserPrompt(permissions, chatId, prompt, bot.telegram, { autonomous: true });
+      return true;
+    },
+  });
 
   return bot;
 }

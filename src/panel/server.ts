@@ -20,6 +20,12 @@ import {
   COLUMNS,
 } from "../core/tasks.js";
 import { workers, describeWorkerSchedule, type Worker } from "../core/workers.js";
+import {
+  listProviders,
+  createProvider,
+  updateProvider,
+  deleteProvider,
+} from "../core/providers.js";
 import { recentAudit } from "../core/audit.js";
 import { PanelHub } from "./hub.js";
 
@@ -103,6 +109,7 @@ function workerView(w: Worker) {
     cwd: w.cwd,
     prompt: w.prompt,
     model: w.model ?? "",
+    providerId: w.providerId ?? "",
     systemPrompt: w.systemPrompt ?? "",
     skillId: w.skillId ?? "",
     schedule: describeWorkerSchedule(w),
@@ -190,6 +197,7 @@ function registerApi(app: FastifyInstance): void {
   app.get("/api/workers", async () => ({
     workers: workers.list().map(workerView),
     skills: listSkills().map((s) => ({ id: s.id, name: s.name })),
+    providers: listProviders().map((p) => ({ id: p.id, name: p.name })),
   }));
   app.post("/api/workers", async (req) => workerView(workers.create(req.body as never)));
   app.put("/api/workers/:id", async (req, reply) => {
@@ -214,6 +222,20 @@ function registerApi(app: FastifyInstance): void {
     runs: workers.history((req.params as { id: string }).id),
   }));
   app.get("/api/runs", async () => ({ runs: workers.history() }));
+
+  // --- model providers (local LM Studio/Ollama, proxies) ---
+  app.get("/api/providers", async () => ({ providers: listProviders() }));
+  app.post("/api/providers", async (req) => createProvider(req.body as never));
+  app.put("/api/providers/:id", async (req, reply) => {
+    const updated = updateProvider((req.params as { id: string }).id, req.body as never);
+    if (!updated) return reply.code(404).send({ error: "not found" });
+    return updated;
+  });
+  app.delete("/api/providers/:id", async (req, reply) => {
+    if (!deleteProvider((req.params as { id: string }).id))
+      return reply.code(404).send({ error: "not found" });
+    return { ok: true };
+  });
 }
 
 function registerWs(app: FastifyInstance, hub: PanelHub): void {

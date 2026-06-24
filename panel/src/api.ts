@@ -145,6 +145,7 @@ export interface Worker {
   cwd: string;
   prompt: string;
   model: string;
+  providerId: string;
   systemPrompt: string;
   skillId: string;
   schedule: string;
@@ -166,6 +167,15 @@ export interface WorkerRun {
   durationMs?: number;
   error?: string;
   output: string;
+}
+
+export interface Provider {
+  id: string;
+  name: string;
+  baseUrl: string;
+  authToken: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface LogEntry {
@@ -204,11 +214,22 @@ export const api = {
     req<{ tasks: Task[] }>("POST", "/api/tasks/reorder", { moves }),
   deleteTask: (id: string) => req<{ ok: boolean }>("DELETE", `/api/tasks/${id}`),
 
-  workers: () => get<{ workers: Worker[]; skills: Array<{ id: string; name: string }> }>("/api/workers"),
+  workers: () =>
+    get<{
+      workers: Worker[];
+      skills: Array<{ id: string; name: string }>;
+      providers: Array<{ id: string; name: string }>;
+    }>("/api/workers"),
   createWorker: (w: Partial<Worker>) => req<Worker>("POST", "/api/workers", w),
   updateWorker: (id: string, w: Partial<Worker>) => req<Worker>("PUT", `/api/workers/${id}`, w),
   deleteWorker: (id: string) => req<{ ok: boolean }>("DELETE", `/api/workers/${id}`),
   runWorker: (id: string) => req<WorkerRun>("POST", `/api/workers/${id}/run`),
   stopWorker: (id: string) => req<{ ok: boolean }>("POST", `/api/workers/${id}/stop`),
   workerRuns: (id: string) => get<{ runs: WorkerRun[] }>(`/api/workers/${id}/runs`),
+
+  providers: () => get<{ providers: Provider[] }>("/api/providers"),
+  createProvider: (p: Partial<Provider>) => req<Provider>("POST", "/api/providers", p),
+  updateProvider: (id: string, p: Partial<Provider>) =>
+    req<Provider>("PUT", `/api/providers/${id}`, p),
+  deleteProvider: (id: string) => req<{ ok: boolean }>("DELETE", `/api/providers/${id}`),
 };

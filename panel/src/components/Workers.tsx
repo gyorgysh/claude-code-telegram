@@ -1,28 +1,39 @@
 import { useEffect, useRef, useState } from "react";
-import { api, AuthError, type Worker, type WorkerRun } from "../api.ts";
+import { api, AuthError, type Provider, type Worker, type WorkerRun } from "../api.ts";
 import { useWorkerEvents, type LiveRun } from "../lib/useWorkerEvents.ts";
 import { Badge, Button, Card, Empty, Input, Label, TextArea } from "./ui.tsx";
 import { ms, relTime, usd } from "../lib/format.ts";
 
-const emptyForm = { name: "", cwd: "", prompt: "", model: "", systemPrompt: "", skillId: "", when: "" };
+const emptyForm = {
+  name: "",
+  cwd: "",
+  prompt: "",
+  model: "",
+  providerId: "",
+  systemPrompt: "",
+  skillId: "",
+  when: "",
+};
 type Form = typeof emptyForm;
+
+type Named = { id: string; name: string };
 
 /** Short, readable label for a model id badge (e.g. "haiku-4-5"). */
 function shortModel(id: string): string {
   return id.replace(/^claude-/, "").replace(/-\d{8}$/, "");
 }
 
-// Model choices offered in the worker form. "" = inherit the bot's CLAUDE_MODEL.
-const MODELS: Array<{ value: string; label: string }> = [
-  { value: "", label: "Default (CLAUDE_MODEL)" },
-  { value: "claude-haiku-4-5-20251001", label: "Haiku 4.5 (cheapest)" },
-  { value: "claude-sonnet-4-6", label: "Sonnet 4.6 (balanced)" },
-  { value: "claude-opus-4-8", label: "Opus 4.8 (most capable)" },
+// Suggested Anthropic model ids (free-text, so local model names work too).
+const MODEL_SUGGESTIONS = [
+  "claude-haiku-4-5-20251001",
+  "claude-sonnet-4-6",
+  "claude-opus-4-8",
 ];
 
 export function WorkersView({ onAuthError }: { onAuthError: () => void }) {
   const [workers, setWorkers] = useState<Worker[]>([]);
-  const [skills, setSkills] = useState<Array<{ id: string; name: string }>>([]);
+  const [skills, setSkills] = useState<Named[]>([]);
+  const [providers, setProviders] = useState<Named[]>([]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const live = useWorkerEvents();
@@ -33,6 +44,7 @@ export function WorkersView({ onAuthError }: { onAuthError: () => void }) {
       .then((r) => {
         setWorkers(r.workers);
         setSkills(r.skills);
+        setProviders(r.providers);
       })
       .catch((e) => (e instanceof AuthError ? onAuthError() : setError(String(e))));
 
@@ -48,6 +60,8 @@ export function WorkersView({ onAuthError }: { onAuthError: () => void }) {
 
   return (
     <div className="space-y-4">
+      <Providers onAuthError={onAuthError} onChange={load} />
+
       <div className="flex justify-end">
         {!creating && (
           <Button variant="primary" onClick={() => setCreating(true)}>
@@ -60,6 +74,7 @@ export function WorkersView({ onAuthError }: { onAuthError: () => void }) {
         <Card title="New worker">
           <WorkerForm
             skills={skills}
+            providers={providers}
             initial={emptyForm}
             onCancel={() => setCreating(false)}
             onSubmit={async (form) => {
@@ -80,6 +95,7 @@ export function WorkersView({ onAuthError }: { onAuthError: () => void }) {
             key={w.id}
             worker={w}
             skills={skills}
+            providers={providers}
             live={live[w.id]}
             onChange={load}
             onAuthError={onAuthError}
@@ -93,12 +109,14 @@ export function WorkersView({ onAuthError }: { onAuthError: () => void }) {
 function WorkerRow({
   worker,
   skills,
+  providers,
   live,
   onChange,
   onAuthError,
 }: {
   worker: Worker;
-  skills: Array<{ id: string; name: string }>;
+  skills: Named[];
+  providers: Named[];
   live?: LiveRun;
   onChange: () => void;
   onAuthError: () => void;
@@ -107,6 +125,7 @@ function WorkerRow({
   const [open, setOpen] = useState(false);
   const [runs, setRuns] = useState<WorkerRun[]>([]);
   const running = worker.running || live?.status === "running";
+  const providerName = providers.find((p) => p.id === worker.providerId)?.name;
 
   const loadRuns = () => api.workerRuns(worker.id).then((r) => setRuns(r.runs));
   useEffect(() => {
@@ -139,6 +158,7 @@ function WorkerRow({
         <span className="font-medium text-fg">{worker.name}</span>
         <Badge tone={worker.schedule === "manual" ? "zinc" : "blue"}>{worker.schedule}</Badge>
         {worker.model && <Badge>{shortModel(worker.model)}</Badge>}
+        {providerName && <Badge tone="blue">⌂ {providerName}</Badge>}
         {!worker.enabled && <Badge tone="amber">disabled</Badge>}
         {running && <Badge tone="green">running</Badge>}
         <span className="ml-auto flex gap-1.5">
@@ -168,11 +188,13 @@ function WorkerRow({
         <div className="mt-3 border-t border-line pt-3">
           <WorkerForm
             skills={skills}
+            providers={providers}
             initial={{
               name: worker.name,
               cwd: worker.cwd,
               prompt: worker.prompt,
               model: worker.model,
+              providerId: worker.providerId,
               systemPrompt: worker.systemPrompt,
               skillId: worker.skillId,
               when: worker.when,
@@ -250,13 +272,15 @@ function LiveOutput({ live }: { live?: LiveRun }) {
 
 function WorkerForm({
   skills,
+  providers,
   initial,
   enabled: initialEnabled = true,
   onCancel,
   onSubmit,
   onAuthError,
 }: {
-  skills: Array<{ id: string; name: string }>;
+  skills: Named[];
+  providers: Named[];
   initial: Form;
   enabled?: boolean;
   onCancel: () => void;
@@ -313,18 +337,33 @@ function WorkerForm({
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <Label>Model</Label>
+          <Label>Provider (optional)</Label>
           <select
-            value={form.model}
-            onChange={(e) => setForm({ ...form, model: e.target.value })}
+            value={form.providerId}
+            onChange={(e) => setForm({ ...form, providerId: e.target.value })}
             className="w-full rounded-lg border border-line bg-input px-3 py-2 text-sm text-fg outline-none focus:border-blue-500"
           >
-            {MODELS.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
+            <option value="">Anthropic (default)</option>
+            {providers.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <Label>Model</Label>
+          <Input
+            list="cct-model-suggestions"
+            value={form.model}
+            onChange={(e) => setForm({ ...form, model: e.target.value })}
+            placeholder={form.providerId ? "local model name" : "default (CLAUDE_MODEL)"}
+          />
+          <datalist id="cct-model-suggestions">
+            {MODEL_SUGGESTIONS.map((m) => (
+              <option key={m} value={m} />
+            ))}
+          </datalist>
         </div>
         <div>
           <Label>Skill (optional)</Label>
@@ -372,5 +411,134 @@ function WorkerForm({
         <Button onClick={onCancel}>Cancel</Button>
       </div>
     </div>
+  );
+}
+
+const blankProvider = { name: "", baseUrl: "", authToken: "" };
+
+/** Collapsible manager for local/proxy model endpoints (LM Studio, Ollama, …). */
+function Providers({ onChange, onAuthError }: { onChange: () => void; onAuthError: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [editing, setEditing] = useState<string | "new" | null>(null);
+  const [form, setForm] = useState(blankProvider);
+
+  const load = () =>
+    api
+      .providers()
+      .then((r) => setProviders(r.providers))
+      .catch((e) => e instanceof AuthError && onAuthError());
+
+  useEffect(() => {
+    if (open) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const save = async () => {
+    try {
+      if (editing === "new") await api.createProvider(form);
+      else if (editing) await api.updateProvider(editing, form);
+      setEditing(null);
+      await load();
+      onChange();
+    } catch (e) {
+      if (e instanceof AuthError) onAuthError();
+    }
+  };
+  const del = async (id: string) => {
+    if (!confirm("Delete this provider? Workers using it fall back to Anthropic.")) return;
+    await api.deleteProvider(id);
+    await load();
+    onChange();
+  };
+
+  return (
+    <Card
+      title="Model providers (local / proxy)"
+      right={
+        <Button onClick={() => setOpen((o) => !o)}>{open ? "Hide" : `Manage (${providers.length})`}</Button>
+      }
+    >
+      {!open ? (
+        <p className="text-sm text-fg-dim">
+          Point workers at a local model server (LM Studio, Ollama) or a proxy via an
+          Anthropic-compatible base URL + auth token.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {editing ? (
+            <div className="space-y-3 rounded-lg border border-line bg-input p-3">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <Label>Name</Label>
+                  <Input
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    placeholder="LM Studio"
+                  />
+                </div>
+                <div>
+                  <Label>Base URL</Label>
+                  <Input
+                    value={form.baseUrl}
+                    onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
+                    placeholder="http://localhost:1234"
+                  />
+                </div>
+                <div>
+                  <Label>Auth token</Label>
+                  <Input
+                    value={form.authToken}
+                    onChange={(e) => setForm({ ...form, authToken: e.target.value })}
+                    placeholder="lmstudio"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="primary" onClick={save} disabled={!form.name.trim() || !form.baseUrl.trim()}>
+                  Save
+                </Button>
+                <Button onClick={() => setEditing(null)}>Cancel</Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              variant="primary"
+              onClick={() => {
+                setForm(blankProvider);
+                setEditing("new");
+              }}
+            >
+              + New provider
+            </Button>
+          )}
+
+          {providers.map((p) => (
+            <div
+              key={p.id}
+              className="flex items-center justify-between gap-3 rounded-lg border border-line p-2.5"
+            >
+              <div className="min-w-0">
+                <span className="font-medium text-fg">{p.name}</span>
+                <span className="ml-2 font-mono text-xs text-fg-faint">{p.baseUrl}</span>
+              </div>
+              <div className="flex shrink-0 gap-1.5">
+                <Button
+                  onClick={() => {
+                    setForm({ name: p.name, baseUrl: p.baseUrl, authToken: p.authToken });
+                    setEditing(p.id);
+                  }}
+                >
+                  Edit
+                </Button>
+                <Button variant="danger" onClick={() => del(p.id)}>
+                  Delete
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }

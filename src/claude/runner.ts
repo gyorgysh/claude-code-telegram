@@ -44,6 +44,9 @@ export interface RunOptions {
   resume?: string;
   /** Model id override for this turn; falls back to CLAUDE_MODEL. */
   model?: string;
+  /** Env overrides for the spawned CLI (e.g. ANTHROPIC_BASE_URL for a local
+   *  model). Merged over process.env; undefined values drop the variable. */
+  env?: Record<string, string | undefined>;
   /** Extra worker/persona instructions appended to the system prompt. */
   systemPromptAppend?: string;
   /** "default" = interactive approval; "bypassPermissions" = autonomous. */
@@ -83,6 +86,9 @@ export async function runTurn(opts: RunOptions): Promise<RunResult> {
       cwd: opts.cwd,
       resume: opts.resume,
       model: opts.model ?? config.CLAUDE_MODEL,
+      // Only override the child env when asked (e.g. a local-model provider);
+      // otherwise the SDK defaults to process.env.
+      env: opts.env ? { ...process.env, ...opts.env } : undefined,
       systemPrompt: systemPrompt(opts.systemPromptAppend),
       permissionMode: opts.permissionMode,
       includePartialMessages: true,

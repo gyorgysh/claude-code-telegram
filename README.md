@@ -181,6 +181,7 @@ Open `http://127.0.0.1:8787` and unlock with your `PANEL_TOKEN`. What's inside:
 
 - **System** — live CPU (overall + per-core), memory, swap, disk usage and disk I/O, pushed over a WebSocket.
 - **Workers** — persisted **sub-agents**: give one a name, working directory, task prompt, model (Haiku/Sonnet/Opus, or inherit the default), optional persona/skill, and an optional schedule (`30m`/`2h`/`HH:MM`). Run on demand or on the timer; runs are **concurrent** and autonomous (no approval prompts), with **live streaming output** and per-worker run history (status, cost, duration). Picking Haiku makes cheap background agents practical.
+  - **Local models** — define a **provider** (an Anthropic-compatible base URL + auth token, e.g. **LM Studio** `http://localhost:1234` or **Ollama**) and point a worker at it with a free-text model name (`qwen/qwen3.6-35b-a3b`, …). Per sub-agent, so you can mix cloud and local. (To run the *whole bot* on a local model instead, set `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN` in `.env`.)
 - **Tasks** — a Trello-style board (Backlog / In progress / Done) with drag-and-drop.
 - **Skills** — a reusable **prompt library**, plus a scoped editor for the on-disk `.claude/{agents,skills,commands}/*.md` and `CLAUDE.md` files the agent loads from your working dirs.
 - **Prompt** — view the built-in personality and edit the operator playbook (`work.md`) live.

@@ -4,6 +4,7 @@ import { nextRun, parseWhen, describeSpec } from "../schedule/manager.js";
 import type { ScheduleSpec } from "../schedule/store.js";
 import { loadJson, saveJson } from "./jsonStore.js";
 import { getSkill } from "./skills.js";
+import { getProvider } from "./providers.js";
 import { audit } from "./audit.js";
 import { log } from "../logger.js";
 
@@ -26,8 +27,11 @@ export interface Worker {
   cwd: string;
   /** The task prompt sent as the user turn each run. */
   prompt: string;
-  /** Model id override; falls back to CLAUDE_MODEL when empty. */
+  /** Model id override; falls back to CLAUDE_MODEL when empty. For a local
+   *  provider this is that server's model name (e.g. "qwen/qwen3.6-35b-a3b"). */
   model?: string;
+  /** Optional model-endpoint provider (local LM Studio/Ollama, a proxy, …). */
+  providerId?: string;
   /** Extra persona instructions appended to the system prompt. */
   systemPrompt?: string;
   /** Optional skill whose body augments the system prompt. */
@@ -103,6 +107,7 @@ export class WorkerManager {
       cwd: input.cwd.trim(),
       prompt: input.prompt,
       model: input.model?.trim() || undefined,
+      providerId: input.providerId || undefined,
       systemPrompt: input.systemPrompt?.trim() || undefined,
       skillId: input.skillId || undefined,
       schedule: parseSchedule(input.when),
@@ -123,6 +128,7 @@ export class WorkerManager {
     if (input.cwd !== undefined) w.cwd = input.cwd.trim();
     if (input.prompt !== undefined) w.prompt = input.prompt;
     if (input.model !== undefined) w.model = input.model.trim() || undefined;
+    if (input.providerId !== undefined) w.providerId = input.providerId || undefined;
     if (input.systemPrompt !== undefined) w.systemPrompt = input.systemPrompt.trim() || undefined;
     if (input.skillId !== undefined) w.skillId = input.skillId || undefined;
     if (input.enabled !== undefined) w.enabled = input.enabled;
@@ -189,11 +195,22 @@ export class WorkerManager {
   private async execute(w: Worker, run: WorkerRun, abort: AbortController): Promise<void> {
     const skill = w.skillId ? getSkill(w.skillId) : undefined;
     const append = [skill?.prompt, w.systemPrompt].filter(Boolean).join("\n\n") || undefined;
+    // Point the run at a local model server / proxy if a provider is set.
+    // Clear ANTHROPIC_API_KEY so the auth token (not a stale key) is used.
+    const provider = w.providerId ? getProvider(w.providerId) : undefined;
+    const env = provider
+      ? {
+          ANTHROPIC_BASE_URL: provider.baseUrl,
+          ANTHROPIC_AUTH_TOKEN: provider.authToken,
+          ANTHROPIC_API_KEY: undefined,
+        }
+      : undefined;
     try {
       const res = await runTurn({
         prompt: w.prompt,
         cwd: w.cwd,
         model: w.model,
+        env,
         systemPromptAppend: append,
         permissionMode: "bypassPermissions",
         abortController: abort,
@@ -262,6 +279,7 @@ export interface WorkerInput {
   cwd: string;
   prompt: string;
   model?: string;
+  providerId?: string;
   systemPrompt?: string;
   skillId?: string;
   /** Schedule token: "30m", "2h", "HH:MM", or "" / undefined for manual-only. */

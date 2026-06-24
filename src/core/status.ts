@@ -1,4 +1,3 @@
-import { config } from "../config.js";
 import { listProviders, type Provider } from "./providers.js";
 import { fetchProviderModels } from "./providerModels.js";
 import { resolveSecret } from "./vault.js";
@@ -66,47 +65,6 @@ const KNOWN_LOCAL: Array<{ name: string; baseUrl: string }> = [
   { name: "Ollama", baseUrl: "http://localhost:11434" },
 ];
 
-async function checkAnthropic(): Promise<BackendStatus> {
-  const baseUrl = (process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com").replace(/\/+$/, "");
-  const key = config.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
-  const out: BackendStatus = {
-    id: "anthropic",
-    name: "Anthropic API",
-    kind: "anthropic",
-    baseUrl,
-    reachable: false,
-    authOk: false,
-    models: [],
-  };
-  if (!key) {
-    out.error = "no ANTHROPIC_API_KEY set";
-    return out;
-  }
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-  try {
-    const res = await fetch(`${baseUrl}/v1/models`, {
-      headers: { "x-api-key": key, "anthropic-version": "2023-06-01" },
-      signal: ctrl.signal,
-    });
-    out.reachable = true;
-    if (res.ok) {
-      out.authOk = true;
-      const json = (await res.json().catch(() => ({}))) as { data?: Array<{ id?: string }> };
-      out.models = (json.data ?? []).map((m) => m.id ?? "").filter(Boolean);
-    } else if (res.status === 401 || res.status === 403) {
-      out.error = "auth rejected";
-    } else {
-      out.error = `HTTP ${res.status}`;
-    }
-  } catch (err) {
-    out.error = err instanceof Error ? err.message : String(err);
-  } finally {
-    clearTimeout(timer);
-  }
-  return out;
-}
-
 async function checkProvider(p: Provider): Promise<BackendStatus> {
   const out: BackendStatus = {
     id: p.id,
@@ -144,15 +102,14 @@ export async function getStatus(): Promise<StatusSnapshot> {
   const localProbes = KNOWN_LOCAL.filter((l) => !configured.has(l.baseUrl)).map((l) =>
     probeLocal(l.name, l.baseUrl),
   );
-  const [service, anthropic, providerStatuses, localStatuses] = await Promise.all([
+  const [service, providerStatuses, localStatuses] = await Promise.all([
     checkClaudeService(),
-    checkAnthropic(),
     Promise.all(providers.map(checkProvider)),
     Promise.all(localProbes),
   ]);
   return {
     checkedAt: Date.now(),
     service,
-    backends: [anthropic, ...providerStatuses, ...localStatuses.filter((s): s is BackendStatus => s !== null)],
+    backends: [...providerStatuses, ...localStatuses.filter((s): s is BackendStatus => s !== null)],
   };
 }

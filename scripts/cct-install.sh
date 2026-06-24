@@ -11,7 +11,8 @@
 # as a background service or by hand.
 #
 # Non-interactive overrides (env vars): CCT_REPO, CCT_DIR, CCT_BRANCH,
-# CCT_TOKEN, CCT_USER_IDS, CCT_API_KEY, CCT_MODE=service|manual, CCT_YES=1.
+# CCT_TOKEN, CCT_USER_IDS, CCT_API_KEY, CCT_MODE=service|manual,
+# CCT_VOICE=none|api|vosk, CCT_OPENAI_KEY, CCT_YES=1.
 
 set -euo pipefail
 
@@ -152,6 +153,32 @@ ensure_git() {
   ok "git installed."
 }
 
+# Soft package install for optional extras (ffmpeg, unzip): installs via brew or
+# the detected Linux package manager. Returns non-zero instead of dying so an
+# optional step can warn and carry on. Same package name across managers.
+pkg_install() {
+  local name="$1" S=""
+  if [ "$OS" = "mac" ]; then brew install "$name"; return; fi
+  if [ "$(id -u)" -ne 0 ]; then
+    command -v sudo >/dev/null 2>&1 && S="sudo" || return 1
+  fi
+  detect_pkg_mgr
+  case "$PKG" in
+    apt) $S apt-get install -y "$name" ;;
+    dnf|yum) $S "$PKG" install -y "$name" ;;
+    pacman) $S pacman -Sy --noconfirm "$name" ;;
+    zypper) $S zypper install -y "$name" ;;
+    *) return 1 ;;
+  esac
+}
+
+ensure_ffmpeg() {
+  if command -v ffmpeg >/dev/null 2>&1; then ok "ffmpeg present."; return 0; fi
+  say "Installing ffmpeg (decodes voice notes for local transcription)…"
+  pkg_install ffmpeg || { warn "Couldn't install ffmpeg automatically — install it manually."; return 1; }
+  ok "ffmpeg installed."
+}
+
 ensure_claude_cli() {
   if command -v claude >/dev/null 2>&1; then ok "Claude Code CLI present."; return; fi
   say "Installing the Claude Code CLI (npm -g @anthropic-ai/claude-code)…"
@@ -275,6 +302,63 @@ set_env() {
   mv "$tmp" "$file"
 }
 
+# --- voice (optional) -------------------------------------------------------
+configure_voice() {
+  local env="$APP_DIR/.env"
+  local choice="${CCT_VOICE:-}"
+  if [ -z "$choice" ]; then
+    printf '\n%s\n' "${B}Voice notes?${R} ${DIM}(transcribe Telegram voice messages into prompts)${R}" >"${TTY:-/dev/stdout}"
+    printf '%s\n' "  ${B}1)${R} Skip" >"${TTY:-/dev/stdout}"
+    printf '%s\n' "  ${B}2)${R} Cloud API ${DIM}(OpenAI, or Groq's free tier)${R}" >"${TTY:-/dev/stdout}"
+    printf '%s\n' "  ${B}3)${R} Local / offline ${DIM}(Vosk + ffmpeg, English)${R}" >"${TTY:-/dev/stdout}"
+    case "$(ask "Choose 1, 2 or 3" "1")" in
+      2) choice=api ;; 3) choice=vosk ;; *) choice=none ;;
+    esac
+  fi
+
+  case "$choice" in
+    api)
+      local key; key="${CCT_OPENAI_KEY:-$(ask "Transcription API key (OpenAI or Groq)" "")}"
+      set_env "$env" TRANSCRIBE_PROVIDER openai
+      [ -n "$key" ] && set_env "$env" OPENAI_API_KEY "$key"
+      say "For Groq's free tier, set TRANSCRIBE_BASE_URL + TRANSCRIBE_MODEL in .env (see its comments)."
+      ok "Voice via API configured."
+      ;;
+    vosk)
+      ensure_ffmpeg || warn "Vosk needs ffmpeg — install it before using voice."
+      say "Installing the vosk npm package (optional native dependency)…"
+      ( cd "$APP_DIR" && npm install vosk ) \
+        || warn "vosk failed to build — see the README; you can retry 'npm install vosk' later."
+      local model; model="$(install_vosk_model)" || model=""
+      if [ -n "$model" ]; then
+        set_env "$env" TRANSCRIBE_PROVIDER vosk
+        set_env "$env" VOSK_MODEL_PATH "$model"
+        ok "Local voice (Vosk) configured."
+      else
+        warn "Model not installed. Download one from https://alphacephei.com/vosk/models,"
+        warn "set VOSK_MODEL_PATH to it and TRANSCRIBE_PROVIDER=vosk in $env."
+      fi
+      ;;
+    *) ok "Skipping voice setup." ;;
+  esac
+}
+
+# Download + unpack the small English Vosk model into <app>/models; echoes its
+# path on stdout (logs go to stderr so they don't pollute the captured path).
+install_vosk_model() {
+  local url="https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
+  local dir="$APP_DIR/models" target="$APP_DIR/models/vosk-model-small-en-us-0.15"
+  [ -d "$target" ] && { printf '%s' "$target"; return 0; }
+  command -v unzip >/dev/null 2>&1 || pkg_install unzip >/dev/null 2>&1 || {
+    echo "unzip not available" >&2; return 1; }
+  mkdir -p "$dir"
+  say "Downloading Vosk English model (~40MB)…" >&2
+  curl -fsSL "$url" -o "$dir/model.zip" || return 1
+  unzip -q "$dir/model.zip" -d "$dir" || return 1
+  rm -f "$dir/model.zip"
+  [ -d "$target" ] && printf '%s' "$target"
+}
+
 # --- run mode ---------------------------------------------------------------
 choose_run_mode() {
   local mode="${CCT_MODE:-}"
@@ -341,6 +425,7 @@ main() {
   clone_repo
   build_app
   configure_env
+  configure_voice
   choose_run_mode
   final_notes
 }

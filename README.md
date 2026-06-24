@@ -46,7 +46,7 @@ Authentication for Claude itself reuses your existing `claude` CLI login, or set
 
 ## Quick install (one-liner)
 
-On a fresh **Linux** or **macOS** box, the wizard installs everything for you — Homebrew (macOS), Node 20+, git, and the Claude Code CLI — checks RAM (and offers to add swap on small Linux boxes), clones the repo, builds it, walks you through `.env`, and offers to set it up as a background service:
+On a fresh **Linux** or **macOS** box, the wizard installs everything for you — Homebrew (macOS), Node 20+, git, and the Claude Code CLI — checks RAM (and offers to add swap on small Linux boxes), clones the repo, builds it, walks you through `.env`, optionally sets up voice transcription (cloud API or local Vosk + ffmpeg, model downloaded for you), and offers to run as a background service:
 
 ```bash
 curl -fsSL https://gyorgy.sh/cct-install.sh | bash

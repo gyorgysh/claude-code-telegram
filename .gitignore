@@ -5,6 +5,9 @@ dist/
 uploads/
 .DS_Store
 
+# Locally downloaded Vosk speech models (installer puts them here)
+models/
+
 # User/agent-created files land here (default WORKDIR) — keep them out of the repo
 data/
 !data/.gitkeep

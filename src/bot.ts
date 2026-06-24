@@ -15,7 +15,7 @@ import { isProjectCallback, resolveProjectCallback } from "./telegram/projects.j
 import { transcribeAudio, voiceEnabled, voiceSetupHint } from "./telegram/voice.js";
 import { schedules, type ScheduleRunner } from "./schedule/manager.js";
 import { resolveMainRun } from "./core/mainSettings.js";
-import { escapeHtml } from "./telegram/formatting.js";
+import { escapeHtml, normalizeAgentText } from "./telegram/formatting.js";
 import type { ImageInput } from "./claude/runner.js";
 import { sessions } from "./session/manager.js";
 import { log, preview } from "./logger.js";
@@ -226,19 +226,30 @@ async function handleUserPrompt(
   session.busy = true;
   session.abort = new AbortController();
 
-  // rich/draft modes stream a native ephemeral preview; edit mode uses a
-  // throttled placeholder message.
+  // Immediate "Working on it…" ack so the chat shows the turn was accepted
+  // before the first token arrives. In edit mode this very message becomes the
+  // streamed reply; in the draft modes (whose final reply is a fresh message)
+  // it is a standalone placeholder that we delete once the turn finishes.
+  const ack = await tg.sendMessage(chatId, "💭 Working on it…").catch(() => undefined);
+  let placeholderId: number | undefined;
+
+  // rich/draft modes stream a native ephemeral preview; edit mode edits the ack
+  // message in place.
   let streamer: Streamer;
   if (config.STREAM_MODE === "rich") {
     const draft = new RichDraftStreamer(tg, chatId);
     await draft.start();
     streamer = draft;
+    placeholderId = ack?.message_id;
   } else if (config.STREAM_MODE === "draft") {
     const draft = new DraftStreamer(tg, chatId);
     await draft.start();
     streamer = draft;
+    placeholderId = ack?.message_id;
+  } else if (ack) {
+    streamer = new TelegramStreamer(tg, chatId, ack.message_id);
   } else {
-    const placeholder = await tg.sendMessage(chatId, "🤔 Thinking…");
+    const placeholder = await tg.sendMessage(chatId, "💭 Working on it…");
     streamer = new TelegramStreamer(tg, chatId, placeholder.message_id);
   }
 
@@ -296,7 +307,7 @@ async function handleUserPrompt(
       abortController: session.abort,
       mcpServers: { telegram: createTelegramMcp(tg, chatId, cwd) },
       canUseTool,
-      onText: (delta) => streamer.appendText(delta),
+      onText: (delta) => streamer.appendText(normalizeAgentText(delta)),
       onToolUse: (name, input) => {
         log.info("Tool use", { chatId, tool: name, arg: preview(summarizeArg(input), 80) });
         streamer.setStatus(`🔧 <i>${name}</i> ${summarizeInput(input)}`);
@@ -330,6 +341,11 @@ async function handleUserPrompt(
     }
   } finally {
     clearInterval(typing);
+    // Drop the standalone "Working on it…" ack (draft modes); in edit mode it
+    // became the reply, so placeholderId is left unset and nothing is deleted.
+    if (placeholderId !== undefined) {
+      await tg.deleteMessage(chatId, placeholderId).catch(() => {});
+    }
     session.busy = false;
     session.abort = undefined;
   }

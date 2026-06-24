@@ -30,6 +30,10 @@ The usual loop for touching a server is: open a terminal, SSH in, run something,
 - **Session continuity** — context carries across messages; `/new` resets it. Sessions (resume token, cwd, mode, allow-list, cost totals) are **persisted to disk**, so they survive a restart.
 - **Git review from chat** — `/diff` shows the working-tree diff (as a `.diff` file when large) with inline **Commit / Discard** buttons; `/commit <message>` stages and commits.
 - **Cost & usage tracking** — `/usage` reports turns, spend, and time for the chat (today + lifetime).
+- **Voice notes** — send a voice message and it's transcribed (Whisper) and run as a prompt; needs `OPENAI_API_KEY`.
+- **Scheduled prompts** — `/schedule add 2h | check disk space` runs a prompt on a timer (interval or daily), autonomously, and pushes the result back to the chat.
+- **Multi-project switching** — `/projects` saves working dirs and switches between them with inline buttons.
+- **Persistent approval presets** — “Always allow” remembers a tool (or a specific Bash program like `git`) across restarts; manage with `/allow`, `/allowed`, `/disallow`. A middle ground between fully interactive `safe` and hands-off `auto`.
 - **Working directory control** — `/cd`, `/pwd`, `/status`.
 - **File send/receive** — upload files/photos (Claude *sees* images inline); Claude can send files back via a built-in `send_file` tool (images arrive as photos).
 - **Quiet by default** — messages from anyone not on the allow-list are silently ignored (no reply, no trace).
@@ -116,6 +120,9 @@ scripts/
 | `ANTHROPIC_API_KEY` | no | API key; omit to use `claude` CLI login |
 | `APPROVAL_TIMEOUT_MS` | no | Approval wait before auto-deny (default 300000) |
 | `STREAM_MODE` | no | `rich` (default), `draft`, or `edit` — see below |
+| `OPENAI_API_KEY` | no | Enables voice-note transcription (Whisper). Voice is disabled without it |
+| `TRANSCRIBE_MODEL` | no | Transcription model (default `whisper-1`) |
+| `TRANSCRIBE_BASE_URL` | no | OpenAI-compatible base URL (default `https://api.openai.com/v1`) |
 | `LOG_LEVEL` | no | `error` \| `warn` \| `info` (default) \| `debug` |
 | `WORK_FILE` | no | Path to the operator playbook (default `work.md`) |
 
@@ -156,12 +163,17 @@ A starter template ships in `work.md`; replace the examples with what's true for
 | `/cd <path>` | Change working directory |
 | `/pwd` | Show current directory |
 | `/status` | Show session info (cwd, model, mode, session id) |
+| `/projects` | Saved working dirs; switch/add/remove via inline buttons |
 | `/diff` | Review the working-tree diff, then commit or discard inline |
 | `/commit <message>` | Stage all changes and commit |
 | `/usage` | Show cost & activity for this chat (today + lifetime) |
+| `/allow <Tool>` · `/allowed` · `/disallow <Tool\|all>` | Manage persistent always-allow rules |
+| `/schedule [list]` · `/schedule add <when> \| <prompt>` · `/schedule rm <id>` | Timed autonomous prompts (`when` = `30m`/`2h`/`1d` or `HH:MM`) |
 | `/stop` | Abort the running request |
 | `/mode safe\|auto` | Interactive approval (default) or autonomous |
 | `/help` | Show help |
+
+You can also send a **voice note** (transcribed and run as a prompt) or upload **files/photos** (Claude sees images inline).
 
 ## Architecture
 
@@ -173,11 +185,14 @@ src/
   logger.ts           tiny timestamped structured logger (LOG_LEVEL)
   prompt.ts           personality + work.md -> system prompt (per turn)
   bot.ts              Telegraf wiring + per-turn orchestration
-  commands.ts         /new /cd /pwd /status /diff /commit /usage /stop /mode /help
+  commands.ts         /new /cd /pwd /status /projects /diff /commit /usage /allow /schedule /stop /mode /help
   git.ts              shell-free git helpers (status, diff, commit, restore)
   session/
-    manager.ts        per-chat state (sessionId, cwd, busy, mode, allow-list, usage)
+    manager.ts        per-chat state (sessionId, cwd, busy, mode, allow-lists, projects, usage)
     store.ts          JSON persistence of session + usage state across restarts
+  schedule/
+    manager.ts        schedule parsing, next-run math, tick loop running autonomous turns
+    store.ts          JSON persistence of schedules (sibling of the state file)
   claude/
     runner.ts         wraps the Agent SDK query(); fans events to callbacks; inline image vision
     events.ts         narrow type guards over SDK messages
@@ -188,8 +203,10 @@ src/
     richDraftStreamer.ts  Bot API 10.1 Rich Messages backend ("rich")
     send.ts            shared final-message sender (markdown -> HTML, splitting)
     formatting.ts      markdown -> Telegram HTML (headings, bold, code, quotes)
-    permissions.ts     approval keyboards + pending-request registry
+    permissions.ts     approval keyboards (incl. per-Bash-command preset) + registry
     gitFlow.ts         /diff rendering + commit/discard buttons + callbacks
+    projects.ts        /projects switch menu + callbacks
+    voice.ts           voice-note transcription (Whisper)
     files.ts           incoming file downloads + image decoding for vision
   mcp/sendFile.ts     in-process MCP tool so Claude can send files back
 ```

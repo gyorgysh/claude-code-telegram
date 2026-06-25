@@ -95,7 +95,7 @@ async function main(): Promise<void> {
         for (const lb of leadBots) lb.stop(signal);
         // Short backstop in case bot.stop() stalls.
         setTimeout(() => { log.info("Forcing exit"); process.exit(0); }, 3000).unref();
-      }, 10_000).unref();
+      }, 10_000);
     };
 
     const deadline = setTimeout(() => {

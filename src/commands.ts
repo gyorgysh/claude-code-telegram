@@ -1,7 +1,7 @@
 import { existsSync, statSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import type { Telegraf } from "telegraf";
-import { config } from "./config.js";
+import { mainSettingsView } from "./core/mainSettings.js";
 import { sessions } from "./session/manager.js";
 import { sendDiff } from "./telegram/gitFlow.js";
 import { sendProjectsMenu } from "./telegram/projects.js";
@@ -239,7 +239,7 @@ export function registerCommands(bot: Telegraf): void {
     await ctx.replyWithHTML(
       `<b>Status</b>\n` +
         `📂 <code>${s.cwd}</code>\n` +
-        `🧠 Atlas · <code>${config.CLAUDE_MODEL}</code>\n` +
+        `🧠 Atlas · <code>${mainSettingsView().effectiveModel}</code>\n` +
         `🔒 mode: <b>${s.mode}</b>\n` +
         `🔗 session: <code>${s.sessionId ?? "(new)"}</code>\n` +
         `⚙️ ${s.busy ? "running…" : "idle"}`,

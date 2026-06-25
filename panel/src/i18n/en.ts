@@ -397,6 +397,7 @@ export const en = {
   usage_cost_lifetime: "Cost lifetime",
   usage_turn: "turn",
   usage_turns: "turns",
+  usage_turns_today: "Turns today",
   usage_turns_total: "turns total",
   usage_time_today: "Time today",
   usage_time_lifetime: "Time lifetime",

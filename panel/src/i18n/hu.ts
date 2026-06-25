@@ -399,6 +399,7 @@ export const hu: Translations = {
   usage_cost_lifetime: "Költség összesen",
   usage_turn: "kör",
   usage_turns: "kör",
+  usage_turns_today: "Körök ma",
   usage_turns_total: "kör összesen",
   usage_time_today: "Idő ma",
   usage_time_lifetime: "Idő összesen",

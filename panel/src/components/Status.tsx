@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { api, type BackendStatus, type ServiceStatus } from "../api.ts";
 import { usePoll } from "../lib/usePoll.ts";
 import { Badge, Card, Empty } from "./ui.tsx";
@@ -69,7 +68,6 @@ function ServiceBanner({ s }: { s: ServiceStatus }) {
 
 function BackendRow({ b }: { b: BackendStatus }) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
   const state = !b.reachable ? "down" : !b.authOk ? "auth" : "up";
   const dot =
     state === "up" ? "bg-emerald-500" : state === "auth" ? "bg-amber-500" : "bg-red-500";
@@ -103,14 +101,6 @@ function BackendRow({ b }: { b: BackendStatus }) {
         </div>
       </div>
       {b.models.length > 0 && (
-        <button
-          onClick={() => setOpen((o) => !o)}
-          className="mt-2 text-xs text-fg-dim hover:text-fg-muted"
-        >
-          {open ? t("status_hide_models") : t("status_show_models")}
-        </button>
-      )}
-      {open && (
         <div className="mono mt-2 flex flex-wrap gap-1.5">
           {b.models.map((m) => (
             <span key={m} className="rounded bg-surface-2 px-1.5 py-0.5 text-xs text-fg-muted">

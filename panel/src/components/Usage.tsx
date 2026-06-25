@@ -82,40 +82,55 @@ export function UsageView({ onAuthError }: { onAuthError: () => void }) {
         </Card>
       )}
 
-      {/* MyHQ session metrics */}
+      {/* MyHQ session metrics — cost is meaningless on a subscription plan, so omit it */}
       {myhq && (
         <>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <Card>
-              <Metric
-                label={isSubscription ? t("usage_api_cost_today") : t("usage_cost_today")}
-                value={usd(myhq.today.costUsd)}
-                sub={`${myhq.today.turns} ${myhq.today.turns === 1 ? t("usage_turn") : t("usage_turns")}`}
-              />
-            </Card>
-            <Card>
-              <Metric
-                label={isSubscription ? t("usage_api_cost_lifetime") : t("usage_cost_lifetime")}
-                value={usd(myhq.total.costUsd)}
-                sub={`${myhq.total.turns} ${t("usage_turns_total")}`}
-              />
-            </Card>
-            <Card>
-              <Metric label={t("usage_time_today")} value={ms(myhq.today.durationMs)} />
-            </Card>
-            <Card>
-              <Metric label={t("usage_time_lifetime")} value={ms(myhq.total.durationMs)} />
-            </Card>
-          </div>
+          {isSubscription ? (
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <Card>
+                <Metric
+                  label={t("usage_turns_today")}
+                  value={myhq.today.turns.toLocaleString()}
+                  sub={`${myhq.total.turns.toLocaleString()} ${t("usage_turns_total")}`}
+                />
+              </Card>
+              <Card>
+                <Metric label={t("usage_time_today")} value={ms(myhq.today.durationMs)} />
+              </Card>
+              <Card>
+                <Metric label={t("usage_time_lifetime")} value={ms(myhq.total.durationMs)} />
+              </Card>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <Card>
+                  <Metric
+                    label={t("usage_cost_today")}
+                    value={usd(myhq.today.costUsd)}
+                    sub={`${myhq.today.turns} ${myhq.today.turns === 1 ? t("usage_turn") : t("usage_turns")}`}
+                  />
+                </Card>
+                <Card>
+                  <Metric
+                    label={t("usage_cost_lifetime")}
+                    value={usd(myhq.total.costUsd)}
+                    sub={`${myhq.total.turns} ${t("usage_turns_total")}`}
+                  />
+                </Card>
+                <Card>
+                  <Metric label={t("usage_time_today")} value={ms(myhq.today.durationMs)} />
+                </Card>
+                <Card>
+                  <Metric label={t("usage_time_lifetime")} value={ms(myhq.total.durationMs)} />
+                </Card>
+              </div>
 
-          <Card title={isSubscription ? t("usage_cost_per_day_sub") : t("usage_daily_cost")}>
-            <CostChart myhq={myhq} plan={plan} isSubscription={isSubscription} />
-            {isSubscription && (
-              <p className="mt-2 text-xs text-fg-faint">
-                {t("usage_subscription_note").replace("{plan}", detectedPlan ?? t("usage_subscription_fallback"))}
-              </p>
-            )}
-          </Card>
+              <Card title={t("usage_daily_cost")}>
+                <CostChart myhq={myhq} plan={plan} isSubscription={isSubscription} />
+              </Card>
+            </>
+          )}
         </>
       )}
     </div>
@@ -240,8 +255,6 @@ function LiveLimitsCard({
 
 function ActivityCard({ claude }: { claude: ClaudeUsageSnapshot }) {
   const { t } = useI18n();
-  const days = [...claude.recentDays].reverse();
-  const maxMsg = Math.max(1, ...days.map((d) => d.messageCount));
 
   return (
     <Card title={t("usage_activity_history")}>
@@ -265,60 +278,6 @@ function ActivityCard({ claude }: { claude: ClaudeUsageSnapshot }) {
             value={(claude.lastRecordedDay?.toolCallCount ?? 0).toLocaleString()}
           />
         </div>
-
-        {/* Message sparkline */}
-        {days.length > 0 && (
-          <div>
-            <p className="mb-2 text-xs font-medium text-fg-dim">
-              {t("usage_messages_per_day").replace("{n}", String(days.length))}
-            </p>
-            <div className="flex h-20 items-end gap-0.5">
-              {days.map((d) => {
-                const isLatest = d.date === claude.lastRecordedDay?.date;
-                return (
-                  <div
-                    key={d.date}
-                    className="group flex flex-1 flex-col items-center justify-end"
-                    title={`${d.date}: ${d.messageCount.toLocaleString()} ${t("health_messages")}`}
-                  >
-                    <div
-                      className={`w-full min-h-[2px] rounded-t transition-all ${
-                        isLatest ? "bg-accent" : "bg-accent/30 group-hover:bg-accent/60"
-                      }`}
-                      style={{ height: `${(d.messageCount / maxMsg) * 100}%` }}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Token breakdown */}
-        {Object.keys(claude.lastDayTokens).length > 0 && (
-          <div>
-            <p className="mb-1.5 text-xs font-medium text-fg-dim">
-              {t("usage_tokens_by_model")} — {claude.lastRecordedDay?.date ?? t("usage_last_recorded_day")}
-            </p>
-            <div className="space-y-1.5">
-              {Object.entries(claude.lastDayTokens).map(([model, t]) => {
-                const total = t.inputTokens + t.outputTokens;
-                const short = model.replace(/^(claude-|anthropic\/|qwen\/)/i, "").slice(0, 42);
-                return (
-                  <div key={model} className="flex items-center gap-2 text-xs">
-                    <span className="w-40 shrink-0 truncate font-mono text-fg-dim" title={model}>{short}</span>
-                    <span className="tabular text-fg">{(total / 1_000_000).toFixed(2)}M</span>
-                    <span className="hidden sm:inline text-fg-faint">
-                      in {(t.inputTokens / 1_000_000).toFixed(2)}M · out {(t.outputTokens / 1_000_000).toFixed(2)}M
-                      {t.cacheReadInputTokens > 0 && ` · cache ${(t.cacheReadInputTokens / 1_000_000).toFixed(2)}M`}
-                    </span>
-                    {t.costUSD > 0 && <span className="ml-auto tabular text-fg-faint">${t.costUSD.toFixed(4)}</span>}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         {/* Lifetime footer */}
         <div className="flex flex-wrap gap-x-5 gap-y-0.5 border-t border-line pt-2 text-xs text-fg-faint">

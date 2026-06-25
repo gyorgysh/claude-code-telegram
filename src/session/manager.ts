@@ -60,7 +60,7 @@ export class SessionManager {
         chatId: p.chatId,
         sessionId: p.sessionId,
         cwd: p.cwd,
-        busy: false,
+        busy: false, // runtime-only flag; always starts clear so a hard restart can't leave a stale-busy session
         sessionAllowedTools: new Set(p.allowedTools),
         allowedBashCmds: new Set(p.allowedBashCmds),
         projects: p.projects,

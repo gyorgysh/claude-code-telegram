@@ -9,7 +9,19 @@ import { getTask, setDelegate, updateTask } from "./tasks.js";
 import { audit } from "./audit.js";
 import { log } from "../logger.js";
 
-const OUTPUT_CAP = 8_000;
+const OUTPUT_HEAD = 3_000;
+const OUTPUT_TAIL = 5_000;
+const OUTPUT_MARKER = "\n\n[...TRUNCATED...]\n\n";
+
+/**
+ * Cap accumulated run output by keeping the first `OUTPUT_HEAD` and last
+ * `OUTPUT_TAIL` chars with a marker between, so errors at the start aren't lost
+ * to a plain tail-slice. Returns the string unchanged when it fits.
+ */
+function capOutput(s: string): string {
+  if (s.length <= OUTPUT_HEAD + OUTPUT_TAIL) return s;
+  return s.slice(0, OUTPUT_HEAD) + OUTPUT_MARKER + s.slice(-OUTPUT_TAIL);
+}
 
 type Broadcaster = (msg: unknown) => void;
 
@@ -101,7 +113,7 @@ export class TaskDelegator {
         mcpServers: { memory: memoryMcp, tasks: tasksMcp, skills: skillsMcp, self_update: selfUpdateMcp },
         canUseTool: async (_n, input) => ({ behavior: "allow", updatedInput: input }),
         onText: (d) => {
-          output = (output + d).slice(-OUTPUT_CAP);
+          output += d;
           this.broadcast({ type: "task", event: "delta", taskId: id, runId, delta: d });
         },
         onToolUse: (name) => this.broadcast({ type: "task", event: "tool", taskId: id, runId, tool: name }),
@@ -112,7 +124,7 @@ export class TaskDelegator {
         runId,
         startedAt,
         endedAt: Date.now(),
-        output,
+        output: capOutput(output),
         error: res.isError ? res.text?.slice(0, 500) : undefined,
       });
       const finalColumn = res.isError ? undefined : "done";
@@ -127,7 +139,7 @@ export class TaskDelegator {
         runId,
         startedAt,
         endedAt: Date.now(),
-        output,
+        output: capOutput(output),
         error: stopped ? undefined : err instanceof Error ? err.message : String(err),
       });
       if (!stopped) log.error("Task delegation failed", { id, runId });

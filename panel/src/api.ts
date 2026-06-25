@@ -420,6 +420,13 @@ export interface ChatView {
 
 export type Autonomy = "supervised" | "standard" | "full";
 
+export interface EmbeddingConfig {
+  enabled: boolean;
+  provider: "ollama" | "openai";
+  baseUrl: string;
+  model: string;
+}
+
 export interface MainAgent {
   model: string;
   providerId: string;
@@ -431,6 +438,7 @@ export interface MainAgent {
   persona: string;
   autonomy: Autonomy;
   defaultLanguage: string;
+  embeddings: EmbeddingConfig;
 }
 
 export interface Provider {
@@ -540,6 +548,8 @@ export const api = {
     req<MainAgent>("PUT", "/api/agent", s),
   resetAgent: () => req<{ sessions: number; aborted: number }>("POST", "/api/agent/reset"),
   restartAgent: () => req<{ ok: boolean; restarting: boolean }>("POST", "/api/agent/restart"),
+  saveEmbeddings: (s: { enabled: boolean; provider?: "ollama" | "openai"; baseUrl?: string; model?: string }) =>
+    req<{ embeddings: EmbeddingConfig }>("PUT", "/api/agent/embeddings", s),
 
   workers: () =>
     get<{

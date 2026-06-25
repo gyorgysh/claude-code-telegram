@@ -43,7 +43,7 @@ import {
 import { taskDelegator } from "../core/taskRunner.js";
 import { workers, describeWorkerSchedule, type Worker } from "../core/workers.js";
 import { chat } from "../core/chat.js";
-import { memory } from "../core/memory.js";
+import { memory, type MemoryEntry } from "../core/memory.js";
 import { getStatus } from "../core/status.js";
 import { heartbeat } from "../core/heartbeat.js";
 import { listConnectors, setConnector } from "../core/connectors.js";
@@ -57,6 +57,7 @@ import {
 } from "../core/providers.js";
 import { fetchProviderModels } from "../core/providerModels.js";
 import { mainSettingsView, setMainSettings } from "../core/mainSettings.js";
+import { embeddingConfig, setEmbeddingsEnabled } from "../core/embeddings.js";
 import { serviceInstalled, restartService } from "../core/agentControl.js";
 import { isActive } from "../core/activity.js";
 import { getUpdateStatus, checkForUpdate, runUpdate, runRestore } from "../core/updateControl.js";
@@ -206,7 +207,18 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
   app.get("/api/agent", async () => ({
     ...mainSettingsView(),
     serviceInstalled: serviceInstalled(),
+    embeddings: embeddingConfig(),
   }));
+  app.put("/api/agent/embeddings", async (req) => {
+    const { enabled, provider, baseUrl, model } = (req.body ?? {}) as {
+      enabled: boolean;
+      provider?: "ollama" | "openai";
+      baseUrl?: string;
+      model?: string;
+    };
+    setEmbeddingsEnabled(enabled, { provider, baseUrl, model });
+    return { embeddings: embeddingConfig() };
+  });
   app.put("/api/agent", async (req) => {
     const { model, providerId, persona, autonomy, defaultLanguage } = (req.body ?? {}) as {
       model?: string;
@@ -374,16 +386,25 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
   });
 
   // --- durable memory ---
+  // Drop the (large) raw embedding vector from API responses; the panel never
+  // needs it and it would bloat every payload.
+  const stripEmbedding = (e: MemoryEntry): Omit<MemoryEntry, "embedding"> & { embedded: boolean } => {
+    const { embedding, ...rest } = e;
+    return { ...rest, embedded: !!(embedding && embedding.length) };
+  };
   app.get("/api/memories", async (req) => {
     const { q, all } = req.query as { q?: string; all?: string };
-    if (q) return { memories: all === "true" ? memory.searchAll(q, 50) : memory.search(q, 50) };
-    return { memories: memory.list() };
+    if (q) {
+      const hits = await memory.semanticSearch(q, 50, all === "true");
+      return { memories: hits.map(stripEmbedding) };
+    }
+    return { memories: memory.list().map(stripEmbedding) };
   });
-  app.post("/api/memories", async (req) => memory.create(req.body as never));
+  app.post("/api/memories", async (req) => stripEmbedding(memory.create(req.body as never)));
   app.put("/api/memories/:id", async (req, reply) => {
     const updated = memory.update((req.params as { id: string }).id, req.body as never);
     if (!updated) return reply.code(404).send({ error: "not found" });
-    return updated;
+    return stripEmbedding(updated);
   });
   app.patch("/api/memories/:id/tier", async (req, reply) => {
     const { tier } = (req.body ?? {}) as { tier?: string };
@@ -391,7 +412,7 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
       return reply.code(400).send({ error: "tier must be hot, warm, or cold" });
     const updated = memory.setTier((req.params as { id: string }).id, tier);
     if (!updated) return reply.code(404).send({ error: "not found" });
-    return updated;
+    return stripEmbedding(updated);
   });
   app.delete("/api/memories/:id", async (req, reply) => {
     if (!memory.remove((req.params as { id: string }).id))

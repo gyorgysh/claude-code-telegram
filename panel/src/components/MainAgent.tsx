@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { api, AuthError, type MainAgent, type Autonomy } from "../api.ts";
+import { api, AuthError, type MainAgent, type Autonomy, type EmbeddingConfig } from "../api.ts";
 import { Badge, Button, Card, Input, Label, Select, TextArea } from "./ui.tsx";
 import { useI18n } from "../lib/useI18n.ts";
 import type { TranslationKey } from "../i18n/en.ts";
@@ -28,6 +28,11 @@ export function MainAgentCard({ onAuthError }: { onAuthError: () => void }) {
   const [providerId, setProviderId] = useState("");
   const [persona, setPersona] = useState("");
   const [autonomy, setAutonomy] = useState<Autonomy>("standard");
+  const [embeddings, setEmbeddings] = useState<EmbeddingConfig | null>(null);
+  const [embEnabled, setEmbEnabled] = useState(false);
+  const [embProvider, setEmbProvider] = useState<"ollama" | "openai">("ollama");
+  const [embBaseUrl, setEmbBaseUrl] = useState("");
+  const [embModel, setEmbModel] = useState("");
   const [fetched, setFetched] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -42,6 +47,11 @@ export function MainAgentCard({ onAuthError }: { onAuthError: () => void }) {
         setProviderId(a.providerId);
         setPersona(a.persona ?? "");
         setAutonomy(a.autonomy ?? "standard");
+        setEmbeddings(a.embeddings);
+        setEmbEnabled(a.embeddings.enabled);
+        setEmbProvider(a.embeddings.provider);
+        setEmbBaseUrl(a.embeddings.baseUrl);
+        setEmbModel(a.embeddings.model);
       })
       .catch((e) => e instanceof AuthError && onAuthError());
 
@@ -95,6 +105,20 @@ export function MainAgentCard({ onAuthError }: { onAuthError: () => void }) {
     try {
       const r = await api.resetAgent();
       flash(t("settings_reset_done").replace("{sessions}", String(r.sessions)).replace("{aborted}", String(r.aborted)));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const saveEmbeddingSettings = async () => {
+    setBusy("emb");
+    try {
+      const r = await api.saveEmbeddings({ enabled: embEnabled, provider: embProvider, baseUrl: embBaseUrl, model: embModel });
+      setEmbeddings(r.embeddings);
+      flash(t("agent_saved"));
+    } catch (e) {
+      if (e instanceof AuthError) return onAuthError();
+      flash(String(e));
     } finally {
       setBusy(null);
     }
@@ -216,6 +240,49 @@ export function MainAgentCard({ onAuthError }: { onAuthError: () => void }) {
           ))}
         </div>
       </div>
+
+      {embeddings && (
+        <div className="mt-4 border-t border-line pt-4">
+          <div className="flex items-center justify-between mb-2">
+            <Label>{t("settings_embeddings")}</Label>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={embEnabled}
+              onClick={() => setEmbEnabled((v) => !v)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${embEnabled ? "bg-accent" : "bg-line"}`}
+            >
+              <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${embEnabled ? "translate-x-4" : "translate-x-1"}`} />
+            </button>
+          </div>
+          {embEnabled && (
+            <div className="space-y-2">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div>
+                  <Label>{t("settings_emb_provider")}</Label>
+                  <Select value={embProvider} onChange={(e) => setEmbProvider(e.target.value as "ollama" | "openai")}>
+                    <option value="ollama">Ollama</option>
+                    <option value="openai">OpenAI / LM Studio</option>
+                  </Select>
+                </div>
+                <div>
+                  <Label>{t("settings_emb_base_url")}</Label>
+                  <Input value={embBaseUrl} onChange={(e) => setEmbBaseUrl(e.target.value)} placeholder="http://localhost:11434" />
+                </div>
+                <div>
+                  <Label>{t("settings_emb_model")}</Label>
+                  <Input value={embModel} onChange={(e) => setEmbModel(e.target.value)} placeholder="nomic-embed-text" />
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="mt-2">
+            <Button onClick={saveEmbeddingSettings} disabled={busy === "emb"}>
+              {busy === "emb" ? t("saving") : t("save")}
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button variant="primary" onClick={save} disabled={!dirty || busy === "save"}>

@@ -8,6 +8,8 @@ import { startProbeScheduler, stopProbeScheduler } from "./core/usageProbe.js";
 import { getPlanSettings } from "./core/planSettings.js";
 import { startPanel } from "./panel/server.js";
 import { workers } from "./core/workers.js";
+import { memory } from "./core/memory.js";
+import { embeddingsEnabled, autoProbeEmbeddings } from "./core/embeddings.js";
 import { LeadBot } from "./telegram/leadBot.js";
 import { log } from "./logger.js";
 import { registerIdleGate, whenSettled } from "./core/activity.js";
@@ -34,6 +36,19 @@ async function main(): Promise<void> {
 
   maintenance.start();
   startProbeScheduler(getPlanSettings().probeIntervalMs);
+
+  // Auto-detect a local embedding model (Ollama / LM Studio) if the user hasn't
+  // explicitly configured EMBEDDING_ENABLED. Fire-and-forget; sets the runtime
+  // flag so the subsequent ensureEmbeddings() call sees the right state.
+  await autoProbeEmbeddings().catch(() => {});
+
+  // Backfill semantic embeddings for existing memories in the background (no-op
+  // when embeddings are disabled). Best-effort: failures fall back to keyword search.
+  if (embeddingsEnabled()) {
+    void memory.ensureEmbeddings().catch((err) => {
+      log.debug("Memory embedding backfill failed", { error: errText(err) });
+    });
+  }
 
   const me = await bot.telegram.getMe();
   log.info("Configuration loaded", {

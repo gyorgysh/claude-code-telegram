@@ -3,6 +3,7 @@ import { runTurn, AUTO_ALLOWED_TOOLS } from "../claude/runner.js";
 import { memoryMcp } from "../mcp/memory.js";
 import { tasksMcp } from "../mcp/tasks.js";
 import { skillsMcp } from "../mcp/skills.js";
+import { selfUpdateMcp } from "../mcp/selfUpdate.js";
 import { nextRun, parseWhen, describeSpec } from "../schedule/manager.js";
 import type { ScheduleSpec } from "../schedule/store.js";
 import { loadJson, saveJson } from "./jsonStore.js";
@@ -268,7 +269,7 @@ export class WorkerManager {
         language: w.language,
         permissionMode,
         abortController: abort,
-        mcpServers: { memory: memoryMcp, tasks: tasksMcp, skills: skillsMcp },
+        mcpServers: { memory: memoryMcp, tasks: tasksMcp, skills: skillsMcp, self_update: selfUpdateMcp },
         canUseTool: async (toolName, input) => {
           // supervised/standard: only AUTO_ALLOWED_TOOLS pass for unattended workers.
           if (AUTO_ALLOWED_TOOLS.has(toolName)) return { behavior: "allow", updatedInput: input };

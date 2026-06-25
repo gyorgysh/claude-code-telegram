@@ -2,6 +2,7 @@ import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { config } from "../config.js";
 import { systemPrompt } from "../prompt.js";
 import { memory, formatMemories } from "../core/memory.js";
+import { activityBegin, activityEnd } from "../core/activity.js";
 import { log } from "../logger.js";
 import {
   isAssistant,
@@ -35,6 +36,9 @@ export const AUTO_ALLOWED_TOOLS = new Set([
   "mcp__skills__skill_save",
   "mcp__skills__skill_patch",
   "mcp__skills__skill_list",
+  // Shipping own source edits: only queues a build-gated, deferred restart and
+  // is announced to the user, so it's safe to run without a prompt.
+  "mcp__self_update__self_update",
 ]);
 
 export type PermissionResult =
@@ -139,6 +143,9 @@ export async function runTurn(opts: RunOptions): Promise<RunResult> {
   let result: RunResult = { isError: false };
   const toolCalls: Array<{ name: string; input: unknown }> = [];
 
+  // Hold the dev restart-guard for the lifetime of the stream, so a source edit
+  // the agent makes mid-run doesn't bounce the watcher until the turn is done.
+  activityBegin();
   try {
     for await (const msg of response) {
       if (isSystemInit(msg)) {
@@ -167,6 +174,8 @@ export async function runTurn(opts: RunOptions): Promise<RunResult> {
     const tail = stderr.slice(-8).join("\n");
     if (tail) log.error("claude process failed", { stderr: tail });
     throw new Error(tail ? `${err instanceof Error ? err.message : String(err)} — ${tail}` : String(err));
+  } finally {
+    activityEnd();
   }
 
   return result;

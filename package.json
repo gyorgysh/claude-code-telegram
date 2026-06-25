@@ -8,8 +8,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "concurrently -k -n bot,panel -c blue,green \"tsx watch src/index.ts\" \"npm run panel:watch\"",
-    "dev:bot": "tsx watch src/index.ts",
+    "dev": "concurrently -k -n bot,panel -c blue,green \"npm run dev:bot\" \"npm run panel:watch\"",
+    "dev:bot": "node scripts/dev-bot.mjs",
     "build": "npm run build:panel && tsc -p tsconfig.json",
     "build:panel": "cd panel && npm install && npm run build",
     "panel:watch": "cd panel && npm install && npm run build -- --watch",

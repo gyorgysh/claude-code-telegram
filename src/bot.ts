@@ -8,6 +8,8 @@ import { createTelegramMcp } from "./mcp/sendFile.js";
 import { memoryMcp } from "./mcp/memory.js";
 import { tasksMcp } from "./mcp/tasks.js";
 import { skillsMcp } from "./mcp/skills.js";
+import { selfUpdateMcp } from "./mcp/selfUpdate.js";
+import { selfUpdate } from "./core/selfUpdate.js";
 import { createCrewMcp } from "./mcp/crew.js";
 import { TelegramStreamer, type Streamer } from "./telegram/streamer.js";
 import { DraftStreamer } from "./telegram/draftStreamer.js";
@@ -177,6 +179,16 @@ export function buildBot(): Telegraf {
 
   // --- Heartbeat: proactive host/kanban monitoring (off unless enabled) ---
   const alertTargets = [...allowedUserIds];
+
+  // Self-update reports (build/restart of the bot's own source) go to the
+  // president — every allowed chat — as plain status messages.
+  selfUpdate.start(async (text) => {
+    for (const chatId of alertTargets) {
+      await bot.telegram
+        .sendMessage(chatId, `<i>${escapeHtml(text)}</i>`, { parse_mode: "HTML" })
+        .catch(() => {});
+    }
+  });
   heartbeat.start({
     notify: async (text) => {
       for (const chatId of alertTargets) {
@@ -362,6 +374,7 @@ async function handleUserPrompt(
         memory: memoryMcp,
         tasks: tasksMcp,
         skills: skillsMcp,
+        self_update: selfUpdateMcp,
         crew: crewMcp,
       },
       canUseTool,

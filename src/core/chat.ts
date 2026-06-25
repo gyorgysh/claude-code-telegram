@@ -4,6 +4,7 @@ import { runTurn, AUTO_ALLOWED_TOOLS, type PermissionResult } from "../claude/ru
 import { memoryMcp } from "../mcp/memory.js";
 import { tasksMcp } from "../mcp/tasks.js";
 import { skillsMcp } from "../mcp/skills.js";
+import { selfUpdateMcp } from "../mcp/selfUpdate.js";
 import { resolveMainRun } from "./mainSettings.js";
 import { loadJson, saveJson } from "./jsonStore.js";
 import { audit } from "./audit.js";
@@ -159,7 +160,7 @@ export class ChatManager {
         env,
         permissionMode: this.autoActive ? "bypassPermissions" : "default",
         abortController: abort,
-        mcpServers: { memory: memoryMcp, tasks: tasksMcp, skills: skillsMcp },
+        mcpServers: { memory: memoryMcp, tasks: tasksMcp, skills: skillsMcp, self_update: selfUpdateMcp },
         canUseTool: (name, input) => this.canUseTool(name, input, abort),
         onText: (delta) => {
           assistant.text += delta;

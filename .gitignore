@@ -2,6 +2,9 @@ node_modules/
 dist/
 .env
 *.log
+
+# Dev restart-guard lock (scripts/dev-bot.mjs <-> src/core/devGuard.ts)
+.dev-busy
 uploads/
 .DS_Store
 

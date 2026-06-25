@@ -62,8 +62,21 @@ export function isActive(): boolean {
   return active > 0;
 }
 
-/** Resolve when no run is in flight (immediately if already idle). */
+/** Resolve when no run is in flight.
+ *
+ * Always yields at least one event-loop tick before checking, so callers that
+ * are invoked from within the same microtask frame as activityEnd() (e.g.
+ * self_update fired at the tail of a turn) don't see a spurious idle signal
+ * before the turn's finally-block has fully settled.
+ */
 export function whenIdle(): Promise<void> {
-  if (active === 0) return Promise.resolve();
-  return new Promise((res) => idleWaiters.push(res));
+  return new Promise((res) => {
+    setImmediate(() => {
+      if (active === 0) {
+        res();
+      } else {
+        idleWaiters.push(res);
+      }
+    });
+  });
 }

@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import { repoRoot } from "../config.js";
 import { log } from "../logger.js";
 import { audit } from "./audit.js";
-import { whenIdle } from "./activity.js";
+import { isActive, whenIdle } from "./activity.js";
 import { serviceInstalled, restartService } from "./agentControl.js";
 
 const pexec = promisify(execFile);
@@ -59,8 +59,12 @@ class SelfUpdateManager {
   private async run(summary: string): Promise<void> {
     try {
       // Wait for the calling task (and any concurrent run) to finish before we
-      // touch anything, so nothing is recompiled mid-task.
-      await whenIdle();
+      // touch anything, so nothing is recompiled mid-task.  Loop because a new
+      // turn may arrive in the gap between whenIdle() resolving and the build
+      // actually starting (e.g. the user sends the next message immediately).
+      do {
+        await whenIdle();
+      } while (isActive());
 
       const stat = await this.diffStat();
       this.state = { status: "building", summary, at: Date.now() };

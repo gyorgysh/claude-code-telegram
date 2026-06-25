@@ -231,6 +231,8 @@ export const en = {
   tasks_remove_confirm: "Remove column \"{name}\"?",
   tasks_failed_load: "Failed to load: {error}",
   tasks_subtask: "↳ subtask",
+  tasks_move_to_planned: "Move to Planned",
+  tasks_mark_done: "Mark Done",
 
   // Workers
   workers_crew: "Your Crew",

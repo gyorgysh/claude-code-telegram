@@ -268,6 +268,10 @@ function Card({
   const stop = async () => {
     await api.stopTask(task.id).catch(() => {});
   };
+  const moveTo = async (column: Column) => {
+    await api.updateTask(task.id, { column }).catch(() => {});
+    onChange();
+  };
 
   if (editing) {
     return (
@@ -358,6 +362,23 @@ function Card({
             </div>
           )}
           {task.delegate?.error && <div className="mt-1 text-xs text-red-400">{task.delegate.error}</div>}
+        </div>
+      )}
+
+      {!running && (dstatus === "stopped" || dstatus === "error") && (
+        <div className="mt-2 flex gap-1.5">
+          <button
+            onClick={() => moveTo("backlog")}
+            className="flex-1 rounded border border-line py-1 text-xs text-fg-dim hover:bg-surface-2 hover:text-fg"
+          >
+            {t("tasks_move_to_planned")}
+          </button>
+          <button
+            onClick={() => moveTo("done")}
+            className="flex-1 rounded border border-line py-1 text-xs text-emerald-400 hover:bg-surface-2"
+          >
+            {t("tasks_mark_done")}
+          </button>
         </div>
       )}
 

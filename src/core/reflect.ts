@@ -7,6 +7,10 @@ import { log } from "../logger.js";
 
 const COST_THRESHOLD_USD = 0.05;
 const DURATION_THRESHOLD_MS = 30_000;
+/** Minimum gap between reflect runs per chat to avoid spamming memory writes. */
+const COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+
+const lastReflectAt = new Map<number, number>();
 
 const SYSTEM = `You are a reflection pass. A Claude Code turn just finished on a host machine. Your only job is to decide whether anything is worth keeping for future turns, and if so, save it — then stop. Be conservative: most turns yield nothing.
 
@@ -28,10 +32,18 @@ export async function reflectOnTurn(
   userPrompt: string,
   toolCalls: Array<{ name: string; input: unknown }>,
   result: { text?: string; costUsd?: number; durationMs?: number },
+  chatId?: number,
 ): Promise<void> {
   if (!config.AUTO_SKILL_GENERATION) return;
   const { costUsd = 0, durationMs = 0 } = result;
   if (costUsd < COST_THRESHOLD_USD && durationMs < DURATION_THRESHOLD_MS) return;
+  const key = chatId ?? 0;
+  const last = lastReflectAt.get(key) ?? 0;
+  if (Date.now() - last < COOLDOWN_MS) {
+    log.debug("Reflect: skipped (cooldown)", { chatId });
+    return;
+  }
+  lastReflectAt.set(key, Date.now());
 
   const toolSummary = toolCalls
     .slice(0, 20)

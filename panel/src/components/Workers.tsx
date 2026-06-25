@@ -414,8 +414,26 @@ function WorkerWizard({
   };
 
   const createAll = async () => {
+    // Track lead id -> real worker id so assistants get the right parentId.
+    const leadIdByIndex = new Map<number, string>();
     for (let i = 0; i < configs.length; i++) {
-      if (!created.has(i)) await createOne(i);
+      if (created.has(i)) continue;
+      let cfg = configs[i];
+      // If this is an assistant, find the nearest preceding lead in this batch
+      // and inject its freshly-created id.
+      if (cfg.role === "assistant") {
+        for (let j = i - 1; j >= 0; j--) {
+          const leadId = leadIdByIndex.get(j);
+          if (leadId) { cfg = { ...cfg, parentId: leadId }; break; }
+        }
+      }
+      try {
+        const created_worker = await api.createWorker(cfg);
+        if (cfg.role === "lead") leadIdByIndex.set(i, created_worker.id);
+        setCreated((prev) => new Set([...prev, i]));
+      } catch (e) {
+        if (e instanceof AuthError) { onAuthError(); return; }
+      }
     }
     await onDone();
   };

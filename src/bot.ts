@@ -450,7 +450,7 @@ async function handleUserPrompt(
     // Post-turn reflection: distil a durable fact and/or reusable skill
     // (fire-and-forget, gated by env var + cost/time thresholds).
     if (!res.isError && res.toolCalls?.length) {
-      void reflectOnTurn(prompt, res.toolCalls, res);
+      void reflectOnTurn(prompt, res.toolCalls, res, chatId);
     }
   } catch (err) {
     await streamer.finalize().catch(() => {});

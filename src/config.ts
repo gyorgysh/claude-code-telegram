@@ -42,9 +42,13 @@ const schema = z.object({
   // Default language for agent responses (BCP 47 tag, e.g. "en", "hu", "fr").
   DEFAULT_LANGUAGE: z.string().min(2).default("en"),
   // Auto-generate skills from expensive/long turns (off by default).
+  // Post-turn reflection: after a substantive turn, a short autonomous reflection
+  // run distils a durable fact (→ memory) and/or a reusable procedure (→ skills).
+  // Runs through the same model/provider as the bot; gated by cost/time thresholds
+  // so cheap turns never trigger it.
   AUTO_SKILL_GENERATION: z
     .enum(["true", "false"])
-    .default("false")
+    .default("true")
     .transform((v) => v === "true"),
   // Maintenance scheduler: daily run time in HH:MM (server-local 24h). Disabled if unset.
   MAINTENANCE_CRON: z.string().optional(),

@@ -27,7 +27,7 @@ import { resolveMainRun } from "./core/mainSettings.js";
 import { workers } from "./core/workers.js";
 import { escapeHtml, normalizeAgentText } from "./telegram/formatting.js";
 import { resolveAsk, hasPendingAsk } from "./core/crewAsk.js";
-import { autoExtractSkill } from "./core/autoSkill.js";
+import { reflectOnTurn } from "./core/reflect.js";
 import type { ImageInput, RunResult } from "./claude/runner.js";
 import type { Autonomy } from "./session/manager.js";
 import { sessions } from "./session/manager.js";
@@ -430,9 +430,10 @@ async function handleUserPrompt(
       await sendSummaryReport(tg, chatId, res);
     }
 
-    // Auto skill extraction (fire-and-forget, gated by env var).
+    // Post-turn reflection: distil a durable fact and/or reusable skill
+    // (fire-and-forget, gated by env var + cost/time thresholds).
     if (!res.isError && res.toolCalls?.length) {
-      void autoExtractSkill(prompt, res.toolCalls, res);
+      void reflectOnTurn(prompt, res.toolCalls, res);
     }
   } catch (err) {
     await streamer.finalize().catch(() => {});

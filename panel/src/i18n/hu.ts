@@ -566,6 +566,7 @@ export const hu: Translations = {
   updates_recovery_desc:
     "Visszaállítja a kódot az ág legutóbbi GitHub commitjára. Eldobja a helyi kódváltoztatásokat (pl. egy elrontott önfrissítést), de megtartja az adatokat, titkokat, konfigurációt és a work.md fájlt. Akkor használd, ha egy változtatás elrontotta a panelt vagy a buildet — Telegramról is indítható a /restore paranccsal.",
   updates_restore: "Visszaállítás GitHubról",
+  updates_active_warn: "Jelenleg fut egy feladat — a bot újraindításakor leáll.",
   updates_restore_confirm:
     "Visszaállítod a kódot a legutóbbi GitHub commitra? A helyi kódváltoztatások elvesznek; az adatok és a konfiguráció megmaradnak. A bot újraépül és újraindul.",
 

@@ -460,6 +460,8 @@ export interface UpdateStatus {
   checking: boolean;
   updating: boolean;
   serviceInstalled: boolean;
+  /** A turn/delegation is in flight — update/restore would interrupt it. */
+  active?: boolean;
 }
 
 export const api = {

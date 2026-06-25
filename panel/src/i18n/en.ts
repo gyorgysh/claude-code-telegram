@@ -564,6 +564,7 @@ export const en = {
   updates_recovery_desc:
     "Reset the code to the latest commit on this branch from GitHub. Discards local code changes (e.g. a self-update gone wrong) but keeps your data, secrets, config, and work.md. Use this if a change broke the panel or build — you can also trigger it from Telegram with /restore.",
   updates_restore: "Restore from GitHub",
+  updates_active_warn: "A task is currently running — it will be stopped when the bot restarts.",
   updates_restore_confirm:
     "Restore the code to the latest GitHub commit? Local code changes are discarded; your data and config are kept. The bot will rebuild and restart.",
 

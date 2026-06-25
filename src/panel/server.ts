@@ -56,6 +56,7 @@ import {
 import { fetchProviderModels } from "../core/providerModels.js";
 import { mainSettingsView, setMainSettings } from "../core/mainSettings.js";
 import { serviceInstalled, restartService } from "../core/agentControl.js";
+import { isActive } from "../core/activity.js";
 import { getUpdateStatus, checkForUpdate, runUpdate, runRestore } from "../core/updateControl.js";
 import { recentAudit } from "../core/audit.js";
 import { sessions } from "../session/manager.js";
@@ -301,8 +302,8 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
   app.post("/api/plan/report-test", async () => heartbeat.sendCostReport());
 
   // --- self-update ---
-  app.get("/api/update", async () => ({ ...getUpdateStatus(), serviceInstalled: serviceInstalled() }));
-  app.post("/api/update/check", async () => ({ ...(await checkForUpdate()), serviceInstalled: serviceInstalled() }));
+  app.get("/api/update", async () => ({ ...getUpdateStatus(), serviceInstalled: serviceInstalled(), active: isActive() }));
+  app.post("/api/update/check", async () => ({ ...(await checkForUpdate()), serviceInstalled: serviceInstalled(), active: isActive() }));
   app.post("/api/update/run", async () => {
     if (getUpdateStatus().updating) return { started: false };
     // Stream output to panel clients; don't await (the run may restart us).

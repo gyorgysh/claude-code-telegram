@@ -15,6 +15,7 @@ import type { UsageStat } from "./session/store.js";
 import { loadProbeResult, runProbe } from "./core/usageProbe.js";
 import { getPlanSettings, billingPeriodStart, daysUntilReset } from "./core/planSettings.js";
 import { checkForUpdate, runUpdate, runRestore, isUpdating } from "./core/updateControl.js";
+import { isActive } from "./core/activity.js";
 import { serviceInstalled } from "./core/agentControl.js";
 import { log } from "./logger.js";
 
@@ -379,9 +380,13 @@ export function registerCommands(bot: Telegraf): void {
     const list = st.commits.slice(0, 10).map((c) => `• ${escapeHtml(c)}`).join("\n");
     // Only auto-run when the user confirmed with "now"; otherwise just report.
     if (arg !== "now") {
+      const busyNote = isActive()
+        ? "\n\n⚠️ <b>A task is currently running</b> — it will be stopped when the bot restarts."
+        : "";
       await ctx.replyWithHTML(
-        `⬆️ <b>${st.behindBy}</b> update(s) available on <b>${st.branch}</b>:\n${list}\n\n` +
-          `Send <code>/update now</code> to apply (fetch, rebuild${serviceInstalled() ? ", and restart" : ""}).`,
+        `⬆️ <b>${st.behindBy}</b> update(s) available on <b>${st.branch}</b>:\n${list}` +
+          busyNote +
+          `\n\nSend <code>/update now</code> to apply (fetch, rebuild${serviceInstalled() ? ", and restart" : ""}).`,
       );
       return;
     }
@@ -410,11 +415,15 @@ export function registerCommands(bot: Telegraf): void {
     // Destructive: discards local code edits. Require an explicit confirm so it
     // can't fire by accident — this is the recovery path, not a routine action.
     if (arg !== "confirm" && arg !== "now") {
+      const busyNote = isActive()
+        ? "\n\n⚠️ <b>A task is currently running</b> — it will be stopped when the bot restarts."
+        : "";
       await ctx.replyWithHTML(
         "♻️ <b>Restore system</b>\n" +
           "Resets the code to the latest commit on this branch from GitHub. " +
-          "Local code changes are <b>discarded</b>; your data, secrets, config, and work.md are <b>kept</b>.\n\n" +
-          `Send <code>/restore confirm</code> to proceed (fetch, rebuild${serviceInstalled() ? ", and restart" : ""}).`,
+          "Local code changes are <b>discarded</b>; your data, secrets, config, and work.md are <b>kept</b>." +
+          busyNote +
+          `\n\nSend <code>/restore confirm</code> to proceed (fetch, rebuild${serviceInstalled() ? ", and restart" : ""}).`,
       );
       return;
     }

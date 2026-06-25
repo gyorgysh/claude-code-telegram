@@ -72,7 +72,8 @@ export function UpdatesView({
   };
 
   const run = async () => {
-    if (!confirm(t("updates_run_confirm"))) return;
+    const msg = t("updates_run_confirm") + (status?.active ? `\n\n${t("updates_active_warn")}` : "");
+    if (!confirm(msg)) return;
     setRunning(true);
     setLines([]);
     try {
@@ -85,7 +86,8 @@ export function UpdatesView({
   };
 
   const restore = async () => {
-    if (!confirm(t("updates_restore_confirm"))) return;
+    const msg = t("updates_restore_confirm") + (status?.active ? `\n\n${t("updates_active_warn")}` : "");
+    if (!confirm(msg)) return;
     setRunning(true);
     setLines([]);
     try {
@@ -161,6 +163,9 @@ export function UpdatesView({
             </span>
           </div>
         )}
+        {available && status?.active && (
+          <p className="mt-2 text-xs text-amber-400">⚠️ {t("updates_active_warn")}</p>
+        )}
       </Card>
 
       {/* Streamed output */}
@@ -190,6 +195,9 @@ export function UpdatesView({
             {status?.serviceInstalled ? t("updates_will_restart") : t("updates_manual_restart")}
           </span>
         </div>
+        {status?.active && (
+          <p className="mt-2 text-xs text-amber-400">⚠️ {t("updates_active_warn")}</p>
+        )}
       </Card>
 
       {/* Manual fallback */}

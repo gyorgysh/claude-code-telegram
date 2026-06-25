@@ -200,6 +200,10 @@ curl -X POST -H "$AUTH" -H "Content-Type: application/json" $BASE/api/schedules 
   -d '{ "prompt": "Check disk usage and alert if over 80%", "when": "09:00", "cwd": "/home/user" }'
 # when: "30m", "2h", "1d", or "HH:MM" (daily, server local time)
 
+# Pause/resume a schedule (paused ones stay in the list but never fire on tick)
+curl -X PUT -H "$AUTH" -H "Content-Type: application/json" $BASE/api/schedules/<id>/enabled \
+  -d '{ "enabled": false }'
+
 # Remove a schedule
 curl -X DELETE -H "$AUTH" $BASE/api/schedules/<id>
 ```

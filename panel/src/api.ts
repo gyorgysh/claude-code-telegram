@@ -93,6 +93,7 @@ export interface ScheduleView {
   nextRunAt: number;
   lastRunAt?: number;
   createdAt: number;
+  enabled: boolean;
 }
 
 export interface UsageSummary {
@@ -484,6 +485,8 @@ export const api = {
     req<{ schedules: ScheduleView[] }>("POST", "/api/schedules", s),
   updateSchedule: (id: string, patch: { prompt?: string; when?: string; cwd?: string }) =>
     req<{ schedules: ScheduleView[] }>("PUT", `/api/schedules/${id}`, patch),
+  setScheduleEnabled: (id: string, enabled: boolean) =>
+    req<{ schedules: ScheduleView[] }>("PUT", `/api/schedules/${id}/enabled`, { enabled }),
   runScheduleNow: (id: string) =>
     req<{ ok: boolean; schedules: ScheduleView[] }>("POST", `/api/schedules/${id}/run`, {}),
   deleteSchedule: (id: string) => req<{ ok: boolean }>("DELETE", `/api/schedules/${id}`),

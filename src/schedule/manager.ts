@@ -65,6 +65,7 @@ export class ScheduleManager {
       spec,
       nextRunAt: nextRun(spec, Date.now()),
       createdAt: Date.now(),
+      enabled: true,
     };
     this.schedules.push(s);
     saveSchedules(this.schedules);
@@ -88,6 +89,16 @@ export class ScheduleManager {
     }
     saveSchedules(this.schedules);
     log.info("Schedule updated", { id });
+    return { ...s };
+  }
+
+  /** Pause/resume a schedule by id. Paused ones stay in the list but never fire. */
+  setEnabled(id: string, enabled: boolean): Schedule | null {
+    const s = this.schedules.find((s) => s.id === id);
+    if (!s) return null;
+    s.enabled = enabled;
+    saveSchedules(this.schedules);
+    log.info("Schedule enabled toggled", { id, enabled });
     return { ...s };
   }
 
@@ -115,6 +126,7 @@ export class ScheduleManager {
     const now = Date.now();
     let dirty = false;
     for (const s of this.schedules) {
+      if (s.enabled === false) continue;
       if (s.nextRunAt > now) continue;
       let started = false;
       try {

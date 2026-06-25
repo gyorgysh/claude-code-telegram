@@ -28,6 +28,7 @@ export interface ScheduleView {
   nextRunAt: number;
   lastRunAt?: number;
   createdAt: number;
+  enabled: boolean;
 }
 
 function today(): string {
@@ -62,6 +63,7 @@ export function listSchedules(): ScheduleView[] {
     nextRunAt: s.nextRunAt,
     lastRunAt: s.lastRunAt,
     createdAt: s.createdAt,
+    enabled: s.enabled !== false,
   }));
 }
 

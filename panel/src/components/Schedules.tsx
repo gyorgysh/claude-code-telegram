@@ -68,6 +68,17 @@ export function SchedulesView({ onAuthError }: { onAuthError: () => void }) {
     }
   };
 
+  const toggleEnabled = async (id: string, enabled: boolean) => {
+    setError(null);
+    try {
+      const r = await api.setScheduleEnabled(id, enabled);
+      setSchedules(r.schedules);
+    } catch (e) {
+      if (e instanceof AuthError) return onAuthError();
+      setError(String(e));
+    }
+  };
+
   const del = async (id: string) => {
     if (!confirm(t("sched_delete_confirm"))) return;
     await api.deleteSchedule(id);
@@ -166,13 +177,22 @@ export function SchedulesView({ onAuthError }: { onAuthError: () => void }) {
                 </div>
               </div>
             ) : (
-              <div key={s.id} className="rounded-lg border border-line p-3">
+              <div
+                key={s.id}
+                className={`rounded-lg border border-line p-3${s.enabled ? "" : " opacity-60"}`}
+              >
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone="blue">{s.spec}</Badge>
+                  {!s.enabled && <Badge tone="amber">{t("sched_paused")}</Badge>}
                   <span className="ml-auto tabular text-xs text-fg-muted">
-                    {t("sched_next").replace("{time}", relTime(s.nextRunAt))}
+                    {s.enabled
+                      ? t("sched_next").replace("{time}", relTime(s.nextRunAt))
+                      : t("sched_paused")}
                     {s.lastRunAt ? ` · ${t("sched_last").replace("{time}", relTime(s.lastRunAt))}` : ""}
                   </span>
+                  <Button onClick={() => void toggleEnabled(s.id, !s.enabled)}>
+                    {s.enabled ? t("sched_pause") : t("sched_resume")}
+                  </Button>
                   <Button onClick={() => void runNow(s.id)}>{t("sched_run_now")}</Button>
                   <Button onClick={() => startEdit(s)}>{t("edit")}</Button>
                   <Button variant="danger" onClick={() => del(s.id)}>

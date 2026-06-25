@@ -538,6 +538,9 @@ export const hu: Translations = {
   sched_last: "utolsó {time}",
   sched_run_now: "Futtatás most",
   sched_run_busy: "A csevegés foglalt, próbáld újra.",
+  sched_pause: "Szüneteltetés",
+  sched_resume: "Folytatás",
+  sched_paused: "Szüneteltetve",
 
   // Állapot nézet
   status_kind_anthropic: "Anthropic",

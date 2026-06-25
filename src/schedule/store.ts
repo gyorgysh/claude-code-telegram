@@ -20,6 +20,8 @@ export interface Schedule {
   nextRunAt: number;
   createdAt: number;
   lastRunAt?: number;
+  /** Paused schedules stay in the list but are skipped on tick. Defaults to enabled. */
+  enabled?: boolean;
 }
 
 // Sibling of STATE_FILE so it lives in the same gitignored data/ folder.

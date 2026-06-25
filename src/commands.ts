@@ -321,7 +321,7 @@ export function registerCommands(bot: Telegraf): void {
       }
       const lines = list.map(
         (x) =>
-          `• <code>${x.id}</code>: ${escapeHtml(describeSpec(x.spec))}, next ${new Date(x.nextRunAt).toLocaleString()}\n  <i>${escapeHtml(x.prompt.slice(0, 80))}</i>`,
+          `• <code>${x.id}</code>: ${escapeHtml(describeSpec(x.spec))}, ${x.enabled === false ? "⏸ paused" : `next ${new Date(x.nextRunAt).toLocaleString()}`}\n  <i>${escapeHtml(x.prompt.slice(0, 80))}</i>`,
       );
       await ctx.replyWithHTML(
         `<b>⏰ Schedules</b>\n${lines.join("\n")}\n\nRemove with <code>/schedule rm &lt;id&gt;</code>.`,

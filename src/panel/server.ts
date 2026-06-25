@@ -261,6 +261,14 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
     if (!updated) return reply.code(404).send({ error: "not found" });
     return { schedules: listSchedules() };
   });
+  app.put("/api/schedules/:id/enabled", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { enabled } = (req.body ?? {}) as { enabled?: boolean };
+    if (typeof enabled !== "boolean") return reply.code(400).send({ error: "enabled (boolean) required" });
+    const updated = schedules.setEnabled(id, enabled);
+    if (!updated) return reply.code(404).send({ error: "not found" });
+    return { schedules: listSchedules() };
+  });
   app.post("/api/schedules/:id/run", async (req, reply) => {
     const result = await schedules.runNow((req.params as { id: string }).id);
     if (result === "not_found") return reply.code(404).send({ error: "not found" });

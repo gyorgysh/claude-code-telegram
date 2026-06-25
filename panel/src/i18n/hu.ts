@@ -68,6 +68,8 @@ export const hu: Translations = {
   memory_forget: "Töröljük ezt a memóriát?",
   memory_show_cold: "Hideg mutatása",
   memory_hide_cold: "Hideg elrejtése",
+  memory_tip_title: "Tipp",
+  memory_tip_body: 'Csevegésben mondd az ügynöknek: „kérlek jegyezd meg…", ha úgy érzed, kihagyott egy fontos tényt. Azt is megkérdezheted: „mit tudsz X-ről?", hogy ellenőrizd az emlékezetet egy hosszabb feladat előtt.',
   // Készségek nézet
   skills_title: "Készségek",
   skills_new: "+ Új készség",

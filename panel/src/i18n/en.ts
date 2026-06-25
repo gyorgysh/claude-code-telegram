@@ -66,6 +66,8 @@ export const en = {
   memory_forget: "Forget this memory?",
   memory_show_cold: "Show cold",
   memory_hide_cold: "Hide cold",
+  memory_tip_title: "Tip",
+  memory_tip_body: 'In chat, tell your agent "please remember…" to save any fact you think it missed. You can also ask "what do you remember about X?" to verify recall before a long task.',
   // Skills view
   skills_title: "Skills",
   skills_new: "+ New skill",

@@ -98,9 +98,8 @@ export function MemoryView({ onAuthError }: { onAuthError: () => void }) {
       <p className="mb-3 text-sm text-fg-dim">{t("memory_desc")}</p>
 
       <div className="mb-4">
-        <Callout title="Tip" dismissId="memory-recall">
-          In chat, tell your agent <em>"please remember…"</em> to save any fact you think it missed.
-          You can also ask <em>"what do you remember about X?"</em> to verify recall before a long task.
+        <Callout title={t("memory_tip_title")} dismissId="memory-recall">
+          {t("memory_tip_body")}
         </Callout>
       </div>
 

@@ -60,6 +60,7 @@ export function WorkersView({ onAuthError }: { onAuthError: () => void }) {
   const [skills, setSkills] = useState<Named[]>([]);
   const [providers, setProviders] = useState<Named[]>([]);
   const [creating, setCreating] = useState(false);
+  const [wizarding, setWizarding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const live = useWorkerEvents();
 
@@ -88,12 +89,28 @@ export function WorkersView({ onAuthError }: { onAuthError: () => void }) {
 
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-fg-dim">{t("workers_crew")}</h2>
-        {!creating && (
-          <Button variant="primary" onClick={() => setCreating(true)}>
-            {t("workers_new")}
-          </Button>
+        {!creating && !wizarding && (
+          <div className="flex gap-2">
+            <Button onClick={() => setWizarding(true)}>
+              {t("workers_wizard")}
+            </Button>
+            <Button variant="primary" onClick={() => setCreating(true)}>
+              {t("workers_new")}
+            </Button>
+          </div>
         )}
       </div>
+
+      {wizarding && (
+        <WorkerWizard
+          skills={skills}
+          providers={providers}
+          workers={workers}
+          onDone={async () => { setWizarding(false); await load(); }}
+          onCancel={() => setWizarding(false)}
+          onAuthError={onAuthError}
+        />
+      )}
 
       {creating && (
         <Card title={t("workers_new_card")}>
@@ -310,6 +327,401 @@ function WorkerRow({
     </Card>
   );
 }
+
+// ─── Worker Wizard ───────────────────────────────────────────────────────────
+
+type WizardPhase = "questions" | "generating" | "review";
+
+interface WizardAnswers {
+  goal: string;
+  context: string;
+  cwd: string;
+  schedule: string;
+  crew: boolean;
+}
+
+function WorkerWizard({
+  skills,
+  providers,
+  workers,
+  onDone,
+  onCancel,
+  onAuthError,
+}: {
+  skills: Named[];
+  providers: Named[];
+  workers: Worker[];
+  onDone: () => Promise<void>;
+  onCancel: () => void;
+  onAuthError: () => void;
+}) {
+  const { t } = useI18n();
+  const [phase, setPhase] = useState<WizardPhase>("questions");
+  const [answers, setAnswers] = useState<WizardAnswers>({
+    goal: "", context: "", cwd: "", schedule: "", crew: false,
+  });
+  const [configs, setConfigs] = useState<Form[]>([]);
+  const [created, setCreated] = useState<Set<number>>(new Set());
+  const [genError, setGenError] = useState<string | null>(null);
+
+  const generate = async () => {
+    if (!answers.goal.trim()) return;
+    setPhase("generating");
+    setGenError(null);
+    try {
+      const r = await api.workerWizard({
+        goal: answers.goal,
+        context: answers.context || undefined,
+        crew: answers.crew,
+        schedule: answers.schedule || undefined,
+        cwd: answers.cwd || undefined,
+      });
+      // Map API response to Form shape, filling in defaults.
+      const forms: Form[] = r.configs.map((c) => ({
+        name: String(c.name ?? ""),
+        cwd: String(c.cwd ?? answers.cwd ?? ""),
+        prompt: String(c.prompt ?? ""),
+        model: String(c.model ?? ""),
+        providerId: String(c.providerId ?? ""),
+        systemPrompt: String(c.systemPrompt ?? ""),
+        skillId: String(c.skillId ?? ""),
+        when: String(c.when ?? answers.schedule ?? ""),
+        role: (c.role ?? "") as Form["role"],
+        portfolio: String(c.portfolio ?? ""),
+        parentId: "",  // resolved post-creation by name
+        telegramToken: String(c.telegramToken ?? ""),
+        persona: String(c.persona ?? ""),
+        autonomy: (c.autonomy ?? "full") as Autonomy,
+        language: String(c.language ?? ""),
+      }));
+      setConfigs(forms);
+      setCreated(new Set());
+      setPhase("review");
+    } catch (e) {
+      if (e instanceof AuthError) { onAuthError(); return; }
+      setGenError(String(e));
+      setPhase("questions");
+    }
+  };
+
+  const createOne = async (idx: number) => {
+    try {
+      await api.createWorker(configs[idx]);
+      setCreated((prev) => new Set([...prev, idx]));
+    } catch (e) {
+      if (e instanceof AuthError) onAuthError();
+    }
+  };
+
+  const createAll = async () => {
+    for (let i = 0; i < configs.length; i++) {
+      if (!created.has(i)) await createOne(i);
+    }
+    await onDone();
+  };
+
+  const updateConfig = (idx: number, patch: Partial<Form>) => {
+    setConfigs((prev) => prev.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
+  };
+
+  // ── questions phase ──────────────────────────────────────────────────────
+  if (phase === "questions") {
+    return (
+      <Card title={t("wizard_title")}>
+        <p className="mb-4 text-xs text-fg-dim">{t("wizard_subtitle")}</p>
+        <div className="space-y-4">
+          <div>
+            <Label>{t("wizard_q_goal")} <span className="text-red-400">*</span></Label>
+            <TextArea
+              rows={3}
+              value={answers.goal}
+              onChange={(e) => setAnswers({ ...answers, goal: e.target.value })}
+              placeholder={t("wizard_q_goal_placeholder")}
+            />
+          </div>
+          <div>
+            <Label>{t("wizard_q_context")}</Label>
+            <TextArea
+              rows={2}
+              value={answers.context}
+              onChange={(e) => setAnswers({ ...answers, context: e.target.value })}
+              placeholder={t("wizard_q_context_placeholder")}
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label>{t("wizard_q_cwd")}</Label>
+              <Input
+                value={answers.cwd}
+                onChange={(e) => setAnswers({ ...answers, cwd: e.target.value })}
+                placeholder={t("wizard_q_cwd_placeholder")}
+              />
+            </div>
+            <div>
+              <Label>{t("wizard_q_schedule")}</Label>
+              <Input
+                value={answers.schedule}
+                onChange={(e) => setAnswers({ ...answers, schedule: e.target.value })}
+                placeholder={t("wizard_q_schedule_placeholder")}
+              />
+            </div>
+          </div>
+          <div>
+            <Label>{t("wizard_q_crew")}</Label>
+            <div className="mt-1 flex gap-2">
+              {([false, true] as const).map((val) => (
+                <button
+                  key={String(val)}
+                  type="button"
+                  onClick={() => setAnswers({ ...answers, crew: val })}
+                  className={`rounded px-3 py-1.5 text-xs border transition-colors ${
+                    answers.crew === val
+                      ? "bg-[var(--accent)] text-white border-transparent"
+                      : "border-line text-fg-dim hover:text-fg"
+                  }`}
+                >
+                  {val ? t("wizard_opt_crew") : t("wizard_opt_single")}
+                </button>
+              ))}
+            </div>
+          </div>
+          {genError && (
+            <p className="rounded bg-red-500/10 px-3 py-2 text-xs text-red-400">
+              {t("wizard_error").replace("{error}", genError)}
+            </p>
+          )}
+          <div className="flex gap-2">
+            <Button
+              variant="primary"
+              onClick={generate}
+              disabled={!answers.goal.trim()}
+            >
+              {t("wizard_next")}
+            </Button>
+            <Button onClick={onCancel}>{t("wizard_cancel")}</Button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  // ── generating phase ─────────────────────────────────────────────────────
+  if (phase === "generating") {
+    return (
+      <Card title={t("wizard_title")}>
+        <p className="text-xs text-fg-dim animate-pulse">{t("wizard_generating")}</p>
+      </Card>
+    );
+  }
+
+  // ── review phase ─────────────────────────────────────────────────────────
+  const allCreated = configs.length > 0 && configs.every((_, i) => created.has(i));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-fg">{t("wizard_result_title")}</h3>
+          <p className="text-xs text-fg-dim">{t("wizard_result_subtitle")}</p>
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={() => { setPhase("questions"); setGenError(null); }}>
+            {t("wizard_back")}
+          </Button>
+          {configs.length > 1 && !allCreated && (
+            <Button variant="primary" onClick={createAll}>
+              {t("wizard_confirm_all").replace("{n}", String(configs.length))}
+            </Button>
+          )}
+          {allCreated && (
+            <Button variant="primary" onClick={onDone}>
+              Done
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {configs.map((cfg, idx) => (
+        <Card key={idx} title={cfg.name || `Agent ${idx + 1}`}>
+          {created.has(idx) ? (
+            <p className="text-xs text-emerald-400">{t("wizard_created")}</p>
+          ) : (
+            <WizardConfigEditor
+              form={cfg}
+              onChange={(patch) => updateConfig(idx, patch)}
+              skills={skills}
+              providers={providers}
+              workers={workers}
+              onAuthError={onAuthError}
+              onConfirm={() => createOne(idx)}
+            />
+          )}
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function WizardConfigEditor({
+  form,
+  onChange,
+  skills,
+  providers,
+  onAuthError,
+  onConfirm,
+}: {
+  form: Form;
+  onChange: (patch: Partial<Form>) => void;
+  skills: Named[];
+  providers: Named[];
+  workers: Worker[];
+  onAuthError: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const { t } = useI18n();
+  const [busy, setBusy] = useState(false);
+  const [fetched, setFetched] = useState<string[]>([]);
+  const listId = useId();
+
+  const fetchModels = async () => {
+    if (!form.providerId) return;
+    try {
+      const r = await api.providerModels(form.providerId);
+      setFetched(r.models);
+    } catch (e) {
+      if (e instanceof AuthError) onAuthError();
+    }
+  };
+
+  const confirm = async () => {
+    setBusy(true);
+    try { await onConfirm(); } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <Label>{t("workers_name")}</Label>
+          <Input value={form.name} onChange={(e) => onChange({ name: e.target.value })} />
+        </div>
+        <div>
+          <Label>{t("workers_cwd")}</Label>
+          <Input
+            value={form.cwd}
+            onChange={(e) => onChange({ cwd: e.target.value })}
+            placeholder={t("workers_cwd_placeholder")}
+          />
+        </div>
+      </div>
+      <div>
+        <Label>{t("workers_task")}</Label>
+        <TextArea
+          rows={4}
+          value={form.prompt}
+          onChange={(e) => onChange({ prompt: e.target.value })}
+        />
+      </div>
+      <div>
+        <Label>{t("workers_persona_label")}</Label>
+        <TextArea
+          rows={2}
+          value={form.persona}
+          onChange={(e) => onChange({ persona: e.target.value })}
+        />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <Label>{t("workers_schedule")}</Label>
+          <Input
+            value={form.when}
+            onChange={(e) => onChange({ when: e.target.value })}
+            placeholder={t("workers_schedule_placeholder")}
+          />
+        </div>
+        <div>
+          <Label>{t("autonomy")}</Label>
+          <div className="mt-1 flex gap-1.5">
+            {(["supervised", "standard", "full"] as Autonomy[]).map((a) => (
+              <button
+                key={a}
+                type="button"
+                onClick={() => onChange({ autonomy: a })}
+                className={`rounded px-2 py-1 text-xs border transition-colors ${
+                  form.autonomy === a
+                    ? "bg-[var(--accent)] text-white border-transparent"
+                    : "border-line text-fg-dim hover:text-fg"
+                }`}
+              >
+                {t(AUTONOMY_KEY[a])}
+              </button>
+            ))}
+          </div>
+        </div>
+        {(form.role === "lead" || form.role === "assistant") && (
+          <div>
+            <Label>{t("wizard_portfolio")}</Label>
+            <Input value={form.portfolio} onChange={(e) => onChange({ portfolio: e.target.value })} />
+          </div>
+        )}
+        <div>
+          <Label>{t("workers_role")}</Label>
+          <Select
+            value={form.role}
+            onChange={(e) => onChange({ role: e.target.value as Form["role"] })}
+          >
+            <option value="">{t("workers_role_specialist")}</option>
+            <option value="lead">{t("workers_role_lead")}</option>
+            <option value="assistant">{t("workers_role_assistant")}</option>
+          </Select>
+        </div>
+        <div>
+          <Label>{t("workers_model")}</Label>
+          <div className="flex gap-2">
+            <Input
+              list={listId}
+              value={form.model}
+              onChange={(e) => onChange({ model: e.target.value })}
+              placeholder={form.providerId ? t("workers_model_local") : t("workers_model_default")}
+            />
+            {form.providerId && (
+              <Button onClick={fetchModels} className="shrink-0">{t("fetch")}</Button>
+            )}
+          </div>
+          <datalist id={listId}>
+            {[...new Set([...(form.providerId ? fetched : MODEL_SUGGESTIONS), ...fetched])].map((m) => (
+              <option key={m} value={m} />
+            ))}
+          </datalist>
+        </div>
+        <div>
+          <Label>{t("workers_provider")}</Label>
+          <Select value={form.providerId} onChange={(e) => onChange({ providerId: e.target.value })}>
+            <option value="">{t("workers_anthropic_default")}</option>
+            {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </Select>
+        </div>
+      </div>
+      {form.systemPrompt && (
+        <div>
+          <Label>{t("workers_domain")}</Label>
+          <TextArea rows={3} value={form.systemPrompt} onChange={(e) => onChange({ systemPrompt: e.target.value })} />
+        </div>
+      )}
+      <div className="flex gap-2 pt-1">
+        <Button
+          variant="primary"
+          onClick={confirm}
+          disabled={busy || !form.name.trim() || !form.cwd.trim() || !form.prompt.trim()}
+        >
+          {busy ? t("saving") : t("wizard_confirm_one")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Live output ─────────────────────────────────────────────────────────────
 
 function LiveOutput({ live }: { live?: LiveRun }) {
   const { t } = useI18n();

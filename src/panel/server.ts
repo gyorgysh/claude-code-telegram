@@ -61,6 +61,7 @@ import { getUpdateStatus, checkForUpdate, runUpdate, runRestore } from "../core/
 import { recentAudit } from "../core/audit.js";
 import { sessions } from "../session/manager.js";
 import { PanelHub } from "./hub.js";
+import { runTurn } from "../claude/runner.js";
 
 const STATIC_DIR = join(repoRoot, "panel", "dist");
 
@@ -473,6 +474,82 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
     runs: workers.history((req.params as { id: string }).id),
   }));
   app.get("/api/runs", async () => ({ runs: workers.history() }));
+
+  // --- worker wizard: generate pre-filled worker config(s) from user intent ---
+  app.post("/api/workers/wizard", async (req, reply) => {
+    const { goal, context, crew, schedule, cwd } = req.body as {
+      goal?: string;
+      context?: string;
+      crew?: boolean;
+      schedule?: string;
+      cwd?: string;
+    };
+    if (!goal?.trim()) return reply.code(400).send({ error: "goal required" });
+
+    const existingLeads = workers.list().filter((w) => w.role === "lead");
+    const existingLeadList =
+      existingLeads.length > 0
+        ? `Existing leads: ${existingLeads.map((w) => `${w.name} (${w.portfolio ?? "general"})`).join(", ")}`
+        : "No existing leads.";
+
+    const prompt = `You are a configuration generator for an AI agent orchestration system.
+
+The user wants to set up an autonomous agent (or crew of agents) to handle a recurring task.
+
+User's intent:
+- Goal: ${goal.trim()}
+${context?.trim() ? `- Context / domain: ${context.trim()}` : ""}
+${schedule?.trim() ? `- Desired schedule: ${schedule.trim()}` : "- No schedule (manual run only)"}
+${cwd?.trim() ? `- Working directory: ${cwd.trim()}` : "- No specific cwd"}
+- Wants full crew setup: ${crew ? "yes" : "no"}
+${existingLeadList}
+
+Generate a JSON array of worker configuration objects. Each object must include:
+- name: string — short display name
+- role: "" | "lead" | "assistant"
+- portfolio: string — domain (for lead/assistant roles)
+- parentId: string — leave "" (will be resolved by name post-creation)
+- cwd: string — working directory path
+- prompt: string — the standing task prompt this worker runs each time (detailed, actionable, first-person)
+- persona: string — character and tone (e.g. "Concise and direct. Lead with results.")
+- systemPrompt: string — domain knowledge or context injected into every run
+- autonomy: "supervised" | "standard" | "full"
+- when: string — schedule token like "09:00", "1h", "30m", or "" for manual
+- model: string — leave "" for default
+- enabled: boolean
+
+Rules:
+- If crew=false, return exactly one worker object (role: "").
+- If crew=true, design a minimal effective crew: one lead and 1-3 assistants that each own a slice of the work.
+- The prompt must be a complete, standalone task description — the agent has no other context when it runs.
+- Autonomy should be "full" for unattended work, "standard" if the task touches risky resources.
+- Be specific and practical. No placeholders.
+
+Respond with ONLY a JSON array, no markdown fences, no explanation. Example format:
+[{"name":"Finance Lead","role":"lead","portfolio":"Finance","parentId":"","cwd":"/home/user","prompt":"...","persona":"...","systemPrompt":"...","autonomy":"full","when":"09:00","model":"","enabled":true}]`;
+
+    try {
+      let output = "";
+      await runTurn({
+        prompt,
+        cwd: cwd?.trim() || process.cwd(),
+        permissionMode: "bypassPermissions",
+        abortController: new AbortController(),
+        mcpServers: {},
+        canUseTool: async (_name, input) => ({ behavior: "allow" as const, updatedInput: input }),
+        onText: (delta) => { output += delta; },
+        onToolUse: () => {},
+        onSessionId: () => {},
+      });
+      // Extract JSON array from the output (handle any stray text before/after).
+      const match = output.match(/\[[\s\S]*\]/);
+      if (!match) return reply.code(502).send({ error: "Model returned no JSON", raw: output.slice(0, 500) });
+      const configs = JSON.parse(match[0]) as unknown[];
+      return { configs };
+    } catch (err) {
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
 
   // --- in-panel chat (dedicated Claude session) ---
   app.get("/api/chat", async () => chat.view());

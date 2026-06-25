@@ -538,6 +538,8 @@ export const api = {
   runWorker: (id: string) => req<WorkerRun>("POST", `/api/workers/${id}/run`),
   stopWorker: (id: string) => req<{ ok: boolean }>("POST", `/api/workers/${id}/stop`),
   workerRuns: (id: string) => get<{ runs: WorkerRun[] }>(`/api/workers/${id}/runs`),
+  workerWizard: (body: { goal: string; context?: string; crew?: boolean; schedule?: string; cwd?: string }) =>
+    req<{ configs: Partial<Worker>[] }>("POST", "/api/workers/wizard", body),
 
   status: () => get<StatusSnapshot>("/api/status"),
 

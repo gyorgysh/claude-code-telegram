@@ -62,6 +62,59 @@ export function isActive(): boolean {
   return active > 0;
 }
 
+// Extra "still busy" predicates contributed by higher-level modules. The
+// activity counter only tracks the SDK stream (runTurn brackets it), but a chat
+// turn also has a post-stream tail — the streamed-reply quote/summary edits and
+// the reflect/memory pass — that runs *after* activityEnd(). session.busy stays
+// true across that tail, so registering it as a gate keeps whenSettled()/
+// isSettled() reporting busy until the whole turn (not just the stream) is done.
+type IdleGate = () => boolean;
+const idleGates = new Set<IdleGate>();
+
+/** Register a predicate that reports true while work is still pending. */
+export function registerIdleGate(fn: IdleGate): void {
+  idleGates.add(fn);
+}
+
+function gatesBusy(): boolean {
+  for (const gate of idleGates) {
+    try {
+      if (gate()) return true;
+    } catch {
+      /* a faulty gate must not wedge shutdown */
+    }
+  }
+  return false;
+}
+
+/** True when no run is in flight and every registered idle gate is clear. */
+export function isSettled(): boolean {
+  return active === 0 && !gatesBusy();
+}
+
+/**
+ * Resolve once fully settled: no active run AND all idle gates clear. Gates such
+ * as session.busy clear synchronously in a finally with no event to await, so we
+ * poll rather than rely on activityEnd's event alone.
+ */
+export function whenSettled(): Promise<void> {
+  return new Promise((res) => {
+    setImmediate(() => {
+      if (isSettled()) {
+        res();
+        return;
+      }
+      const timer = setInterval(() => {
+        if (isSettled()) {
+          clearInterval(timer);
+          res();
+        }
+      }, 200);
+      timer.unref();
+    });
+  });
+}
+
 /** Resolve when no run is in flight.
  *
  * Always yields at least one event-loop tick before checking, so callers that

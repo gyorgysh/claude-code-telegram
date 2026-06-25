@@ -10,7 +10,7 @@ import { startPanel } from "./panel/server.js";
 import { workers } from "./core/workers.js";
 import { LeadBot } from "./telegram/leadBot.js";
 import { log } from "./logger.js";
-import { whenIdle } from "./core/activity.js";
+import { registerIdleGate, whenSettled } from "./core/activity.js";
 
 async function main(): Promise<void> {
   if (config.ANTHROPIC_API_KEY) {
@@ -18,6 +18,12 @@ async function main(): Promise<void> {
   }
 
   const bot = buildBot();
+
+  // A chat turn stays session.busy through its post-stream tail (quote/summary
+  // edits + reflect/memory pass), which outlives the activity counter. Register
+  // it as an idle gate so self-update restarts and shutdown drain wait for the
+  // whole turn, not just the SDK stream.
+  registerIdleGate(() => sessions.all().some((s) => s.busy));
 
   // Start lead bots for any Lead worker with a telegramToken.
   const leadBots: LeadBot[] = workers.leads().map((w) => new LeadBot(w));
@@ -67,9 +73,27 @@ async function main(): Promise<void> {
     maintenance.stop();
     stopProbeScheduler();
 
-    // Give in-flight turns (including fire-and-forget reflect/memory writes)
-    // up to 30 s to finish naturally before we abort them.
+    // Give in-flight turns up to 30 s to finish naturally before we abort them.
+    // whenSettled() waits for the *whole* turn, not just the SDK stream: the
+    // session.busy gate (registered above) keeps it busy through the post-stream
+    // tail — the streamed-reply quote/summary edits and the reflect/memory pass —
+    // so SIGTERM during that tail waits for it instead of killing it.
+    let done = false;
     const GRACEFUL_MS = 30_000;
+
+    const finish = () => {
+      if (done) return;
+      done = true;
+      log.info("All turns finished — flushing and exiting");
+      clearTimeout(deadline);
+      sessions.flush();
+      void stopPanel?.();
+      bot.stop(signal);
+      for (const lb of leadBots) lb.stop(signal);
+      // Short backstop in case bot.stop() stalls.
+      setTimeout(() => { log.info("Forcing exit"); process.exit(0); }, 3000).unref();
+    };
+
     const deadline = setTimeout(() => {
       log.info("Graceful deadline reached — aborting in-flight turns");
       let aborted = 0;
@@ -80,20 +104,12 @@ async function main(): Promise<void> {
         }
       }
       if (aborted) log.info("Aborted in-flight turns", { count: aborted });
+      finish();
     }, GRACEFUL_MS);
     // Don't let the timer itself keep the process alive past a clean exit.
     deadline.unref();
 
-    void whenIdle().then(() => {
-      log.info("All turns finished — flushing and exiting");
-      clearTimeout(deadline);
-      sessions.flush();
-      void stopPanel?.();
-      bot.stop(signal);
-      for (const lb of leadBots) lb.stop(signal);
-      // Short backstop in case bot.stop() stalls.
-      setTimeout(() => { log.info("Forcing exit"); process.exit(0); }, 3000).unref();
-    });
+    void whenSettled().then(finish);
   };
 
   process.once("SIGINT", () => shutdown("SIGINT"));

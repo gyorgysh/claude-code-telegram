@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import { repoRoot } from "../config.js";
 import { log } from "../logger.js";
 import { audit } from "./audit.js";
-import { isActive, whenIdle } from "./activity.js";
+import { whenSettled } from "./activity.js";
 import { serviceInstalled, restartService } from "./agentControl.js";
 
 const pexec = promisify(execFile);
@@ -58,13 +58,10 @@ class SelfUpdateManager {
 
   private async run(summary: string): Promise<void> {
     try {
-      // Wait for the calling task (and any concurrent run) to finish before we
-      // touch anything, so nothing is recompiled mid-task.  Loop because a new
-      // turn may arrive in the gap between whenIdle() resolving and the build
-      // actually starting (e.g. the user sends the next message immediately).
-      do {
-        await whenIdle();
-      } while (isActive());
+      // Wait for the calling task — including its post-stream tail (quote/summary
+      // edits + reflect/memory pass, tracked by the session.busy idle gate) — to
+      // finish before we touch anything, so nothing is recompiled mid-task.
+      await whenSettled();
 
       const stat = await this.diffStat();
       this.state = { status: "building", summary, at: Date.now() };
@@ -84,9 +81,9 @@ class SelfUpdateManager {
         return;
       }
 
-      // Build is green. Don't restart on top of a task that started while we
-      // were building.
-      await whenIdle();
+      // Build is green. Don't restart on top of a task (or its post-stream tail)
+      // that started while we were building.
+      await whenSettled();
       const serviced = serviceInstalled();
       audit("selfUpdate.applied", { serviced });
       this.queued = false;

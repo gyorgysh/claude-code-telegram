@@ -12,6 +12,8 @@ import { schedules, parseWhen, describeSpec } from "./schedule/manager.js";
 import * as git from "./git.js";
 import { escapeHtml } from "./telegram/formatting.js";
 import type { UsageStat } from "./session/store.js";
+import { loadProbeResult } from "./core/usageProbe.js";
+import { getPlanSettings, billingPeriodStart, daysUntilReset } from "./core/planSettings.js";
 import { log } from "./logger.js";
 
 const HELP = `🤖 <b>Claude Code over Telegram</b>
@@ -231,12 +233,70 @@ export function registerCommands(bot: Telegraf): void {
   bot.command("usage", async (ctx) => {
     const s = sessions.get(ctx.chat.id);
     const today = new Date().toISOString().slice(0, 10);
-    const day = s.usage.daily[today];
-    await ctx.replyWithHTML(
-      `<b>📊 Usage — this chat</b>\n` +
-        `Today: ${fmtUsage(day)}\n` +
-        `Lifetime: ${fmtUsage(s.usage.total)}`,
-    );
+    const probe = loadProbeResult();
+    const plan = getPlanSettings();
+    const lines: string[] = ["<b>📊 Usage</b>"];
+
+    // Plan + account
+    if (probe?.account) {
+      const planLabel = probe.account.hasMax
+        ? "Claude Max"
+        : probe.account.hasPro
+          ? "Claude Pro"
+          : "API (pay-per-token)";
+      const who = probe.account.email ? ` · <code>${escapeHtml(probe.account.email)}</code>` : "";
+      lines.push(`\n<b>Plan</b>  ${planLabel}${who}`);
+    } else {
+      const planLabel = plan.plan === "max" ? "Claude Max" : plan.plan === "pro" ? "Claude Pro" : "API (pay-per-token)";
+      lines.push(`\n<b>Plan</b>  ${planLabel}`);
+    }
+
+    // Subscription limits (OAuth)
+    if (probe?.limits && probe.limits.length > 0) {
+      lines.push("\n<b>Subscription limits</b>");
+      for (const lim of probe.limits) {
+        const msLeft = Math.max(0, new Date(lim.resetsAt).getTime() - Date.now());
+        const sev = lim.severity === "critical" ? "🔴" : lim.severity === "warning" ? "🟡" : "🟢";
+        lines.push(`${sev} ${lim.label}   <b>${lim.percent}%</b>  ${fmtBar(lim.percent)}  resets in ${fmtCountdown(msLeft)}`);
+      }
+    }
+
+    // This chat
+    lines.push("\n<b>This chat</b>");
+    lines.push(`Today     ${fmtUsage(s.usage.daily[today])}`);
+    lines.push(`Lifetime  ${fmtUsage(s.usage.total)}`);
+
+    // API budget (only when plan=api and a cap is configured)
+    if (plan.plan === "api" && plan.monthlyCap > 0) {
+      const periodStart = billingPeriodStart(plan.billingDay);
+      const periodSpend = sessions.all().reduce((sum, sess) => {
+        for (const [d, stat] of Object.entries(sess.usage.daily)) {
+          if (d >= periodStart) sum += stat.costUsd;
+        }
+        return sum;
+      }, 0);
+      const pct = plan.monthlyCap > 0 ? Math.round((periodSpend / plan.monthlyCap) * 100) : 0;
+      const daysLeft = daysUntilReset(plan.billingDay);
+      lines.push(`\n<b>API budget</b>`);
+      lines.push(`Period spend  <b>$${periodSpend.toFixed(2)}</b> / $${plan.monthlyCap.toFixed(2)} (${pct}%)  ${fmtBar(pct)}`);
+      lines.push(`Billing resets in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`);
+    }
+
+    // Activity from stats-cache (when available)
+    if (probe?.activity) {
+      const a = probe.activity;
+      lines.push(`\n<b>Activity</b>`);
+      lines.push(`Messages  today ${a.messageCount}  ·  this week ${a.weeklyMessageCount}`);
+    }
+
+    // Probe age
+    if (probe) {
+      const ageMin = Math.round((Date.now() - new Date(probe.probedAt).getTime()) / 60_000);
+      const aged = ageMin < 2 ? "just now" : `${ageMin}m ago`;
+      lines.push(`\n<i>Subscription data from ${aged}</i>`);
+    }
+
+    await ctx.replyWithHTML(lines.join("\n"));
   });
 
   bot.command("status", async (ctx) => {
@@ -347,10 +407,27 @@ export function registerCommands(bot: Telegraf): void {
   });
 }
 
-/** Render a usage bucket as "N turns · $X.XX · Ym Ns" (handles the empty case). */
 function fmtUsage(stat: UsageStat | undefined): string {
   if (!stat || stat.turns === 0) return "—";
   const secs = Math.round(stat.durationMs / 1000);
   const time = secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`;
   return `${stat.turns} turn${stat.turns === 1 ? "" : "s"} · $${stat.costUsd.toFixed(2)} · ${time}`;
+}
+
+function fmtBar(pct: number): string {
+  const filled = Math.min(10, Math.round(pct / 10));
+  return "▓".repeat(filled) + "░".repeat(10 - filled);
+}
+
+function fmtCountdown(ms: number): string {
+  if (ms <= 0) return "now";
+  const totalMin = Math.ceil(ms / 60_000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h >= 24) {
+    const d = Math.floor(h / 24);
+    return `${d} day${d === 1 ? "" : "s"}`;
+  }
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
 }

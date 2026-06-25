@@ -269,6 +269,8 @@ export interface ProbeAccount {
 export interface ProbeResult {
   probedAt?: string;
   source: "oauth" | "fallback" | "none";
+  /** Cached data shown because the latest refresh failed (e.g. rate-limited). */
+  stale?: boolean;
   error?: string;
   account?: ProbeAccount;
   limits: UsageLimitWindow[];

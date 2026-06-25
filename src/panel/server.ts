@@ -500,8 +500,9 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
   // --- usage probe (OAuth API: real session/weekly limits + profile) ---
   app.get("/api/usage-probe", async () => loadProbeResult() ?? { source: "none", limits: [] });
   app.post("/api/usage-probe/run", async () => {
-    // Kick off async; return immediately so the button feels responsive.
-    void runProbe();
+    // Explicit user action — force past any rate-limit cooldown. Kick off async
+    // so the button feels responsive.
+    void runProbe({ force: true });
     return { ok: true, message: "Probe started" };
   });
 

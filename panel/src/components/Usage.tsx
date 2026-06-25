@@ -233,6 +233,11 @@ function LiveLimitsCard({
         <p className="text-sm text-fg-faint">{t("usage_no_active_limits")}</p>
       ) : (
         <div className="space-y-5">
+          {(probe.stale || probe.error) && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+              {probe.error ?? t("usage_oauth_unavailable")}
+            </div>
+          )}
           <div className="grid gap-6 sm:grid-cols-2">
             {probe.limits.slice(0, 2).map((lim) => (
               <LimitBar key={lim.label} lim={lim} />

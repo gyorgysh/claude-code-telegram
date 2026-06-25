@@ -112,6 +112,9 @@ export interface ProbeResult {
   probedAt: string;
   /** "oauth" = real data from the Anthropic OAuth API. "fallback" = stats-cache + auth status. */
   source: "oauth" | "fallback";
+  /** Set when this is cached data shown because a fresh refresh just failed
+   *  (e.g. rate-limited). `probedAt` then reflects when the data was last good. */
+  stale?: boolean;
   error?: string;
   account?: {
     email?: string;
@@ -137,7 +140,15 @@ export interface ProbeResult {
 interface ProbeFile {
   version: 1;
   result?: ProbeResult;
+  /** Epoch ms of the last API attempt (success or failure). */
+  lastAttemptAt?: number;
+  /** Epoch ms before which we must not hit the API again (rate-limit backoff). */
+  cooldownUntil?: number;
 }
+
+/** After a 429 we back off this long before touching the OAuth endpoint again,
+ *  so frequent restarts / stale-refreshes don't keep tripping the rate limit. */
+const RATE_LIMIT_COOLDOWN_MS = 30 * 60_000; // 30 min
 
 // ---------------------------------------------------------------------------
 // Keychain / token helpers
@@ -340,13 +351,39 @@ async function probeViaFallback(): Promise<ProbeResult> {
 // Public API
 // ---------------------------------------------------------------------------
 
-export function loadProbeResult(): ProbeResult | undefined {
-  return loadJson<ProbeFile>(PROBE_FILE, { version: 1 }).result;
+function loadFile(): ProbeFile {
+  return loadJson<ProbeFile>(PROBE_FILE, { version: 1 });
 }
 
-export async function runProbe(): Promise<ProbeResult> {
+export function loadProbeResult(): ProbeResult | undefined {
+  return loadFile().result;
+}
+
+/** True if the error looks like an HTTP 429 / rate-limit response. */
+function isRateLimit(msg: string): boolean {
+  return /\b429\b/.test(msg) || /rate[_ ]?limit/i.test(msg);
+}
+
+/**
+ * Probe usage and cache the result. Skips the network entirely while inside a
+ * rate-limit cooldown (unless `force`), so frequent restarts don't keep hitting
+ * the OAuth endpoint. On failure the last good OAuth data is preserved and
+ * flagged `stale` rather than being overwritten with an empty result.
+ */
+export async function runProbe(opts?: { force?: boolean }): Promise<ProbeResult> {
+  const file = loadFile();
+  const now = Date.now();
+
+  if (!opts?.force && file.cooldownUntil && now < file.cooldownUntil && file.result) {
+    log.info("Usage probe skipped — in rate-limit cooldown", {
+      until: new Date(file.cooldownUntil).toISOString(),
+    });
+    return file.result;
+  }
+
   log.info("Usage probe starting");
   let result: ProbeResult;
+  let rateLimited = false;
 
   try {
     const token = await getAccessToken();
@@ -359,22 +396,40 @@ export async function runProbe(): Promise<ProbeResult> {
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    log.warn("Usage probe failed", { error: msg });
-    try {
-      result = await probeViaFallback();
-      result.error = `OAuth probe failed: ${msg}`;
-    } catch {
-      result = {
-        probedAt: new Date().toISOString(),
-        source: "fallback",
-        error: msg,
-        limits: [],
-        activity: readActivity(),
-      };
+    rateLimited = isRateLimit(msg);
+    log.warn("Usage probe failed", { error: msg, rateLimited });
+
+    const prev = file.result;
+    const friendly = rateLimited
+      ? "Anthropic rate-limited the usage check — showing the last known values; will retry automatically."
+      : `Usage check failed: ${msg}`;
+
+    if (prev && prev.source === "oauth" && prev.limits.length > 0) {
+      // Keep the last good live data; just mark it stale so the panel can show
+      // it with a "couldn't refresh" note instead of going blank.
+      result = { ...prev, stale: true, error: friendly };
+    } else {
+      try {
+        result = await probeViaFallback();
+        result.error = friendly;
+      } catch {
+        result = {
+          probedAt: new Date().toISOString(),
+          source: "fallback",
+          error: friendly,
+          limits: [],
+          activity: readActivity(),
+        };
+      }
     }
   }
 
-  saveJson<ProbeFile>(PROBE_FILE, { version: 1, result });
+  saveJson<ProbeFile>(PROBE_FILE, {
+    version: 1,
+    result,
+    lastAttemptAt: now,
+    cooldownUntil: rateLimited ? now + RATE_LIMIT_COOLDOWN_MS : undefined,
+  });
   return result;
 }
 
@@ -387,7 +442,24 @@ let timer: ReturnType<typeof setInterval> | undefined;
 export function startProbeScheduler(intervalMs: number): void {
   if (timer) clearInterval(timer);
   if (!intervalMs || intervalMs <= 0) return;
-  void runProbe().catch(() => {});
+
+  // Don't probe on boot if we already have a recent cached result or we're in a
+  // rate-limit cooldown — frequent restarts would otherwise hammer the OAuth
+  // endpoint and trip its rate limit.
+  const file = loadFile();
+  const ageMs = file.result?.probedAt
+    ? Date.now() - new Date(file.result.probedAt).getTime()
+    : Infinity;
+  const inCooldown = Boolean(file.cooldownUntil && Date.now() < file.cooldownUntil);
+  if (ageMs >= intervalMs && !inCooldown) {
+    void runProbe().catch(() => {});
+  } else {
+    log.info("Usage probe: keeping cached result on boot", {
+      ageMin: Number.isFinite(ageMs) ? Math.round(ageMs / 60000) : null,
+      inCooldown,
+    });
+  }
+
   timer = setInterval(() => void runProbe().catch(() => {}), intervalMs);
   timer.unref?.();
   log.info("Usage probe scheduler started", { intervalMs, intervalMin: Math.round(intervalMs / 60000) });

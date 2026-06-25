@@ -243,7 +243,7 @@ export const hu: Translations = {
   tasks_archive_hide: "Archívum elrejtése",
   tasks_created: "Létrehozva: {date}",
   tasks_did_you_know_title: "Tudtad?",
-  tasks_did_you_know_body: "Kérheted az ügynököt, hogy adjon hozzá kártyát: „adj hozzá egy feladatot a lemezhasználat ellenőrzéséhez" — vagy delegálj egy kártyát autonóm futtatásra egy kattintással. A Kész oszlopból 1 nap után kerülnek az archívumba, ami 7 nap után automatikusan törlődik.",
+  tasks_did_you_know_body: "Kérheted az ügynököt, hogy adjon hozzá kártyát (pl. 'adj hozzá egy feladatot a lemezhasználat ellenőrzéséhez'), vagy delegálj egy kártyát autonóm futtatásra egy kattintással. A Kész oszlopból 1 nap után kerülnek az archívumba, ami 7 nap után automatikusan törlődik.",
   col_archive: "Archívum",
 
   // Munkások

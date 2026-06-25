@@ -2,22 +2,23 @@ import { useEffect, useId, useState } from "react";
 import { api, AuthError, type MainAgent, type Autonomy, type Provider, type PlanView, type PlanType, type ProbeResult } from "../api.ts";
 import { Badge, Button, Card, Input, Label, Select, TextArea } from "./ui.tsx";
 import { useI18n, INTERFACE_LANGUAGES } from "../lib/useI18n.ts";
+import type { TranslationKey } from "../i18n/en.ts";
 import { AGENT_LANGUAGES } from "../i18n/languages.ts";
 
 const MODEL_SUGGESTIONS = ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-8"];
 
-const PERSONA_PRESETS = [
-  { label: "Concise", value: "Concise and direct. Lead with the result, skip preamble, use short sentences." },
-  { label: "Warm", value: "Warm and encouraging. Acknowledge effort, celebrate wins, frame challenges positively." },
-  { label: "Formal", value: "Formal and precise. Use structured language, avoid contractions and casual expressions." },
-  { label: "Analytical", value: "Analytical and methodical. Think through problems step by step, cite specifics." },
-  { label: "Playful", value: "Witty and playful. Use light humor, analogies, and keep the energy high." },
+const PERSONA_PRESETS: Array<{ labelKey: TranslationKey; value: string }> = [
+  { labelKey: "settings_persona_concise", value: "Concise and direct. Lead with the result, skip preamble, use short sentences." },
+  { labelKey: "settings_persona_warm", value: "Warm and encouraging. Acknowledge effort, celebrate wins, frame challenges positively." },
+  { labelKey: "settings_persona_formal", value: "Formal and precise. Use structured language, avoid contractions and casual expressions." },
+  { labelKey: "settings_persona_analytical", value: "Analytical and methodical. Think through problems step by step, cite specifics." },
+  { labelKey: "settings_persona_playful", value: "Witty and playful. Use light humor, analogies, and keep the energy high." },
 ];
 
-const AUTONOMY_OPTIONS: Array<{ value: Autonomy; label: string; description: string }> = [
-  { value: "supervised", label: "Supervised", description: "All tools prompt for approval" },
-  { value: "standard", label: "Standard", description: "Safe tools auto-allowed, risky tools prompt" },
-  { value: "full", label: "Full", description: "All tools bypass approval" },
+const AUTONOMY_OPTIONS: Array<{ value: Autonomy; labelKey: TranslationKey; descKey: TranslationKey }> = [
+  { value: "supervised", labelKey: "supervised", descKey: "settings_autonomy_supervised_desc" },
+  { value: "standard", labelKey: "standard", descKey: "settings_autonomy_standard_desc" },
+  { value: "full", labelKey: "full", descKey: "settings_autonomy_full_desc" },
 ];
 
 export function SettingsView({ onAuthError }: { onAuthError: () => void }) {
@@ -86,7 +87,7 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
     try {
       const next = await api.saveAgent({ model, providerId, persona, autonomy });
       setAgent(next);
-      flash("Saved ✓");
+      flash(t("saved"));
     } catch (e) {
       if (e instanceof AuthError) return onAuthError();
       flash(String(e));
@@ -108,22 +109,22 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
   };
 
   const reset = async () => {
-    if (!confirm("Abort any running turn and clear all conversation context?")) return;
+    if (!confirm(t("settings_reset_confirm"))) return;
     setBusy("reset");
     try {
       const r = await api.resetAgent();
-      flash(`Reset ${r.sessions} session(s), aborted ${r.aborted} ✓`);
+      flash(t("settings_reset_done").replace("{sessions}", String(r.sessions)).replace("{aborted}", String(r.aborted)));
     } finally {
       setBusy(null);
     }
   };
 
   const restart = async () => {
-    if (!confirm("Restart the bot service? The panel will briefly disconnect.")) return;
+    if (!confirm(t("settings_restart_confirm"))) return;
     setBusy("restart");
     try {
       await api.restartAgent();
-      flash("Restarting…");
+      flash(t("settings_restarting"));
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e));
     } finally {
@@ -143,7 +144,7 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
           <div>
             <Label>{t("provider")}</Label>
             <Select value={providerId} onChange={(e) => setProviderId(e.target.value)}>
-              <option value="">Anthropic (default / .env)</option>
+              <option value="">{t("settings_anthropic_default")}</option>
               {agent.providers.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
@@ -156,11 +157,11 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
                 list={listId}
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                placeholder={providerId ? "local model name" : "default (CLAUDE_MODEL)"}
+                placeholder={providerId ? t("settings_model_local") : t("settings_model_default")}
               />
               {providerId && (
                 <Button onClick={fetchModels} disabled={busy === "fetch"} className="shrink-0">
-                  {busy === "fetch" ? "…" : "Fetch"}
+                  {busy === "fetch" ? "…" : t("fetch")}
                 </Button>
               )}
             </div>
@@ -177,7 +178,7 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
           <div className="flex flex-wrap gap-1 mb-1.5">
             {PERSONA_PRESETS.map((p) => (
               <button
-                key={p.label}
+                key={p.labelKey}
                 type="button"
                 onClick={() => setPersona(p.value)}
                 className={`rounded px-2 py-0.5 text-xs border transition-colors ${
@@ -186,7 +187,7 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
                     : "border-line text-fg-dim hover:text-fg"
                 }`}
               >
-                {p.label}
+                {t(p.labelKey)}
               </button>
             ))}
             <button
@@ -198,17 +199,17 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
                   : "border-line text-fg-dim hover:text-fg"
               }`}
             >
-              Default
+              {t("settings_persona_default")}
             </button>
             {persona && !PERSONA_PRESETS.find((p) => p.value === persona) && (
-              <span className="rounded px-2 py-0.5 text-xs border border-line text-fg-dim">Custom</span>
+              <span className="rounded px-2 py-0.5 text-xs border border-line text-fg-dim">{t("settings_persona_custom")}</span>
             )}
           </div>
           <TextArea
             rows={2}
             value={persona}
             onChange={(e) => setPersona(e.target.value)}
-            placeholder="concise and direct · warm and encouraging · formal and precise"
+            placeholder={t("settings_persona_placeholder")}
           />
         </div>
 
@@ -219,14 +220,14 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
               <button
                 key={opt.value}
                 onClick={() => setAutonomy(opt.value)}
-                title={opt.description}
+                title={t(opt.descKey)}
                 className={`rounded px-2.5 py-1 text-xs font-medium border transition-colors ${
                   autonomy === opt.value
                     ? "bg-[var(--accent)] text-white border-transparent"
                     : "border-line text-fg-dim hover:text-fg"
                 }`}
               >
-                {opt.label}
+                {t(opt.labelKey)}
               </button>
             ))}
           </div>
@@ -234,18 +235,18 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
 
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <Button variant="primary" onClick={save} disabled={!dirty || busy === "save"}>
-            {busy === "save" ? "Saving…" : t("save")}
+            {busy === "save" ? t("saving") : t("save")}
           </Button>
           <Button onClick={reset} disabled={busy === "reset"}>
-            New context
+            {t("settings_new_context")}
           </Button>
           <Button
             variant="danger"
             onClick={restart}
             disabled={!agent.serviceInstalled || busy === "restart"}
-            title={agent.serviceInstalled ? "" : "No service manager detected"}
+            title={agent.serviceInstalled ? "" : t("settings_no_service")}
           >
-            Restart service
+            {t("settings_restart_service")}
           </Button>
           {status && <span className="text-xs text-fg-dim">{status}</span>}
         </div>
@@ -281,7 +282,7 @@ function LanguageSettings({ onAuthError }: { onAuthError: () => void }) {
     try {
       const next = await api.saveAgent({ defaultLanguage: agentLang });
       setAgent(next);
-      setStatus("Saved ✓");
+      setStatus(t("saved"));
       setTimeout(() => setStatus(null), 2000);
     } catch (e) {
       if (e instanceof AuthError) onAuthError();
@@ -340,14 +341,11 @@ function LanguageSettings({ onAuthError }: { onAuthError: () => void }) {
               onClick={save}
               disabled={!dirty || busy}
             >
-              {busy ? "Saving…" : t("save")}
+              {busy ? t("saving") : t("save")}
             </Button>
           </div>
           {status && <p className="mt-1 text-xs text-fg-dim">{status}</p>}
-          <p className="mt-1.5 text-xs text-fg-faint">
-            Override per-chat with <code>/lang &lt;code&gt;</code> in Telegram.
-            Each Lead can also have its own language in the Agents view.
-          </p>
+          <p className="mt-1.5 text-xs text-fg-faint">{t("settings_lang_override")}</p>
         </div>
       </div>
     </Card>
@@ -358,29 +356,30 @@ function LanguageSettings({ onAuthError }: { onAuthError: () => void }) {
 // Plan / Budget
 // ---------------------------------------------------------------------------
 
-const PLAN_OPTIONS: Array<{ value: PlanType; label: string; sub: string }> = [
-  { value: "pro", label: "Claude Pro", sub: "$20/month — set spending cap below" },
-  { value: "max", label: "Claude Max", sub: "$100/month — set spending cap below" },
-  { value: "api", label: "API", sub: "Pay per token — set your own monthly cap" },
+const PLAN_OPTIONS: Array<{ value: PlanType; labelKey: TranslationKey; subKey: TranslationKey }> = [
+  { value: "pro", labelKey: "plan_pro", subKey: "plan_pro_sub" },
+  { value: "max", labelKey: "plan_max", subKey: "plan_max_sub" },
+  { value: "api", labelKey: "plan_api", subKey: "plan_api_sub" },
 ];
 
-const INTERVAL_OPTIONS = [
-  { label: "Never", value: 0 },
-  { label: "Every hour", value: 3_600_000 },
-  { label: "Every 6 hours", value: 21_600_000 },
-  { label: "Daily", value: 86_400_000 },
-  { label: "Weekly", value: 604_800_000 },
+const INTERVAL_OPTIONS: Array<{ labelKey: TranslationKey; value: number }> = [
+  { labelKey: "interval_never", value: 0 },
+  { labelKey: "interval_hourly", value: 3_600_000 },
+  { labelKey: "interval_6h", value: 21_600_000 },
+  { labelKey: "interval_daily", value: 86_400_000 },
+  { labelKey: "interval_weekly", value: 604_800_000 },
 ];
 
-const PROBE_INTERVAL_OPTIONS = [
-  { label: "Off", value: 0 },
-  { label: "15 min", value: 900_000 },
-  { label: "30 min", value: 1_800_000 },
-  { label: "1 hour", value: 3_600_000 },
-  { label: "3 hours", value: 10_800_000 },
+const PROBE_INTERVAL_OPTIONS: Array<{ labelKey: TranslationKey; value: number }> = [
+  { labelKey: "interval_off", value: 0 },
+  { labelKey: "interval_15m", value: 900_000 },
+  { labelKey: "interval_30m", value: 1_800_000 },
+  { labelKey: "interval_1h", value: 3_600_000 },
+  { labelKey: "interval_3h", value: 10_800_000 },
 ];
 
 function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
+  const { t } = useI18n();
   const [, setPlanState] = useState<PlanView | null>(null);
   const [form, setForm] = useState({
     plan: "api" as PlanType,
@@ -426,7 +425,7 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
         probeIntervalMs: form.probeIntervalMs,
       });
       await loadPlan();
-      setStatus("Saved ✓");
+      setStatus(t("saved"));
       setTimeout(() => setStatus(null), 2000);
     } catch (e) {
       if (e instanceof AuthError) onAuthError();
@@ -449,24 +448,25 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
 
   // Auto-detect from OAuth probe
   const detectedPlan: string | null =
-    probe?.account?.hasMax ? "Claude Max" :
-    probe?.account?.hasPro ? "Claude Pro" :
+    probe?.account?.hasMax ? t("plan_max") :
+    probe?.account?.hasPro ? t("plan_pro") :
     null;
   const isSubscription = Boolean(probe?.account?.hasPro || probe?.account?.hasMax);
-  const effectivePlanLabel = detectedPlan ?? PLAN_OPTIONS.find((o) => o.value === form.plan)?.label ?? "";
+  const planLabelKey = PLAN_OPTIONS.find((o) => o.value === form.plan)?.labelKey;
+  const effectivePlanLabel = detectedPlan ?? (planLabelKey ? t(planLabelKey) : "");
 
   return (
-    <Card title="Subscription and Budget">
+    <Card title={t("plan_title")}>
       <div className="space-y-5">
 
         {/* Account: auto-detected or manual selector */}
         <div className="rounded-lg border border-line bg-input p-3 space-y-3">
           <div className="flex flex-wrap items-start gap-3 justify-between">
             <div className="space-y-1">
-              <p className="text-sm font-medium text-fg">Claude account</p>
+              <p className="text-sm font-medium text-fg">{t("plan_account")}</p>
               {probe?.account?.email && (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-fg-faint">Logged in as</span>
+                  <span className="text-xs text-fg-faint">{t("plan_logged_in")}</span>
                   <BlurredEmail email={probe.account.email} />
                 </div>
               )}
@@ -475,16 +475,16 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
                   <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent">
                     {detectedPlan}
                   </span>
-                  <span className="text-xs text-fg-faint">auto-detected via Claude Code CLI</span>
+                  <span className="text-xs text-fg-faint">{t("plan_autodetected")}</span>
                 </div>
               ) : probe?.source === "fallback" ? (
-                <p className="text-xs text-amber-400">OAuth unavailable — set plan manually below</p>
+                <p className="text-xs text-amber-400">{t("plan_oauth_unavailable")}</p>
               ) : (
-                <p className="text-xs text-fg-faint">Click "Check now" to detect</p>
+                <p className="text-xs text-fg-faint">{t("plan_click_detect")}</p>
               )}
             </div>
             <Button onClick={runCheck} disabled={probeRunning}>
-              {probeRunning ? "Checking…" : "Check now"}
+              {probeRunning ? t("checking") : t("plan_check_now")}
             </Button>
           </div>
 
@@ -502,19 +502,19 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
                   </div>
                   <span className="w-8 tabular text-right text-xs text-fg-dim">{lim.percent}%</span>
                   <span className="text-xs text-fg-faint hidden sm:inline">
-                    resets {new Date(lim.resetsAt).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })}
+                    {t("plan_resets").replace("{time}", new Date(lim.resetsAt).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" }))}
                   </span>
                 </div>
               ))}
               {probe.probedAt && (
-                <p className="text-[10px] text-fg-faint">Last checked: {new Date(probe.probedAt).toLocaleTimeString()}</p>
+                <p className="text-[10px] text-fg-faint">{t("plan_last_checked").replace("{time}", new Date(probe.probedAt).toLocaleTimeString())}</p>
               )}
             </div>
           )}
 
           {/* Auto-refresh interval */}
           <div>
-            <p className="text-xs text-fg-faint mb-1.5">Auto-refresh interval</p>
+            <p className="text-xs text-fg-faint mb-1.5">{t("plan_autorefresh")}</p>
             <div className="flex flex-wrap gap-1.5">
               {PROBE_INTERVAL_OPTIONS.map((opt) => (
                 <button
@@ -526,7 +526,7 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
                       : "border-line text-fg-dim hover:text-fg"
                   }`}
                 >
-                  {opt.label}
+                  {t(opt.labelKey)}
                 </button>
               ))}
             </div>
@@ -536,9 +536,9 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
         {/* Manual plan override — only shown when auto-detect fails */}
         {!detectedPlan && (
           <div>
-            <Label>Plan (manual)</Label>
+            <Label>{t("plan_manual")}</Label>
             <p className="mt-0.5 mb-2 text-xs text-fg-faint">
-              Set manually if the auto-detect above is unavailable.
+              {t("plan_manual_desc")}
             </p>
             <div className="flex flex-wrap gap-2">
               {PLAN_OPTIONS.map((opt) => (
@@ -552,8 +552,8 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
                     form.plan === opt.value ? "border-[var(--accent)] bg-accent/10" : "border-line hover:border-fg-dim"
                   }`}
                 >
-                  <span className={`text-sm font-medium ${form.plan === opt.value ? "text-accent" : "text-fg"}`}>{opt.label}</span>
-                  <span className="text-xs text-fg-faint">{opt.sub}</span>
+                  <span className={`text-sm font-medium ${form.plan === opt.value ? "text-accent" : "text-fg"}`}>{t(opt.labelKey)}</span>
+                  <span className="text-xs text-fg-faint">{t(opt.subKey)}</span>
                 </button>
               ))}
             </div>
@@ -562,10 +562,10 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
 
         {/* Budget cap — always available for tracking; labeled by plan */}
         <div>
-          <Label>{isSubscription ? `Monthly budget reference (${effectivePlanLabel})` : "Monthly cap (USD)"}</Label>
+          <Label>{isSubscription ? t("plan_budget_ref").replace("{plan}", effectivePlanLabel) : t("plan_monthly_cap")}</Label>
           {isSubscription && (
             <p className="mt-0.5 mb-1 text-xs text-fg-faint">
-              Optional reference amount for MyHQ cost tracking. Your {effectivePlanLabel} subscription is billed separately at a flat rate.
+              {t("plan_budget_ref_desc").replace("{plan}", effectivePlanLabel)}
             </p>
           )}
           <div className="mt-1 grid gap-3 sm:grid-cols-3">
@@ -577,7 +577,7 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
                 value={form.monthlyCap}
                 onChange={(e) => setForm({ ...form, monthlyCap: Number(e.target.value) })}
                 className="w-full rounded-lg border border-line bg-input px-3 py-2 text-sm text-fg focus:border-[var(--accent)] focus:outline-none"
-                placeholder="0 = no cap"
+                placeholder={t("plan_cap_placeholder")}
               />
             </div>
             <div>
@@ -588,8 +588,8 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
                 value={form.billingDay}
                 onChange={(e) => setForm({ ...form, billingDay: Number(e.target.value) })}
                 className="w-full rounded-lg border border-line bg-input px-3 py-2 text-sm text-fg focus:border-[var(--accent)] focus:outline-none"
-                placeholder="Billing day (1-28)"
-                title="Billing day (1-28)"
+                placeholder={t("plan_billing_day")}
+                title={t("plan_billing_day")}
               />
             </div>
             <div>
@@ -600,19 +600,19 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
                 value={form.alertThresholdPct}
                 onChange={(e) => setForm({ ...form, alertThresholdPct: Number(e.target.value) })}
                 className="w-full rounded-lg border border-line bg-input px-3 py-2 text-sm text-fg focus:border-[var(--accent)] focus:outline-none"
-                placeholder="Alert at % (0 = off)"
-                title="Telegram alert when spend reaches this % of cap"
+                placeholder={t("plan_alert_pct")}
+                title={t("plan_alert_title")}
               />
             </div>
           </div>
-          <p className="mt-1 text-xs text-fg-faint">Monthly cap (USD) · Billing day · Alert at %</p>
+          <p className="mt-1 text-xs text-fg-faint">{t("plan_cap_help")}</p>
         </div>
 
         {/* Telegram cost report */}
         <div>
-          <Label>Telegram cost report interval</Label>
+          <Label>{t("plan_report_interval")}</Label>
           <p className="mt-0.5 mb-1.5 text-xs text-fg-faint">
-            Send a spend summary to Telegram on this schedule (heartbeat must be running).
+            {t("plan_report_desc")}
           </p>
           <div className="flex flex-wrap gap-1.5">
             {INTERVAL_OPTIONS.map((opt) => (
@@ -625,14 +625,14 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
                     : "border-line text-fg-dim hover:text-fg"
                 }`}
               >
-                {opt.label}
+                {t(opt.labelKey)}
               </button>
             ))}
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="primary" onClick={save} disabled={busy}>{busy ? "Saving…" : "Save"}</Button>
+          <Button variant="primary" onClick={save} disabled={busy}>{busy ? t("saving") : t("save")}</Button>
           {status && <span className="text-xs text-fg-dim">{status}</span>}
         </div>
       </div>
@@ -641,13 +641,14 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
 }
 
 function BlurredEmail({ email }: { email: string }) {
+  const { t } = useI18n();
   return (
     <span
       className="text-xs font-mono text-fg-faint select-none cursor-default transition-all duration-200"
       style={{ filter: "blur(5px)" }}
       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.filter = "blur(0)"; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.filter = "blur(5px)"; }}
-      title="Hover to reveal"
+      title={t("plan_reveal_hover")}
     >
       {email}
     </span>
@@ -706,7 +707,7 @@ function ProvidersSettings({ onAuthError }: { onAuthError: () => void }) {
   };
 
   const del = async (id: string) => {
-    if (!confirm("Delete this provider? Workers using it fall back to Anthropic.")) return;
+    if (!confirm(t("settings_provider_delete_confirm"))) return;
     await api.deleteProvider(id);
     await load();
   };
@@ -717,7 +718,7 @@ function ProvidersSettings({ onAuthError }: { onAuthError: () => void }) {
       right={
         !editing ? (
           <Button variant="primary" onClick={() => { setForm(blankProvider); setEditing("new"); setProbe({ busy: false }); }}>
-            + New provider
+            {t("settings_provider_new")}
           </Button>
         ) : null
       }
@@ -727,7 +728,7 @@ function ProvidersSettings({ onAuthError }: { onAuthError: () => void }) {
       {editing && (
         <div className="mb-4 space-y-3 rounded-lg border border-line bg-input p-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-fg-dim">Prefill:</span>
+            <span className="text-xs text-fg-dim">{t("settings_provider_prefill")}</span>
             {PROVIDER_PRESETS.map((p) => (
               <Button key={p.name} onClick={() => { setForm(p); setProbe({ busy: false }); }}>
                 {p.name}
@@ -736,30 +737,31 @@ function ProvidersSettings({ onAuthError }: { onAuthError: () => void }) {
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             <div>
-              <Label>Name</Label>
+              <Label>{t("settings_provider_name")}</Label>
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="LM Studio" />
             </div>
             <div>
-              <Label>Base URL</Label>
+              <Label>{t("settings_provider_base_url")}</Label>
               <Input value={form.baseUrl} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} placeholder="http://localhost:1234" />
             </div>
             <div>
-              <Label>Auth token</Label>
+              <Label>{t("settings_provider_auth")}</Label>
               <Input value={form.authToken} onChange={(e) => setForm({ ...form, authToken: e.target.value })} placeholder="lmstudio" />
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="primary" onClick={save} disabled={!form.name.trim() || !form.baseUrl.trim()}>{t("save")}</Button>
             <Button onClick={testModels} disabled={!form.baseUrl.trim() || probe.busy}>
-              {probe.busy ? "Fetching…" : "Test / fetch models"}
+              {probe.busy ? t("fetching") : t("settings_provider_test")}
             </Button>
             <Button onClick={() => setEditing(null)}>{t("cancel")}</Button>
           </div>
           {probe.error && <p className="text-xs text-red-400">{probe.error}</p>}
           {probe.models && (
             <p className="text-xs text-emerald-400">
-              ✓ {probe.models.length} model{probe.models.length === 1 ? "" : "s"}:{" "}
-              <span className="font-mono text-fg-dim">{probe.models.join(", ")}</span>
+              {t("settings_provider_models")
+                .replace("{n}", String(probe.models.length))
+                .replace("{models}", probe.models.join(", "))}
             </p>
           )}
         </div>
@@ -767,7 +769,7 @@ function ProvidersSettings({ onAuthError }: { onAuthError: () => void }) {
 
       {providers.length === 0 && !editing ? (
         <p className="text-sm text-fg-dim">
-          No providers configured. Add one to point agents at LM Studio, Ollama, or a proxy.
+          {t("settings_provider_empty")}
         </p>
       ) : (
         <div className="space-y-2">

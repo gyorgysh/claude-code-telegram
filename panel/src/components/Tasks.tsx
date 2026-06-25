@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, AuthError, type Column, type ColumnDef, type Priority, type Task, type Wip } from "../api.ts";
 import { useTaskEvents, type LiveTask } from "../lib/useTaskEvents.ts";
+import { useI18n } from "../lib/useI18n.ts";
 import { Button, Empty, Input, TextArea } from "./ui.tsx";
 
 function colTone(col: ColumnDef, idx: number): string {
@@ -20,6 +21,7 @@ const PRIO_DOT: Record<Priority, string> = {
 const DAY = 86_400_000;
 
 export function TasksView({ onAuthError }: { onAuthError: () => void }) {
+  const { t } = useI18n();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [columns, setColumns] = useState<ColumnDef[]>([]);
   const [wip, setWip] = useState<Wip>({});
@@ -46,21 +48,21 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
   const live = useTaskEvents(load);
 
   const inColumn = (c: Column) =>
-    tasks.filter((t) => t.column === c).sort((a, b) => a.order - b.order);
+    tasks.filter((tk) => tk.column === c).sort((a, b) => a.order - b.order);
 
   const drop = async (target: Column, beforeId: string | null): Promise<void> => {
     if (!dragId) return;
-    const moved = tasks.find((t) => t.id === dragId);
+    const moved = tasks.find((tk) => tk.id === dragId);
     setDragId(null);
     if (!moved) return;
-    const list = inColumn(target).filter((t) => t.id !== dragId);
-    const idx = beforeId ? list.findIndex((t) => t.id === beforeId) : list.length;
+    const list = inColumn(target).filter((tk) => tk.id !== dragId);
+    const idx = beforeId ? list.findIndex((tk) => tk.id === beforeId) : list.length;
     list.splice(idx < 0 ? list.length : idx, 0, moved);
-    const moves = list.map((t, i) => ({ id: t.id, column: target, order: i }));
+    const moves = list.map((tk, i) => ({ id: tk.id, column: target, order: i }));
     setTasks((prev) =>
-      prev.map((t) => {
-        const m = moves.find((x) => x.id === t.id);
-        return m ? { ...t, column: target, order: m.order } : t;
+      prev.map((tk) => {
+        const m = moves.find((x) => x.id === tk.id);
+        return m ? { ...tk, column: target, order: m.order } : tk;
       }),
     );
     try {
@@ -73,7 +75,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
 
   const editWip = async (col: ColumnDef) => {
     const cur = wip[col.id];
-    const input = prompt(`WIP limit for "${col.name}" (blank to clear):`, cur ? String(cur) : "");
+    const input = prompt(t("tasks_wip_prompt").replace("{name}", col.name), cur ? String(cur) : "");
     if (input === null) return;
     const limit = input.trim() === "" ? null : Number(input);
     if (limit !== null && Number.isNaN(limit)) return;
@@ -82,7 +84,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
   };
 
   const addColumn = async () => {
-    const name = prompt("New column name:");
+    const name = prompt(t("tasks_new_column_prompt"));
     if (!name?.trim()) return;
     await api.addColumn(name.trim());
     await load();
@@ -102,15 +104,15 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
   const removeColumn = async (col: ColumnDef) => {
     const count = inColumn(col.id).length;
     if (count > 0) {
-      alert(`Move the ${count} card(s) out of "${col.name}" first.`);
+      alert(t("tasks_move_first").replace("{n}", String(count)).replace("{name}", col.name));
       return;
     }
-    if (!confirm(`Remove column "${col.name}"?`)) return;
+    if (!confirm(t("tasks_remove_confirm").replace("{name}", col.name))) return;
     await api.removeColumn(col.id).catch((e: Error) => alert(e.message));
     await load();
   };
 
-  if (error) return <Empty>Failed to load: {error}</Empty>;
+  if (error) return <Empty>{t("tasks_failed_load").replace("{error}", error)}</Empty>;
 
   const gridCols =
     columns.length <= 3 ? "md:grid-cols-3" :
@@ -148,14 +150,14 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
                   <h3
                     className={`flex-1 cursor-pointer text-xs font-semibold uppercase tracking-wider ${tone} hover:opacity-80`}
                     onClick={() => startRename(col)}
-                    title="Click to rename"
+                    title={t("tasks_click_rename")}
                   >
                     {col.name}
                   </h3>
                 )}
                 <button
                   onClick={() => editWip(col)}
-                  title="Set WIP limit"
+                  title={t("tasks_set_wip")}
                   className={`tabular shrink-0 rounded px-1.5 text-xs ${over ? "bg-red-500/15 text-red-400" : "text-fg-faint hover:text-fg-dim"}`}
                 >
                   {cards.length}
@@ -163,7 +165,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
                 </button>
                 <button
                   onClick={() => removeColumn(col)}
-                  title="Remove column (must be empty)"
+                  title={t("tasks_remove_column")}
                   className="shrink-0 text-xs text-fg-faint hover:text-red-400 transition-colors"
                 >
                   ✕
@@ -171,13 +173,13 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
               </div>
 
               <div className="flex flex-1 flex-col gap-2">
-                {cards.map((t) => (
+                {cards.map((tk) => (
                   <Card
-                    key={t.id}
-                    task={t}
-                    live={live[t.id]}
-                    onDragStart={() => setDragId(t.id)}
-                    onDropBefore={() => drop(col.id, t.id)}
+                    key={tk.id}
+                    task={tk}
+                    live={live[tk.id]}
+                    onDragStart={() => setDragId(tk.id)}
+                    onDropBefore={() => drop(col.id, tk.id)}
                     onChange={load}
                     onAuthError={onAuthError}
                   />
@@ -196,7 +198,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
             className="mt-0 flex items-center gap-1.5 rounded-xl border border-dashed border-line px-3 py-2 text-xs text-fg-faint hover:border-fg-dim hover:text-fg-dim transition-colors"
           >
             <span>+</span>
-            <span>Add column</span>
+            <span>{t("tasks_add_column")}</span>
           </button>
         </div>
       </div>
@@ -228,6 +230,7 @@ function Card({
   onChange: () => void;
   onAuthError: () => void;
 }) {
+  const { t } = useI18n();
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes);
@@ -246,7 +249,7 @@ function Card({
     }
   };
   const del = async () => {
-    if (!confirm("Delete this card?")) return;
+    if (!confirm(t("tasks_delete_confirm"))) return;
     await api.deleteTask(task.id);
     onChange();
   };
@@ -265,7 +268,7 @@ function Card({
           rows={3}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Notes…"
+          placeholder={t("tasks_notes_placeholder")}
           className="mb-2 !font-sans"
         />
         <div className="mb-2 flex gap-1">
@@ -283,11 +286,11 @@ function Card({
         </div>
         <div className="flex gap-1.5">
           <Button variant="primary" onClick={save}>
-            Save
+            {t("save")}
           </Button>
-          <Button onClick={() => setEditing(false)}>Cancel</Button>
+          <Button onClick={() => setEditing(false)}>{t("cancel")}</Button>
           <Button variant="danger" className="ml-auto" onClick={del}>
-            Delete
+            {t("delete")}
           </Button>
         </div>
       </div>
@@ -308,12 +311,12 @@ function Card({
       <div className="flex items-start gap-2">
         <span
           className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${PRIO_DOT[task.priority]}`}
-          title={`${task.priority} priority`}
+          title={t("tasks_priority_label").replace("{priority}", task.priority)}
         />
         <div className="min-w-0 flex-1 cursor-pointer" onClick={() => setEditing(true)}>
           <div className="text-sm text-fg">{task.title}</div>
           {task.notes && <div className="mt-1 line-clamp-3 text-xs text-fg-dim">{task.notes}</div>}
-          {task.parentId && <div className="mt-1 text-xs text-fg-faint">↳ subtask</div>}
+          {task.parentId && <div className="mt-1 text-xs text-fg-faint">{t("tasks_subtask")}</div>}
         </div>
       </div>
 
@@ -331,11 +334,11 @@ function Card({
                       : "text-accent"
               }`}
             >
-              {running ? "⚙ running" : `delegated · ${dstatus}`}
+              {running ? t("tasks_running") : t("tasks_delegated").replace("{status}", String(dstatus))}
             </span>
             {running && (
               <button onClick={stop} className="text-xs text-red-400 hover:underline">
-                Stop
+                {t("stop")}
               </button>
             )}
           </div>
@@ -354,7 +357,7 @@ function Card({
           onClick={delegate}
           className="mt-2 w-full rounded border border-line py-1 text-xs text-fg-dim hover:bg-surface-2 hover:text-fg"
         >
-          Delegate to agent
+          {t("tasks_delegate")}
         </button>
       )}
     </div>
@@ -370,6 +373,7 @@ function AddCard({
   onAdded: () => void;
   onAuthError: () => void;
 }) {
+  const { t } = useI18n();
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
 
@@ -391,7 +395,7 @@ function AddCard({
         onClick={() => setAdding(true)}
         className="mt-2 rounded-lg px-2 py-1.5 text-left text-xs text-fg-faint hover:bg-surface-2 hover:text-fg-dim"
       >
-        + Add card
+        {t("tasks_add_card")}
       </button>
     );
 
@@ -403,7 +407,7 @@ function AddCard({
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && add()}
         onBlur={add}
-        placeholder="Card title…"
+        placeholder={t("tasks_card_title_placeholder")}
       />
     </div>
   );

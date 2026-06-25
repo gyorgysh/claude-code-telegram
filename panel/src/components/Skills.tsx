@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, AuthError, type ClaudeRoot, type Skill } from "../api.ts";
+import { useI18n } from "../lib/useI18n.ts";
 import { Badge, Button, Card, Empty, Input, Label, TextArea } from "./ui.tsx";
 
 export function SkillsView({ onAuthError }: { onAuthError: () => void }) {
@@ -14,6 +15,7 @@ export function SkillsView({ onAuthError }: { onAuthError: () => void }) {
 const blank = { name: "", description: "", prompt: "", cwd: "" };
 
 function PromptLibrary({ onAuthError }: { onAuthError: () => void }) {
+  const { t } = useI18n();
   const [skills, setSkills] = useState<Skill[]>([]);
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [form, setForm] = useState<typeof blank>(blank);
@@ -52,18 +54,18 @@ function PromptLibrary({ onAuthError }: { onAuthError: () => void }) {
   };
 
   const del = async (id: string) => {
-    if (!confirm("Delete this skill?")) return;
+    if (!confirm(t("skills_delete_confirm"))) return;
     await api.deleteSkill(id);
     await load();
   };
 
   return (
     <Card
-      title="Prompt library"
+      title={t("skills_library")}
       right={
         editing ? null : (
           <Button variant="primary" onClick={startNew}>
-            + New skill
+            {t("skills_new")}
           </Button>
         )
       }
@@ -74,49 +76,49 @@ function PromptLibrary({ onAuthError }: { onAuthError: () => void }) {
         <div className="mb-4 space-y-3 rounded-lg border border-line bg-input p-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <Label>Name</Label>
+              <Label>{t("skills_name")}</Label>
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="e.g. Triage issues"
+                placeholder={t("skills_name_placeholder")}
               />
             </div>
             <div>
-              <Label>Default cwd (optional)</Label>
+              <Label>{t("skills_cwd")}</Label>
               <Input
                 value={form.cwd}
                 onChange={(e) => setForm({ ...form, cwd: e.target.value })}
-                placeholder="/path/to/project"
+                placeholder={t("skills_cwd_placeholder")}
               />
             </div>
           </div>
           <div>
-            <Label>Description</Label>
+            <Label>{t("skills_desc")}</Label>
             <Input
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
           </div>
           <div>
-            <Label>Prompt</Label>
+            <Label>{t("skills_prompt")}</Label>
             <TextArea
               rows={6}
               value={form.prompt}
               onChange={(e) => setForm({ ...form, prompt: e.target.value })}
-              placeholder="The reusable instruction text…"
+              placeholder={t("skills_prompt_placeholder")}
             />
           </div>
           <div className="flex gap-2">
             <Button variant="primary" onClick={save} disabled={!form.name.trim() || !form.prompt.trim()}>
-              Save
+              {t("save")}
             </Button>
-            <Button onClick={() => setEditing(null)}>Cancel</Button>
+            <Button onClick={() => setEditing(null)}>{t("cancel")}</Button>
           </div>
         </div>
       )}
 
       {skills.length === 0 && !editing ? (
-        <Empty>No skills yet. Create reusable prompts to run or attach to workers.</Empty>
+        <Empty>{t("skills_empty_full")}</Empty>
       ) : (
         <div className="space-y-2">
           {skills.map((s) => (
@@ -147,6 +149,7 @@ function PromptLibrary({ onAuthError }: { onAuthError: () => void }) {
 }
 
 function ProjectFiles({ onAuthError }: { onAuthError: () => void }) {
+  const { t } = useI18n();
   const [roots, setRoots] = useState<ClaudeRoot[]>([]);
   const [openPath, setOpenPath] = useState<string | null>(null);
   const [content, setContent] = useState("");
@@ -173,18 +176,15 @@ function ProjectFiles({ onAuthError }: { onAuthError: () => void }) {
     if (!openPath) return;
     await api.saveClaudeFile(openPath, content);
     setDirty(false);
-    setStatus("Saved ✓");
+    setStatus(t("saved"));
     setTimeout(() => setStatus(null), 2000);
   };
 
   return (
-    <Card title="Project .claude files">
-      <p className="mb-3 text-sm text-fg-dim">
-        Agents, skills, commands and <code>CLAUDE.md</code> the driven agent loads from each working
-        directory. Edits write straight to disk.
-      </p>
+    <Card title={t("skills_files_title")}>
+      <p className="mb-3 text-sm text-fg-dim">{t("skills_files_desc")}</p>
       {roots.length === 0 ? (
-        <Empty>No .claude config found in any known working directory.</Empty>
+        <Empty>{t("skills_files_empty")}</Empty>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
           <div className="space-y-3">
@@ -225,13 +225,13 @@ function ProjectFiles({ onAuthError }: { onAuthError: () => void }) {
                 />
                 <div className="mt-2 flex items-center gap-3">
                   <Button variant="primary" onClick={save} disabled={!dirty}>
-                    Save
+                    {t("save")}
                   </Button>
                   {status && <span className="text-xs text-emerald-400">{status}</span>}
                 </div>
               </>
             ) : (
-              <Empty>Select a file to edit.</Empty>
+              <Empty>{t("skills_files_select")}</Empty>
             )}
           </div>
         </div>

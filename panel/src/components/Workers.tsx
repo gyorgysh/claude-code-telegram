@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { api, AuthError, type Worker, type WorkerRun, type Autonomy } from "../api.ts";
 import { useWorkerEvents, type LiveRun } from "../lib/useWorkerEvents.ts";
+import { useI18n } from "../lib/useI18n.ts";
+import type { TranslationKey } from "../i18n/en.ts";
 import { Badge, Button, Card, Empty, Input, Label, Select, TextArea } from "./ui.tsx";
 import { ms, relTime, usd } from "../lib/format.ts";
 import { AGENT_LANGUAGES } from "../i18n/languages.ts";
@@ -38,15 +40,22 @@ const MODEL_SUGGESTIONS = [
   "claude-opus-4-8",
 ];
 
-const PERSONA_PRESETS: Array<{ label: string; value: string }> = [
-  { label: "Concise", value: "Concise and direct. Lead with the result, skip preamble, use short sentences." },
-  { label: "Warm", value: "Warm and encouraging. Acknowledge effort, celebrate wins, frame challenges positively." },
-  { label: "Formal", value: "Formal and precise. Use structured language, avoid contractions and casual expressions." },
-  { label: "Analytical", value: "Analytical and methodical. Think through problems step by step, cite specifics." },
-  { label: "Playful", value: "Witty and playful. Use light humor, analogies, and keep the energy high." },
+const PERSONA_PRESETS: Array<{ labelKey: TranslationKey; value: string }> = [
+  { labelKey: "settings_persona_concise", value: "Concise and direct. Lead with the result, skip preamble, use short sentences." },
+  { labelKey: "settings_persona_warm", value: "Warm and encouraging. Acknowledge effort, celebrate wins, frame challenges positively." },
+  { labelKey: "settings_persona_formal", value: "Formal and precise. Use structured language, avoid contractions and casual expressions." },
+  { labelKey: "settings_persona_analytical", value: "Analytical and methodical. Think through problems step by step, cite specifics." },
+  { labelKey: "settings_persona_playful", value: "Witty and playful. Use light humor, analogies, and keep the energy high." },
 ];
 
+const AUTONOMY_KEY: Record<Autonomy, TranslationKey> = {
+  supervised: "supervised",
+  standard: "standard",
+  full: "full",
+};
+
 export function WorkersView({ onAuthError }: { onAuthError: () => void }) {
+  const { t } = useI18n();
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [skills, setSkills] = useState<Named[]>([]);
   const [providers, setProviders] = useState<Named[]>([]);
@@ -67,27 +76,27 @@ export function WorkersView({ onAuthError }: { onAuthError: () => void }) {
   useEffect(() => {
     void load();
     // Refresh registry periodically so schedule/running state stays current.
-    const t = setInterval(load, 5000);
-    return () => clearInterval(t);
+    const id = setInterval(load, 5000);
+    return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (error) return <Empty>Failed to load: {error}</Empty>;
+  if (error) return <Empty>{t("workers_failed_load").replace("{error}", error)}</Empty>;
 
   return (
     <div className="space-y-4">
 
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-fg-dim">Your Crew</h2>
+        <h2 className="text-sm font-semibold text-fg-dim">{t("workers_crew")}</h2>
         {!creating && (
           <Button variant="primary" onClick={() => setCreating(true)}>
-            + New worker
+            {t("workers_new")}
           </Button>
         )}
       </div>
 
       {creating && (
-        <Card title="New worker">
+        <Card title={t("workers_new_card")}>
           <WorkerForm
             skills={skills}
             providers={providers}
@@ -105,7 +114,7 @@ export function WorkersView({ onAuthError }: { onAuthError: () => void }) {
       )}
 
       {workers.length === 0 && !creating ? (
-        <Empty>No workers yet. Create a persistent autonomous agent.</Empty>
+        <Empty>{t("workers_empty")}</Empty>
       ) : (
         (() => {
           const leads = workers.filter((w) => w.role === "lead");
@@ -165,6 +174,7 @@ function WorkerRow({
   onChange: () => void;
   onAuthError: () => void;
 }) {
+  const { t } = useI18n();
   const [editing, setEditing] = useState(false);
   const [open, setOpen] = useState(false);
   const [runs, setRuns] = useState<WorkerRun[]>([]);
@@ -191,7 +201,7 @@ function WorkerRow({
     onChange();
   };
   const del = async () => {
-    if (!confirm(`Delete worker "${worker.name}"?`)) return;
+    if (!confirm(t("workers_delete_confirm").replace("{name}", worker.name))) return;
     await api.deleteWorker(worker.id);
     onChange();
   };
@@ -200,35 +210,35 @@ function WorkerRow({
     <Card>
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium text-fg">{worker.name}</span>
-        {worker.role === "lead" && <Badge tone="blue">Lead</Badge>}
-        {worker.role === "assistant" && <Badge tone="zinc">Assistant</Badge>}
+        {worker.role === "lead" && <Badge tone="blue">{t("workers_lead")}</Badge>}
+        {worker.role === "assistant" && <Badge tone="zinc">{t("workers_assistant")}</Badge>}
         {worker.portfolio && <Badge>{worker.portfolio}</Badge>}
         <Badge tone={worker.schedule === "manual" ? "zinc" : "blue"}>{worker.schedule}</Badge>
         {worker.model && <Badge>{shortModel(worker.model)}</Badge>}
         {providerName && <Badge tone="blue">⌂ {providerName}</Badge>}
-        {!worker.enabled && <Badge tone="amber">disabled</Badge>}
-        {running && <Badge tone="green">running</Badge>}
+        {!worker.enabled && <Badge tone="amber">{t("disabled")}</Badge>}
+        {running && <Badge tone="green">{t("running")}</Badge>}
         <span className="ml-auto flex gap-1.5">
           {running ? (
             <Button variant="danger" onClick={stop}>
-              Stop
+              {t("stop")}
             </Button>
           ) : (
             <Button variant="primary" onClick={run}>
-              Run now
+              {t("workers_run_now")}
             </Button>
           )}
-          <Button onClick={() => setOpen((o) => !o)}>{open ? "Hide" : "Details"}</Button>
-          <Button onClick={() => setEditing((e) => !e)}>Edit</Button>
+          <Button onClick={() => setOpen((o) => !o)}>{open ? t("hide") : t("details")}</Button>
+          <Button onClick={() => setEditing((e) => !e)}>{t("edit")}</Button>
           <Button variant="danger" onClick={del}>
-            Delete
+            {t("delete")}
           </Button>
         </span>
       </div>
 
       <div className="mt-1 truncate font-mono text-xs text-fg-faint" title={worker.cwd}>
-        {worker.cwd || "(no cwd)"}
-        {worker.nextRunAt && ` · next ${relTime(worker.nextRunAt)}`}
+        {worker.cwd || t("workers_no_cwd")}
+        {worker.nextRunAt && ` · ${t("workers_next").replace("{time}", relTime(worker.nextRunAt))}`}
       </div>
 
       {editing && (
@@ -271,10 +281,10 @@ function WorkerRow({
           <LiveOutput live={live} />
           <div>
             <div className="mb-1 text-xs font-medium uppercase tracking-wider text-fg-dim">
-              Run history
+              {t("workers_run_history")}
             </div>
             {runs.length === 0 ? (
-              <p className="text-xs text-fg-faint">No runs yet.</p>
+              <p className="text-xs text-fg-faint">{t("workers_no_runs")}</p>
             ) : (
               <div className="space-y-1">
                 {runs.map((r) => (
@@ -302,6 +312,7 @@ function WorkerRow({
 }
 
 function LiveOutput({ live }: { live?: LiveRun }) {
+  const { t } = useI18n();
   const ref = useRef<HTMLPreElement>(null);
   useEffect(() => {
     if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
@@ -311,8 +322,8 @@ function LiveOutput({ live }: { live?: LiveRun }) {
   return (
     <div>
       <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-fg-dim">
-        Live output
-        {live.status === "running" && <Badge tone="green">streaming</Badge>}
+        {t("workers_live_output")}
+        {live.status === "running" && <Badge tone="green">{t("workers_streaming")}</Badge>}
         {live.tool && <span className="font-mono normal-case text-fg-faint">🔧 {live.tool}</span>}
       </div>
       <pre
@@ -344,6 +355,7 @@ function WorkerForm({
   onSubmit: (form: Form, enabled: boolean) => Promise<void>;
   onAuthError: () => void;
 }) {
+  const { t } = useI18n();
   const [form, setForm] = useState<Form>(initial);
   const [enabled, setEnabled] = useState(initialEnabled);
   const [busy, setBusy] = useState(false);
@@ -379,33 +391,33 @@ function WorkerForm({
     <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <Label>Name</Label>
+          <Label>{t("workers_name")}</Label>
           <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </div>
         <div>
-          <Label>Working directory</Label>
+          <Label>{t("workers_cwd")}</Label>
           <Input
             value={form.cwd}
             onChange={(e) => setForm({ ...form, cwd: e.target.value })}
-            placeholder="/path/to/project"
+            placeholder={t("workers_cwd_placeholder")}
           />
         </div>
       </div>
       <div>
-        <Label>Task prompt (run each time)</Label>
+        <Label>{t("workers_task")}</Label>
         <TextArea
           rows={4}
           value={form.prompt}
           onChange={(e) => setForm({ ...form, prompt: e.target.value })}
-          placeholder="What should this worker do every run?"
+          placeholder={t("workers_task_placeholder")}
         />
       </div>
       <div>
-        <Label>Persona (character and tone, optional)</Label>
+        <Label>{t("workers_persona_label")}</Label>
         <div className="flex flex-wrap gap-1 mb-1.5">
           {PERSONA_PRESETS.map((p) => (
             <button
-              key={p.label}
+              key={p.labelKey}
               type="button"
               onClick={() => setForm({ ...form, persona: p.value })}
               className={`rounded px-2 py-0.5 text-xs border transition-colors ${
@@ -414,22 +426,22 @@ function WorkerForm({
                   : "border-line text-fg-dim hover:text-fg"
               }`}
             >
-              {p.label}
+              {t(p.labelKey)}
             </button>
           ))}
           {form.persona && !PERSONA_PRESETS.find((p) => p.value === form.persona) && (
-            <span className="rounded px-2 py-0.5 text-xs border border-line text-fg-dim">Custom</span>
+            <span className="rounded px-2 py-0.5 text-xs border border-line text-fg-dim">{t("workers_custom")}</span>
           )}
         </div>
         <TextArea
           rows={2}
           value={form.persona}
           onChange={(e) => setForm({ ...form, persona: e.target.value })}
-          placeholder="concise and direct · warm and encouraging · formal and precise"
+          placeholder={t("workers_persona_placeholder")}
         />
       </div>
       <div>
-        <Label>Domain knowledge / extra system prompt (optional)</Label>
+        <Label>{t("workers_domain")}</Label>
         <TextArea
           rows={3}
           value={form.systemPrompt}
@@ -438,12 +450,12 @@ function WorkerForm({
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <Label>Provider (optional)</Label>
+          <Label>{t("workers_provider")}</Label>
           <Select
             value={form.providerId}
             onChange={(e) => setForm({ ...form, providerId: e.target.value })}
           >
-            <option value="">Anthropic (default)</option>
+            <option value="">{t("workers_anthropic_default")}</option>
             {providers.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -452,17 +464,17 @@ function WorkerForm({
           </Select>
         </div>
         <div>
-          <Label>Model</Label>
+          <Label>{t("workers_model")}</Label>
           <div className="flex gap-2">
             <Input
               list={listId}
               value={form.model}
               onChange={(e) => setForm({ ...form, model: e.target.value })}
-              placeholder={form.providerId ? "local model name" : "default (CLAUDE_MODEL)"}
+              placeholder={form.providerId ? t("workers_model_local") : t("workers_model_default")}
             />
             {form.providerId && (
               <Button onClick={fetchModels} disabled={fetchingModels} className="shrink-0">
-                {fetchingModels ? "…" : "Fetch"}
+                {fetchingModels ? "…" : t("fetch")}
               </Button>
             )}
           </div>
@@ -472,16 +484,16 @@ function WorkerForm({
             ))}
           </datalist>
           {form.providerId && fetched.length > 0 && (
-            <p className="mt-1 text-xs text-fg-faint">{fetched.length} models available</p>
+            <p className="mt-1 text-xs text-fg-faint">{t("workers_models_available").replace("{n}", String(fetched.length))}</p>
           )}
         </div>
         <div>
-          <Label>Skill (optional)</Label>
+          <Label>{t("workers_skill")}</Label>
           <Select
             value={form.skillId}
             onChange={(e) => setForm({ ...form, skillId: e.target.value })}
           >
-            <option value="">— none —</option>
+            <option value="">{t("workers_skill_none")}</option>
             {skills.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -490,44 +502,44 @@ function WorkerForm({
           </Select>
         </div>
         <div>
-          <Label>Schedule (optional)</Label>
+          <Label>{t("workers_schedule")}</Label>
           <Input
             value={form.when}
             onChange={(e) => setForm({ ...form, when: e.target.value })}
-            placeholder="30m · 2h · 09:00"
+            placeholder={t("workers_schedule_placeholder")}
           />
         </div>
         <div>
-          <Label>Role</Label>
+          <Label>{t("workers_role")}</Label>
           <Select
             value={form.role}
             onChange={(e) =>
               setForm({ ...form, role: e.target.value as Form["role"] })
             }
           >
-            <option value="">Specialist</option>
-            <option value="lead">Lead</option>
-            <option value="assistant">Assistant</option>
+            <option value="">{t("workers_role_specialist")}</option>
+            <option value="lead">{t("workers_role_lead")}</option>
+            <option value="assistant">{t("workers_role_assistant")}</option>
           </Select>
         </div>
         {(form.role === "lead" || form.role === "assistant") && (
           <div>
-            <Label>Portfolio</Label>
+            <Label>{t("workers_portfolio")}</Label>
             <Input
               value={form.portfolio}
               onChange={(e) => setForm({ ...form, portfolio: e.target.value })}
-              placeholder="Finance, DevOps, Research…"
+              placeholder={t("workers_role_portfolio_placeholder")}
             />
           </div>
         )}
         {form.role === "assistant" && (
           <div>
-            <Label>Parent Lead</Label>
+            <Label>{t("workers_parent")}</Label>
             <Select
               value={form.parentId}
               onChange={(e) => setForm({ ...form, parentId: e.target.value })}
             >
-              <option value="">— none —</option>
+              <option value="">{t("workers_parent_none")}</option>
               {workers
                 .filter((w) => w.role === "lead")
                 .map((w) => (
@@ -540,11 +552,11 @@ function WorkerForm({
         )}
         {form.role === "lead" && (
           <div>
-            <Label>Telegram token</Label>
+            <Label>{t("workers_token")}</Label>
             <Input
               value={form.telegramToken}
               onChange={(e) => setForm({ ...form, telegramToken: e.target.value })}
-              placeholder="vault:<secret-id>"
+              placeholder={t("workers_token_placeholder")}
             />
           </div>
         )}
@@ -556,11 +568,11 @@ function WorkerForm({
               onChange={(e) => setEnabled(e.target.checked)}
               className="h-4 w-4 accent-[var(--accent)]"
             />
-            Enabled
+            {t("workers_enabled")}
           </label>
         </div>
         <div>
-          <Label>Autonomy</Label>
+          <Label>{t("autonomy")}</Label>
           <div className="mt-1 flex gap-1.5">
             {(["supervised", "standard", "full"] as Autonomy[]).map((a) => (
               <button
@@ -572,18 +584,18 @@ function WorkerForm({
                     : "border-line text-fg-dim hover:text-fg"
                 }`}
               >
-                {a}
+                {t(AUTONOMY_KEY[a])}
               </button>
             ))}
           </div>
         </div>
         <div>
-          <Label>Response language (optional)</Label>
+          <Label>{t("workers_lang_label")}</Label>
           <Select
             value={form.language}
             onChange={(e) => setForm({ ...form, language: e.target.value })}
           >
-            <option value="">Default (server setting)</option>
+            <option value="">{t("workers_lang_default")}</option>
             {Object.entries(AGENT_LANGUAGES).map(([code, name]) => (
               <option key={code} value={code}>{name}</option>
             ))}
@@ -596,9 +608,9 @@ function WorkerForm({
           onClick={submit}
           disabled={busy || !form.name.trim() || !form.cwd.trim() || !form.prompt.trim()}
         >
-          {busy ? "Saving…" : "Save worker"}
+          {busy ? t("saving") : t("workers_save")}
         </Button>
-        <Button onClick={onCancel}>Cancel</Button>
+        <Button onClick={onCancel}>{t("cancel")}</Button>
       </div>
     </div>
   );

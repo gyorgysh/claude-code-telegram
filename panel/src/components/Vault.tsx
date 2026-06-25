@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { api, AuthError, type SecretView } from "../api.ts";
+import { useI18n } from "../lib/useI18n.ts";
 import { Badge, Button, Callout, Card, Empty, Input, Label } from "./ui.tsx";
 
 const blank = { name: "", value: "", description: "" };
 
 export function VaultView({ onAuthError }: { onAuthError: () => void }) {
+  const { t } = useI18n();
   const [secrets, setSecrets] = useState<SecretView[]>([]);
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [form, setForm] = useState<typeof blank>(blank);
@@ -58,39 +60,35 @@ export function VaultView({ onAuthError }: { onAuthError: () => void }) {
   };
 
   const del = async (id: string) => {
-    if (!confirm("Delete this secret? Anything referencing it will break.")) return;
+    if (!confirm(t("vault_delete_confirm"))) return;
     await api.deleteSecret(id);
     await load();
   };
 
   const importProviders = async () => {
     const { imported } = await api.importSecrets();
-    setStatus(imported ? `Imported ${imported} provider token(s) into the vault.` : "No plaintext provider tokens to import.");
+    setStatus(imported ? t("vault_imported").replace("{n}", String(imported)) : t("vault_no_import"));
     setTimeout(() => setStatus(null), 4000);
     await load();
   };
 
   return (
     <Card
-      title="Secret vault"
+      title={t("vault_title")}
       right={
         editing ? null : (
           <Button variant="primary" onClick={startNew}>
-            + New secret
+            {t("vault_new")}
           </Button>
         )
       }
     >
-      <p className="mb-3 text-sm text-fg-dim">
-        AES-256-GCM encrypted secrets. The master key lives in the macOS Keychain (file fallback on
-        Linux). Reference a secret anywhere a token is stored as <code>vault:&lt;id&gt;</code>.
-      </p>
+      <p className="mb-3 text-sm text-fg-dim">{t("vault_desc")}</p>
 
-      <Callout title="Migrate provider tokens" dismissId="vault-import">
-        Move plaintext provider auth tokens into the vault and rewrite them to references in one
-        click. Resolution at use-time is transparent.
+      <Callout title={t("vault_migrate_title")} dismissId="vault-import">
+        {t("vault_migrate_desc")}
         <div className="mt-2">
-          <Button onClick={importProviders}>Scan &amp; import provider tokens</Button>
+          <Button onClick={importProviders}>{t("vault_scan_import")}</Button>
           {status && <span className="ml-2 text-xs text-emerald-400">{status}</span>}
         </div>
       </Callout>
@@ -101,15 +99,15 @@ export function VaultView({ onAuthError }: { onAuthError: () => void }) {
         <div className="my-4 space-y-3 rounded-lg border border-line bg-input p-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <Label>Name</Label>
+              <Label>{t("vault_name")}</Label>
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="e.g. notion-token"
+                placeholder={t("vault_name_placeholder")}
               />
             </div>
             <div>
-              <Label>Description (optional)</Label>
+              <Label>{t("vault_description")}</Label>
               <Input
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -117,7 +115,7 @@ export function VaultView({ onAuthError }: { onAuthError: () => void }) {
             </div>
           </div>
           <div>
-            <Label>{editing === "new" ? "Secret value" : "New value (leave blank to keep)"}</Label>
+            <Label>{editing === "new" ? t("vault_value") : t("vault_value_edit")}</Label>
             <Input
               type="password"
               value={form.value}
@@ -131,15 +129,15 @@ export function VaultView({ onAuthError }: { onAuthError: () => void }) {
               onClick={save}
               disabled={!form.name.trim() || (editing === "new" && !form.value)}
             >
-              Save
+              {t("save")}
             </Button>
-            <Button onClick={() => setEditing(null)}>Cancel</Button>
+            <Button onClick={() => setEditing(null)}>{t("cancel")}</Button>
           </div>
         </div>
       )}
 
       {secrets.length === 0 && !editing ? (
-        <Empty>No secrets stored.</Empty>
+        <Empty>{t("vault_empty")}</Empty>
       ) : (
         <div className="mt-3 space-y-2">
           {secrets.map((s) => (
@@ -159,11 +157,11 @@ export function VaultView({ onAuthError }: { onAuthError: () => void }) {
               </div>
               <div className="flex shrink-0 gap-1.5">
                 <Button onClick={() => reveal(s.id)}>
-                  {revealed[s.id] !== undefined ? "Hide" : "Reveal"}
+                  {revealed[s.id] !== undefined ? t("hide") : t("vault_reveal")}
                 </Button>
-                <Button onClick={() => startEdit(s)}>Edit</Button>
+                <Button onClick={() => startEdit(s)}>{t("edit")}</Button>
                 <Button variant="danger" onClick={() => del(s.id)}>
-                  Delete
+                  {t("delete")}
                 </Button>
               </div>
             </div>

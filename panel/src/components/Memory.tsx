@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, AuthError, type MemoryEntry, type MemoryTier } from "../api.ts";
+import { useI18n } from "../lib/useI18n.ts";
 import { Badge, Button, Card, Empty, Input, Label, TextArea } from "./ui.tsx";
 
 const blank = { text: "", tags: "", salience: 0.5, tier: "warm" as MemoryTier };
@@ -10,9 +11,10 @@ const TIER_TONE = {
   cold: "zinc" as const,
 };
 
-const TIER_LABEL = { hot: "🔥 hot", warm: "warm", cold: "❄️ cold" };
+const TIER_KEY = { hot: "memory_tier_hot", warm: "memory_tier_warm", cold: "memory_tier_cold" } as const;
 
 export function MemoryView({ onAuthError }: { onAuthError: () => void }) {
+  const { t } = useI18n();
   const [entries, setEntries] = useState<MemoryEntry[]>([]);
   const [query, setQuery] = useState("");
   const [showCold, setShowCold] = useState(false);
@@ -77,50 +79,47 @@ export function MemoryView({ onAuthError }: { onAuthError: () => void }) {
   };
 
   const del = async (id: string) => {
-    if (!confirm("Forget this memory?")) return;
+    if (!confirm(t("memory_forget"))) return;
     await api.deleteMemory(id);
     await load(query.trim() || undefined);
   };
 
   return (
     <Card
-      title="Memory"
+      title={t("memory_title")}
       right={
         editing ? null : (
           <Button variant="primary" onClick={startNew}>
-            + New memory
+            {t("memory_new")}
           </Button>
         )
       }
     >
-      <p className="mb-3 text-sm text-fg-dim">
-        Durable facts the agent recalls across conversations. Hot entries are injected every turn;
-        warm entries are keyword-recalled; cold entries are panel-only.
-      </p>
+      <p className="mb-3 text-sm text-fg-dim">{t("memory_desc")}</p>
       {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
 
       {editing && (
         <div className="mb-4 space-y-3 rounded-lg border border-line bg-input p-3">
           <div>
-            <Label>Fact</Label>
+            <Label>{t("memory_fact")}</Label>
             <TextArea
               rows={2}
               value={form.text}
               onChange={(e) => setForm({ ...form, text: e.target.value })}
-              placeholder="One concise, self-contained fact…"
+              placeholder={t("memory_fact_placeholder")}
             />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <Label>Tags (comma-separated)</Label>
+              <Label>{t("memory_tags")}</Label>
               <Input
                 value={form.tags}
                 onChange={(e) => setForm({ ...form, tags: e.target.value })}
-                placeholder="deploy, preferences"
+                placeholder={t("memory_tags_placeholder")}
               />
             </div>
             <div>
-              <Label>Salience: {form.salience.toFixed(2)}</Label>
+              <Label>{t("memory_salience")}: {form.salience.toFixed(2)}</Label>
               <input
                 type="range"
                 min={0}
@@ -133,28 +132,28 @@ export function MemoryView({ onAuthError }: { onAuthError: () => void }) {
             </div>
           </div>
           <div>
-            <Label>Tier</Label>
+            <Label>{t("memory_tier")}</Label>
             <div className="flex gap-2 mt-1">
-              {(["hot", "warm", "cold"] as MemoryTier[]).map((t) => (
+              {(["hot", "warm", "cold"] as MemoryTier[]).map((tier) => (
                 <button
-                  key={t}
-                  onClick={() => setForm({ ...form, tier: t })}
+                  key={tier}
+                  onClick={() => setForm({ ...form, tier })}
                   className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-                    form.tier === t
+                    form.tier === tier
                       ? "bg-[var(--accent)] text-white"
                       : "border border-line text-fg-dim hover:text-fg"
                   }`}
                 >
-                  {TIER_LABEL[t]}
+                  {t(TIER_KEY[tier])}
                 </button>
               ))}
             </div>
           </div>
           <div className="flex gap-2">
             <Button variant="primary" onClick={save} disabled={!form.text.trim()}>
-              Save
+              {t("save")}
             </Button>
-            <Button onClick={() => setEditing(null)}>Cancel</Button>
+            <Button onClick={() => setEditing(null)}>{t("cancel")}</Button>
           </div>
         </div>
       )}
@@ -163,19 +162,19 @@ export function MemoryView({ onAuthError }: { onAuthError: () => void }) {
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search memories…"
+          placeholder={t("memory_search")}
           className="flex-1"
         />
         <button
           onClick={() => setShowCold((s) => !s)}
           className={`rounded px-2.5 py-1 text-xs border border-line transition-colors ${showCold ? "bg-[var(--accent)] text-white" : "text-fg-dim hover:text-fg"}`}
         >
-          {showCold ? "Hide cold" : "Show cold"}
+          {showCold ? t("memory_hide_cold") : t("memory_show_cold")}
         </button>
       </div>
 
       {entries.length === 0 && !editing ? (
-        <Empty>{query ? "No matching memories." : "No memories yet."}</Empty>
+        <Empty>{query ? t("memory_empty_query") : t("memory_empty")}</Empty>
       ) : (
         <div className="space-y-2">
           {entries.map((m) => (
@@ -186,33 +185,33 @@ export function MemoryView({ onAuthError }: { onAuthError: () => void }) {
               <div className="min-w-0">
                 <p className="text-sm text-fg">{m.text}</p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-fg-faint">
-                  <Badge tone={TIER_TONE[m.tier]}>{TIER_LABEL[m.tier]}</Badge>
-                  {m.tags.map((t) => (
-                    <Badge key={t} tone="blue">
-                      {t}
+                  <Badge tone={TIER_TONE[m.tier]}>{t(TIER_KEY[m.tier])}</Badge>
+                  {m.tags.map((tag) => (
+                    <Badge key={tag} tone="blue">
+                      {tag}
                     </Badge>
                   ))}
-                  <span className="tabular">salience {m.salience.toFixed(2)}</span>
-                  {m.useCount > 0 && <span className="tabular">· recalled {m.useCount}×</span>}
+                  <span className="tabular">{t("memory_salience").toLowerCase()} {m.salience.toFixed(2)}</span>
+                  {m.useCount > 0 && <span className="tabular">· {t("memory_recalled")} {m.useCount}×</span>}
                 </div>
                 <div className="mt-1.5 flex gap-1">
                   {(["hot", "warm", "cold"] as MemoryTier[])
-                    .filter((t) => t !== m.tier)
-                    .map((t) => (
+                    .filter((tier) => tier !== m.tier)
+                    .map((tier) => (
                       <button
-                        key={t}
-                        onClick={() => setTier(m.id, t)}
+                        key={tier}
+                        onClick={() => setTier(m.id, tier)}
                         className="rounded px-1.5 py-0.5 text-xs border border-line text-fg-faint hover:text-fg transition-colors"
                       >
-                        → {t}
+                        → {t(TIER_KEY[tier])}
                       </button>
                     ))}
                 </div>
               </div>
               <div className="flex shrink-0 gap-1.5">
-                <Button onClick={() => startEdit(m)}>Edit</Button>
+                <Button onClick={() => startEdit(m)}>{t("edit")}</Button>
                 <Button variant="danger" onClick={() => del(m.id)}>
-                  Delete
+                  {t("delete")}
                 </Button>
               </div>
             </div>

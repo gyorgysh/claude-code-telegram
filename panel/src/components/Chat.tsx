@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type ChatMessage } from "../api.ts";
 import { useChatEvents } from "../lib/useChatEvents.ts";
+import { useI18n } from "../lib/useI18n.ts";
 import { Button } from "./ui.tsx";
 
 export function ChatView({ onAuthError }: { onAuthError: () => void }) {
+  const { t } = useI18n();
   const { messages, stream, busy, approval, view, setView } = useChatEvents(onAuthError);
   const [text, setText] = useState("");
   const [editingCwd, setEditingCwd] = useState(false);
@@ -48,7 +50,7 @@ export function ChatView({ onAuthError }: { onAuthError: () => void }) {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-fg">Chat</h2>
+          <h2 className="text-sm font-semibold text-fg">{t("chat_title")}</h2>
           {editingCwd ? (
             <input
               autoFocus
@@ -60,7 +62,7 @@ export function ChatView({ onAuthError }: { onAuthError: () => void }) {
           ) : (
             <button
               onClick={() => setEditingCwd(true)}
-              title="Change working directory"
+              title={t("chat_change_cwd")}
               className="mono mt-0.5 block max-w-full truncate text-xs text-fg-dim hover:text-fg-muted"
             >
               {view?.cwd ?? "…"}
@@ -73,8 +75,8 @@ export function ChatView({ onAuthError }: { onAuthError: () => void }) {
             disabled={!view?.bypassAllowed}
             title={
               view?.bypassAllowed
-                ? "Toggle auto-run (bypass approvals)"
-                : "Set PANEL_CHAT_BYPASS=true and restart to unlock"
+                ? t("chat_toggle_auto")
+                : t("chat_toggle_locked")
             }
             className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
               view?.auto
@@ -82,14 +84,14 @@ export function ChatView({ onAuthError }: { onAuthError: () => void }) {
                 : "bg-surface-2 text-fg-dim"
             } ${view?.bypassAllowed ? "" : "cursor-not-allowed opacity-60"}`}
           >
-            {view?.auto ? "● auto" : "○ safe"}
+            {view?.auto ? t("chat_auto") : t("chat_safe")}
           </button>
           <Button
             variant="ghost"
             onClick={async () => view && setView(await api.clearChat())}
             disabled={busy}
           >
-            Clear
+            {t("chat_clear")}
           </Button>
         </div>
       </div>
@@ -99,9 +101,9 @@ export function ChatView({ onAuthError }: { onAuthError: () => void }) {
         {messages.length === 0 && !stream && (
           <div className="flex h-full flex-col items-center justify-center text-center text-sm text-fg-faint">
             <div className="mono mb-2 text-2xl text-accent">%_</div>
-            Talk to the agent. It runs in the directory above
+            {t("chat_empty")}
             <br />
-            and {view?.auto ? "auto-runs tools." : "asks before risky tools."}
+            {view?.auto ? t("chat_empty_auto") : t("chat_empty_safe")}
           </div>
         )}
         {messages.map((m) => (
@@ -126,15 +128,15 @@ export function ChatView({ onAuthError }: { onAuthError: () => void }) {
       {approval && (
         <div className="mb-3 rounded-xl border border-accent/40 bg-accent/5 p-3">
           <div className="mb-2 text-sm text-fg">
-            Allow <span className="font-semibold text-accent">{approval.tool}</span>
+            {t("chat_allow")} <span className="font-semibold text-accent">{approval.tool}</span>
             {approval.arg && <span className="mono text-fg-dim"> · {approval.arg}</span>}?
           </div>
           <div className="flex gap-2">
             <Button variant="primary" onClick={() => void api.approveChat(approval.approvalId, true)}>
-              Approve
+              {t("chat_approve")}
             </Button>
             <Button variant="danger" onClick={() => void api.approveChat(approval.approvalId, false)}>
-              Deny
+              {t("chat_deny")}
             </Button>
           </div>
         </div>
@@ -147,16 +149,16 @@ export function ChatView({ onAuthError }: { onAuthError: () => void }) {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKey}
           rows={1}
-          placeholder="Message the agent…  (Enter to send, Shift+Enter for newline)"
+          placeholder={t("chat_placeholder")}
           className="max-h-40 min-h-[42px] flex-1 resize-none rounded-xl border border-line bg-input px-3 py-2.5 text-sm text-fg outline-none focus:border-accent"
         />
         {busy ? (
           <Button variant="danger" onClick={() => void api.stopChat()} className="h-[42px]">
-            Stop
+            {t("stop")}
           </Button>
         ) : (
           <Button variant="primary" onClick={() => void send()} disabled={!text.trim()} className="h-[42px]">
-            Send
+            {t("chat_send")}
           </Button>
         )}
       </div>
@@ -165,6 +167,7 @@ export function ChatView({ onAuthError }: { onAuthError: () => void }) {
 }
 
 function Bubble({ m }: { m: ChatMessage }) {
+  const { t } = useI18n();
   const user = m.role === "user";
   return (
     <div className={`flex ${user ? "justify-end" : "justify-start"}`}>
@@ -177,7 +180,7 @@ function Bubble({ m }: { m: ChatMessage }) {
               : "rounded-tl-sm bg-surface text-fg"
         }`}
       >
-        {m.text || (m.error ? "(failed)" : "")}
+        {m.text || (m.error ? t("chat_failed") : "")}
       </div>
     </div>
   );

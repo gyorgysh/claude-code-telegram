@@ -6,6 +6,7 @@ import { tasksMcp } from "../mcp/tasks.js";
 import { skillsMcp } from "../mcp/skills.js";
 import { selfUpdateMcp } from "../mcp/selfUpdate.js";
 import { getTask, setDelegate, updateTask } from "./tasks.js";
+import { memory } from "./memory.js";
 import { audit } from "./audit.js";
 import { log } from "../logger.js";
 
@@ -129,6 +130,17 @@ export class TaskDelegator {
       });
       const finalColumn = res.isError ? undefined : "done";
       if (finalColumn) updateTask(id, { column: finalColumn });
+      // On success, write a hot memory so the agent knows this task was done.
+      // Useful for git commit messages and context across sessions.
+      if (!res.isError) {
+        const summary = (res.text ?? "").trim().slice(0, 400);
+        memory.create({
+          text: `Task completed: ${title}${summary ? `. ${summary}` : ""}`,
+          tags: ["task", "completed"],
+          salience: 0.8,
+          tier: "hot",
+        });
+      }
       await Promise.resolve(
         this.notify({ taskId: id, title, status: res.isError ? "error" : "ok", res }),
       ).catch(() => {});

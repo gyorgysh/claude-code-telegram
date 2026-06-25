@@ -41,7 +41,7 @@ export function SchedulesView({ onAuthError }: { onAuthError: () => void }) {
 
   const startEdit = (s: ScheduleView) => {
     setEditingId(s.id);
-    setEditForm({ prompt: s.prompt, when: s.spec, cwd: s.cwd });
+    setEditForm({ prompt: s.prompt, when: s.specRaw, cwd: s.cwd });
   };
 
   const saveEdit = async (id: string) => {

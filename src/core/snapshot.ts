@@ -1,7 +1,7 @@
 import { sessions } from "../session/manager.js";
 import type { Autonomy } from "../session/manager.js";
 import { schedules } from "../schedule/manager.js";
-import { describeSpec } from "../schedule/manager.js";
+import { describeSpec, specToWhen } from "../schedule/manager.js";
 import type { UsageStat } from "../session/store.js";
 
 /** Panel-facing view of one chat session (no abort controllers / secrets). */
@@ -24,6 +24,7 @@ export interface ScheduleView {
   cwd: string;
   prompt: string;
   spec: string;
+  specRaw: string;
   nextRunAt: number;
   lastRunAt?: number;
   createdAt: number;
@@ -57,6 +58,7 @@ export function listSchedules(): ScheduleView[] {
     cwd: s.cwd,
     prompt: s.prompt,
     spec: describeSpec(s.spec),
+    specRaw: specToWhen(s.spec),
     nextRunAt: s.nextRunAt,
     lastRunAt: s.lastRunAt,
     createdAt: s.createdAt,

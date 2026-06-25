@@ -89,6 +89,7 @@ export interface ScheduleView {
   cwd: string;
   prompt: string;
   spec: string;
+  specRaw: string;
   nextRunAt: number;
   lastRunAt?: number;
   createdAt: number;

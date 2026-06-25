@@ -150,6 +150,17 @@ export function nextRun(spec: ScheduleSpec, from: number): number {
   return d.getTime();
 }
 
+/** Return a parseable "when" string that round-trips through parseWhen. */
+export function specToWhen(spec: ScheduleSpec): string {
+  if (spec.kind === "interval") {
+    const m = spec.everyMs;
+    if (m % 86_400_000 === 0) return `${m / 86_400_000}d`;
+    if (m % 3_600_000 === 0) return `${m / 3_600_000}h`;
+    return `${Math.round(m / 60_000)}m`;
+  }
+  return `${String(spec.hour).padStart(2, "0")}:${String(spec.minute).padStart(2, "0")}`;
+}
+
 /** Human-readable description of a spec, for /schedule list. */
 export function describeSpec(spec: ScheduleSpec): string {
   if (spec.kind === "interval") {

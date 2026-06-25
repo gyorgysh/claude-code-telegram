@@ -58,6 +58,7 @@ async function main(): Promise<void> {
     { command: "schedule", description: "Run a prompt on a timer" },
     { command: "stop", description: "Abort the running request" },
     { command: "mode", description: "supervised | standard | full" },
+    { command: "model", description: "Switch the AI model (Claude, local, providers)" },
     { command: "lang", description: "Set response language" },
     { command: "council", description: "Put an idea to a Lead council vote" },
     { command: "restore", description: "Restore code to latest GitHub commit (keeps data)" },

@@ -19,6 +19,7 @@ import { PermissionManager, bashLeadCmd } from "./telegram/permissions.js";
 import { downloadIncomingFile, isViewableImage, readImageInput } from "./telegram/files.js";
 import { isGitCallback, resolveGitCallback } from "./telegram/gitFlow.js";
 import { isProjectCallback, resolveProjectCallback } from "./telegram/projects.js";
+import { isModelCallback, resolveModelCallback } from "./commands.js";
 import { transcribeAudio, voiceEnabled, voiceSetupHint } from "./telegram/voice.js";
 import { schedules, type ScheduleRunner } from "./schedule/manager.js";
 import { heartbeat } from "./core/heartbeat.js";
@@ -59,6 +60,15 @@ export function buildBot(): Telegraf {
       const messageId = ctx.callbackQuery.message?.message_id;
       const toast = await resolveProjectCallback(ctx.telegram, ctx.chat.id, data, messageId);
       await ctx.answerCbQuery(toast.slice(0, 200)).catch(() => {});
+    } else if (data && isModelCallback(data) && ctx.chat) {
+      if (data === "mdl:noop") {
+        await ctx.answerCbQuery().catch(() => {});
+      } else {
+        log.debug("Model button pressed", { chatId: ctx.chat.id, data });
+        const messageId = ctx.callbackQuery.message?.message_id;
+        const toast = await resolveModelCallback(ctx.telegram, ctx.chat.id, messageId, data);
+        await ctx.answerCbQuery(toast.slice(0, 200)).catch(() => {});
+      }
     } else {
       await ctx.answerCbQuery().catch(() => {});
     }

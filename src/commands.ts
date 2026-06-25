@@ -1,7 +1,7 @@
 import { existsSync, statSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import type { Telegraf } from "telegraf";
-import { mainSettingsView } from "./core/mainSettings.js";
+import type { Telegraf, Telegram } from "telegraf";
+import { mainSettingsView, setMainSettings } from "./core/mainSettings.js";
 import { config } from "./config.js";
 import { AGENT_LANGUAGES, isValidLanguage, languageName } from "./core/languages.js";
 import { runCouncil, formatCouncilTelegram } from "./core/council.js";
@@ -17,7 +17,118 @@ import { getPlanSettings, billingPeriodStart, daysUntilReset } from "./core/plan
 import { checkForUpdate, runUpdate, runRestore, isUpdating } from "./core/updateControl.js";
 import { isActive } from "./core/activity.js";
 import { serviceInstalled } from "./core/agentControl.js";
+import { listProviders } from "./core/providers.js";
+import { fetchProviderModels } from "./core/providerModels.js";
+import { resolveSecret } from "./core/vault.js";
 import { log } from "./logger.js";
+
+// ---------------------------------------------------------------------------
+// /model command helpers
+// ---------------------------------------------------------------------------
+
+/** Well-known Anthropic Claude models shown in the picker. */
+const ANTHROPIC_MODELS = [
+  "claude-opus-4-5-20251101",
+  "claude-sonnet-4-5-20251101",
+  "claude-haiku-4-5-20251101",
+  "claude-opus-4-8",
+  "claude-sonnet-4-6",
+];
+
+const MODEL_CB_PREFIX = "mdl:";
+
+/** Build callback_data for a model button. Max 64 bytes — we keep it tight. */
+export function modelCbData(model: string, providerId: string): string {
+  return `${MODEL_CB_PREFIX}${providerId}|${model}`;
+}
+
+export function isModelCallback(data: string): boolean {
+  return data.startsWith(MODEL_CB_PREFIX);
+}
+
+/** Parse callback_data back to { model, providerId }. */
+export function parseModelCallback(data: string): { model: string; providerId: string } {
+  const body = data.slice(MODEL_CB_PREFIX.length);
+  const pipe = body.indexOf("|");
+  return pipe === -1
+    ? { model: body, providerId: "" }
+    : { model: body.slice(pipe + 1), providerId: body.slice(0, pipe) };
+}
+
+/** Handle a model-selection callback: apply, answer, edit message. */
+export async function resolveModelCallback(
+  tg: Telegram,
+  chatId: number,
+  messageId: number | undefined,
+  data: string,
+): Promise<string> {
+  const { model, providerId } = parseModelCallback(data);
+  setMainSettings({ model, providerId: providerId || "" });
+  log.info("Model changed via Telegram", { chatId, model, providerId });
+  // Refresh the picker in place so the user can see the checkmark moved.
+  if (messageId) {
+    await sendModelMenu(tg, chatId, messageId).catch(() => {});
+  }
+  const label = model || config.CLAUDE_MODEL;
+  return `Model set to ${label}`;
+}
+
+/** Send (or edit) the model-picker message. */
+export async function sendModelMenu(
+  tg: Telegram,
+  chatId: number,
+  editMessageId?: number,
+): Promise<void> {
+  const view = mainSettingsView();
+  const current = { model: view.model, providerId: view.providerId };
+
+  // Build button rows. Each row = one model. Anthropic section first.
+  type Btn = { text: string; callback_data: string };
+  const rows: Btn[][] = [];
+
+  const tick = (model: string, pId: string) =>
+    model === current.model && pId === current.providerId ? "✓ " : "";
+
+  rows.push([{ text: "— Anthropic —", callback_data: "mdl:noop" }]);
+  for (const m of ANTHROPIC_MODELS) {
+    rows.push([{ text: `${tick(m, "")}${m}`, callback_data: modelCbData(m, "") }]);
+  }
+
+  // Provider sections — fetch models for each saved provider in parallel.
+  const providers = listProviders();
+  await Promise.all(
+    providers.map(async (p) => {
+      let models: string[];
+      try {
+        models = await fetchProviderModels(p.baseUrl, resolveSecret(p.authToken));
+      } catch {
+        models = [];
+      }
+      if (models.length === 0) return;
+      rows.push([{ text: `— ${p.name} —`, callback_data: "mdl:noop" }]);
+      for (const m of models) {
+        rows.push([{ text: `${tick(m, p.id)}${m}`, callback_data: modelCbData(m, p.id) }]);
+      }
+    }),
+  );
+
+  const effectiveLabel = view.effectiveModel + (view.providerName ? ` (${view.providerName})` : "");
+  const text = `🧠 <b>Model</b>\nCurrent: <code>${escapeHtml(effectiveLabel)}</code>\n\nSelect a model to switch (takes effect on the next message):`;
+
+  if (editMessageId) {
+    await tg
+      .editMessageText(chatId, editMessageId, undefined, text, {
+        parse_mode: "HTML",
+        reply_markup: { inline_keyboard: rows },
+      })
+      .catch(() => {});
+  } else {
+    await tg.sendMessage(chatId, text, {
+      parse_mode: "HTML",
+      reply_markup: { inline_keyboard: rows },
+    });
+  }
+}
 
 function buildStart(firstName?: string): string {
   const A = config.ATLAS_NAME;
@@ -56,6 +167,7 @@ function buildHelp(): string {
 
 <b>Autonomy</b>
 /mode supervised|standard|full: approval level for this chat
+/model: switch the AI model (Claude, local, providers)
 /allow &lt;Tool&gt; · /allowed · /disallow &lt;Tool|all&gt;: persistent tool allow-rules
 
 <b>Crew</b>
@@ -479,6 +591,11 @@ export function registerCommands(bot: Telegraf): void {
         `Current autonomy: ${s.autonomy}. Usage: /mode supervised|standard|full`,
       );
     }
+  });
+
+  bot.command("model", async (ctx) => {
+    log.info("Command /model", { chatId: ctx.chat.id });
+    await sendModelMenu(ctx.telegram, ctx.chat.id);
   });
 
   bot.command("lang", async (ctx) => {

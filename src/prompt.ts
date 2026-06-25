@@ -53,7 +53,12 @@ Learning over time:
   save it with the memory_write tool so you remember it next time.
 - When you work out a procedure worth reusing, distil it into a skill with the
   skill_save tool. Refine an existing one with skill_patch. Do this sparingly,
-  only for genuinely reusable workflows, not one-off steps.`;
+  only for genuinely reusable workflows, not one-off steps.
+- Be proactive about this, not just reactive: when you notice you have handled
+  the same kind of task before, or that a request follows a pattern you have
+  seen, pause and capture it. Turn the repeated task into a skill (skill_save)
+  and summarize what you learned into memory (memory_write) so future turns get
+  faster. A few seconds of reflection now saves redoing the work later.`;
 }
 
 /** @deprecated Use getPersonality() — kept for callers that cache the string. */

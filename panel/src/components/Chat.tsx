@@ -84,6 +84,7 @@ export function ChatView({ onAuthError }: { onAuthError: () => void }) {
                 : "bg-surface-2 text-fg-dim"
             } ${view?.bypassAllowed ? "" : "cursor-not-allowed opacity-60"}`}
           >
+            {!view?.bypassAllowed && <span className="mr-1">🔒</span>}
             {view?.auto ? t("chat_auto") : t("chat_safe")}
           </button>
           <Button

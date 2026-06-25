@@ -2,7 +2,7 @@
 
 **A self-hosted fleet of autonomous AI agents, deeply integrated with Telegram.** Talk to Atlas, your central coordinator, from your phone. He runs day-to-day operations, remembers everything, learns your workflows, and commands a team of specialized Leads. Each Lead owns a domain and can have its own Telegram bot.
 
-![MyHQ Panel: Agents and Crew view](images/ft_agents.webp)
+![MyHQ Panel dashboard](images/prev_dashboard.webp)
 
 Open source. Built on real **Claude Code** agents running on your machine, so every agent can read files, run commands, edit code, check services, and ship things. Replies stream back live and risky actions are gated behind your approval.
 
@@ -37,9 +37,9 @@ The same agents, two front doors:
 
 | | |
 | --- | --- |
-| ![Agents panel: Atlas and the crew](images/ft_agents_small.webp) | ![Tasks panel: Kanban board with delegate-to-agent](images/ft_tasks.webp) |
+| ![Agents panel: Atlas and the crew](images/prev_agents.webp) | ![Tasks panel: Kanban board with delegate-to-agent](images/prev_tasks.webp) |
 | **Crew**: see the full org chart (President, Atlas, Leads, Assistants). Delegation log and council vote history are shown here. | **Tasks**: a Kanban board with drag-and-drop, priority, WIP limits, and a Delegate button that hands a card to an autonomous agent run. Columns are fully customizable: rename them or add your own. |
-| ![Heartbeat panel: proactive monitoring](images/ft_heartbeat.webp) | ![Schedules panel: timed autonomous prompts](images/ft_schedulers.webp) |
+| ![Heartbeat panel: proactive monitoring](images/prev_hearthbeat.webp) | ![Schedules panel: timed autonomous prompts](images/prev_scheduler.webp) |
 | **Heartbeat**: proactive monitoring. Set CPU/mem/swap/disk thresholds; Atlas pings Telegram on breach, or runs an autonomous turn to investigate and act first. | **Schedules**: create timed autonomous prompts (`30m`, `2h`, `HH:MM`) from the panel or via `/schedule` in chat, with results pushed back to Telegram. |
 
 Also inside: **System** (live CPU per-core, memory, swap, disk I/O), **Status** (Claude service status + provider/local-backend probes), **Memory** (tier-based fact store with hot/warm/cold recall), **Vault** (AES-256-GCM secrets), **Skills** (reusable workflows), **Prompt** (playbook editor), **Logs** (live tail), **Settings** (main agent, plan and budget tracker, language, model providers), and more.

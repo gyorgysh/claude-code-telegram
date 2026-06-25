@@ -23,6 +23,8 @@ export const CONNECTORS: ConnectorDef[] = [
   { id: "gcal", name: "Google Calendar", description: "Read and create calendar events.", credential: "Google OAuth token", status: "coming-soon" },
   { id: "gdrive", name: "Google Drive", description: "Browse and fetch files.", credential: "Google OAuth token", status: "coming-soon" },
   { id: "notion", name: "Notion", description: "Read and update Notion pages/databases.", credential: "Notion integration token", status: "coming-soon" },
+  { id: "apple-calendar", name: "Apple Calendar", description: "Read and create events in macOS Calendar.", credential: "macOS Calendar access (EventKit)", status: "coming-soon" },
+  { id: "apple-mail", name: "Apple Mail", description: "Read and send email via iCloud Mail.", credential: "iCloud app-specific password", status: "coming-soon" },
 ];
 
 interface ConnectorConfig {

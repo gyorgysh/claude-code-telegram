@@ -139,6 +139,15 @@ const schema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((v) => v === "true"),
+  // Remote access: let the panel spawn a tunnel relay (ngrok / cloudflared) so it
+  // is reachable from a phone over the internet, gated by the panel login. The
+  // panel token is host-equivalent, so this is OFF by default and must be opted
+  // into. When enabled, the actual relay still only runs when the user starts it
+  // from the Remote Access view (with a provider + token configured).
+  PANEL_TUNNEL_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
 });
 
 // Fail closed: a panel with host access must never run without a token.

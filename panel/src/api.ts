@@ -529,6 +529,19 @@ export interface UpdateStatus {
   active?: boolean;
 }
 
+export type TunnelProviderId = "ngrok" | "cloudflare";
+export type TunnelState = "stopped" | "starting" | "running" | "error";
+export interface TunnelView {
+  enabled: boolean;
+  state: TunnelState;
+  provider: TunnelProviderId;
+  hasToken: boolean;
+  domain: string;
+  url?: string;
+  error?: string;
+  startedAt?: number;
+}
+
 export const api = {
   me: () =>
     get<{ ok: boolean; chatEnabled: boolean; version: string; updateAvailable: boolean; atlasName: string; brandName: string }>("/api/me"),
@@ -710,4 +723,10 @@ export const api = {
     req<{ ok: boolean }>("POST", "/api/terminal/spawn", { cols, rows }),
   terminalResize: (cols: number, rows: number) =>
     req<{ ok: boolean }>("POST", "/api/terminal/resize", { cols, rows }),
+
+  tunnel: () => get<TunnelView>("/api/tunnel"),
+  saveTunnel: (s: { provider?: TunnelProviderId; authToken?: string; domain?: string }) =>
+    req<TunnelView>("PUT", "/api/tunnel", s),
+  startTunnel: () => req<TunnelView>("POST", "/api/tunnel/start"),
+  stopTunnel: () => req<TunnelView>("POST", "/api/tunnel/stop"),
 };

@@ -20,6 +20,7 @@ export type Tab =
   | "sessions"
   | "schedules"
   | "heartbeat"
+  | "remote"
   | "usage";
 
 type Item = { id: Tab; labelKey: TranslationKey; icon: string };
@@ -61,6 +62,7 @@ export const NAV: Group[] = [
     headingKey: "nav_others",
     items: [
       { id: "status", labelKey: "nav_status", icon: "◉" },
+      { id: "remote", labelKey: "nav_remote", icon: "⇆" },
       { id: "updates", labelKey: "nav_updates", icon: "⤓" },
     ],
   },

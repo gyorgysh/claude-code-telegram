@@ -321,6 +321,27 @@ curl -X PUT -H "$AUTH" -H "Content-Type: application/json" $BASE/api/heartbeat \
 curl -X POST -H "$AUTH" $BASE/api/heartbeat/run
 ```
 
+### Remote access (tunnel relay)
+
+Exposes the panel to the internet via ngrok/cloudflared so a phone can reach it,
+still behind the panel login. Off unless `PANEL_TUNNEL_ENABLED=true`; the relay
+binary (`ngrok` or `cloudflared`) must be installed on the host.
+
+```bash
+# View tunnel config + live state (provider, hasToken, url, state)
+curl -H "$AUTH" $BASE/api/tunnel
+
+# Configure provider/token/domain (blank authToken keeps the saved one)
+curl -X PUT -H "$AUTH" -H "Content-Type: application/json" $BASE/api/tunnel \
+  -d '{ "provider": "ngrok", "authToken": "vault:<id>", "domain": "" }'
+# provider: "ngrok" (needs a token) | "cloudflare" (free quick tunnel, no token)
+
+# Start / stop the relay (start returns once launched; the public URL arrives async)
+curl -X POST -H "$AUTH" $BASE/api/tunnel/start
+curl -X POST -H "$AUTH" $BASE/api/tunnel/stop
+# All three (PUT/start/stop) return 403 when PANEL_TUNNEL_ENABLED is false.
+```
+
 ### System / status
 
 ```bash

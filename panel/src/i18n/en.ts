@@ -22,6 +22,7 @@ export const en = {
   nav_connectors: "Connectors",
   nav_prompt: "Prompt",
   nav_status: "Status",
+  nav_remote: "Remote Access",
   nav_updates: "Updates",
   // Themes
   theme_light: "Light",
@@ -712,6 +713,46 @@ export const en = {
   terminal_unavailable_overlay: "Terminal unavailable",
   terminal_locked_hint:
     "A live host shell would appear here once the terminal is enabled.",
+
+  // Remote access (tunnel relay)
+  ra_title: "Remote Access",
+  ra_desc:
+    "Expose this panel to the internet through a tunnel relay (ngrok or cloudflared) so you can reach it from your phone. It stays behind the same login.",
+  ra_security_title: "This opens a public door",
+  ra_security_body:
+    "The public URL is protected only by your panel login, which is host-equivalent. Use a strong token, prefer a paid provider with a reserved domain, and stop the tunnel when you don't need it.",
+  ra_disabled_title: "Remote access disabled",
+  ra_disabled_body:
+    "Exposing the panel publicly is off by default. Set PANEL_TUNNEL_ENABLED=true in .env and restart to unlock this view.",
+  ra_disabled_overlay: "Remote access locked",
+  ra_disabled_hint:
+    "A public tunnel to this panel can be started here once the feature is enabled.",
+  ra_provider: "Provider",
+  ra_provider_ngrok: "ngrok",
+  ra_provider_ngrok_desc: "Needs an authtoken from ngrok.com. The `ngrok` CLI must be installed.",
+  ra_provider_cloudflare: "Cloudflare",
+  ra_provider_cloudflare_desc:
+    "Free quick tunnel, no token needed. The `cloudflared` CLI must be installed.",
+  ra_token_required: "Auth token (required)",
+  ra_token_optional: "Auth token (optional)",
+  ra_token_pick_vault: "Pick from vault…",
+  ra_token_saved: "Saved — leave blank to keep",
+  ra_token_placeholder: "Paste a token or vault:<id>",
+  ra_token_hint:
+    "Stored as written. Use a vault:<id> reference to keep the secret out of this config file.",
+  ra_domain: "Reserved domain (optional)",
+  ra_domain_placeholder: "myapp.example.com",
+  ra_domain_hint: "For a paid ngrok domain or a named Cloudflare tunnel. Leave blank for a random URL.",
+  ra_public_url: "Public URL",
+  ra_started: "Up since {time}",
+  ra_starting: "Starting the relay and waiting for a public URL…",
+  ra_start: "Start tunnel",
+  ra_stop: "Stop tunnel",
+  ra_save: "Save",
+  ra_state_stopped: "Stopped",
+  ra_state_starting: "Starting",
+  ra_state_running: "Live",
+  ra_state_error: "Error",
 
   // Kanban default column names (translated only when not renamed)
   col_planned: "Planned",

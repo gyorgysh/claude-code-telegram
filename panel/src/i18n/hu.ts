@@ -24,6 +24,7 @@ export const hu: Translations = {
   nav_connectors: "Csatlakozók",
   nav_prompt: "Utasítás",
   nav_status: "Állapot",
+  nav_remote: "Távoli elérés",
   nav_updates: "Frissítések",
   // Témák
   theme_light: "Világos",
@@ -714,6 +715,46 @@ export const hu: Translations = {
   terminal_unavailable_overlay: "Terminál nem elérhető",
   terminal_locked_hint:
     "Itt jelenne meg egy élő host shell, amint a terminál engedélyezve van.",
+
+  // Távoli elérés (tunnel relay)
+  ra_title: "Távoli elérés",
+  ra_desc:
+    "Tedd elérhetővé ezt a panelt az interneten egy tunnel relayen (ngrok vagy cloudflared) keresztül, hogy telefonról is elérd. Ugyanaz a bejelentkezés védi.",
+  ra_security_title: "Ez nyilvános ajtót nyit",
+  ra_security_body:
+    "A nyilvános URL-t csak a panel bejelentkezésed védi, ami host-szintű hozzáférést ad. Használj erős tokent, lehetőleg fizetős szolgáltatót fenntartott domainnel, és állítsd le a tunnelt, amikor nincs rá szükség.",
+  ra_disabled_title: "Távoli elérés letiltva",
+  ra_disabled_body:
+    "A panel nyilvános kitettsége alapból ki van kapcsolva. Állítsd be a PANEL_TUNNEL_ENABLED=true értéket a .env-ben és indítsd újra a nézet feloldásához.",
+  ra_disabled_overlay: "Távoli elérés zárolva",
+  ra_disabled_hint:
+    "A panel nyilvános tunnelje innen indítható, amint a funkció engedélyezve van.",
+  ra_provider: "Szolgáltató",
+  ra_provider_ngrok: "ngrok",
+  ra_provider_ngrok_desc: "Authtoken szükséges az ngrok.com-ról. Az `ngrok` CLI-nek telepítve kell lennie.",
+  ra_provider_cloudflare: "Cloudflare",
+  ra_provider_cloudflare_desc:
+    "Ingyenes gyors tunnel, token nélkül. A `cloudflared` CLI-nek telepítve kell lennie.",
+  ra_token_required: "Auth token (kötelező)",
+  ra_token_optional: "Auth token (opcionális)",
+  ra_token_pick_vault: "Választás a tárolóból…",
+  ra_token_saved: "Mentve — hagyd üresen a megtartáshoz",
+  ra_token_placeholder: "Illessz be egy tokent vagy vault:<id>-t",
+  ra_token_hint:
+    "Úgy tárolódik, ahogy beírtad. Használj vault:<id> hivatkozást, hogy a titok kimaradjon ebből a konfigból.",
+  ra_domain: "Fenntartott domain (opcionális)",
+  ra_domain_placeholder: "myapp.example.com",
+  ra_domain_hint: "Fizetős ngrok domainhez vagy nevesített Cloudflare tunnelhez. Hagyd üresen véletlenszerű URL-hez.",
+  ra_public_url: "Nyilvános URL",
+  ra_started: "Aktív azóta: {time}",
+  ra_starting: "A relay indul, várakozás a nyilvános URL-re…",
+  ra_start: "Tunnel indítása",
+  ra_stop: "Tunnel leállítása",
+  ra_save: "Mentés",
+  ra_state_stopped: "Leállítva",
+  ra_state_starting: "Indul",
+  ra_state_running: "Élő",
+  ra_state_error: "Hiba",
 
   // Kanban alapértelmezett oszlopnevek (csak átnevezetlen állapotban fordítva)
   col_planned: "Tervezett",

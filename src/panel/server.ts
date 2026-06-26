@@ -78,6 +78,7 @@ import { getUpdateStatus, checkForUpdate, runUpdate, runRestore } from "../core/
 import { recentAudit } from "../core/audit.js";
 import { sessions } from "../session/manager.js";
 import { ptyManager } from "../core/ptyManager.js";
+import { tunnelManager } from "../core/tunnelManager.js";
 import { PanelHub } from "./hub.js";
 import { runTurn } from "../claude/runner.js";
 
@@ -115,6 +116,8 @@ export async function startPanel(): Promise<(() => Promise<void>) | undefined> {
   taskDelegator.start((m) => hub.broadcast(m));
   // Wire the PTY terminal session to all clients.
   ptyManager.start((m) => hub.broadcast(m));
+  // Wire remote-access tunnel state changes to all clients.
+  tunnelManager.start((m) => hub.broadcast(m));
   // Stream live log lines to every panel client.
   const unsubLog = onLog((entry) => hub.broadcast({ type: "log", entry }));
 
@@ -166,6 +169,7 @@ export async function startPanel(): Promise<(() => Promise<void>) | undefined> {
     workers.stop();
     taskDelegator.stopAll();
     ptyManager.kill();
+    tunnelManager.kill();
     hub.stop();
     await app.close();
   };
@@ -935,6 +939,29 @@ Respond with ONLY a JSON array, no markdown fences, no explanation. Example form
     const { cols, rows } = (req.body ?? {}) as { cols?: number; rows?: number };
     if (typeof cols === "number" && typeof rows === "number") ptyManager.resize(cols, rows);
     return { ok: true };
+  });
+
+  // --- Remote access (tunnel relay) ---
+  app.get("/api/tunnel", async () => tunnelManager.view());
+  app.put("/api/tunnel", async (req, reply) => {
+    if (!tunnelManager.enabled) return reply.code(403).send({ error: "remote access disabled" });
+    const { provider, authToken, domain } = (req.body ?? {}) as {
+      provider?: "ngrok" | "cloudflare";
+      authToken?: string;
+      domain?: string;
+    };
+    return tunnelManager.setConfig({ provider, authToken, domain });
+  });
+  app.post("/api/tunnel/start", async (_req, reply) => {
+    if (!tunnelManager.enabled) return reply.code(403).send({ error: "remote access disabled" });
+    const r = tunnelManager.start_relay();
+    if (!r.ok) return reply.code(409).send({ error: r.error });
+    return tunnelManager.view();
+  });
+  app.post("/api/tunnel/stop", async (_req, reply) => {
+    if (!tunnelManager.enabled) return reply.code(403).send({ error: "remote access disabled" });
+    tunnelManager.stop();
+    return tunnelManager.view();
   });
 }
 

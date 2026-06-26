@@ -20,7 +20,7 @@ set -euo pipefail
 REPO_URL="${MYHQ_REPO:-https://github.com/gyorgysh/myhq.git}"
 BRANCH="${MYHQ_BRANCH:-main}"
 DEFAULT_DIR="${MYHQ_DIR:-$HOME/myhq}"
-TUTORIAL="https://gyorgy.sh/blog/claude-code-telegram"
+TUTORIAL="https://gyorgy.sh/blog/myhq"
 MIN_NODE=20
 
 PANEL_PORT_CHOSEN=""

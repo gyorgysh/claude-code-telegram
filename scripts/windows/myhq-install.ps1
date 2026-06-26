@@ -44,7 +44,7 @@ $Branch     = if ($env:MYHQ_BRANCH) { $env:MYHQ_BRANCH } else { "main" }
 $InstallDir = if ($env:MYHQ_DIR)    { $env:MYHQ_DIR }    else { Join-Path $HOME "myhq" }
 $MinNode    = 20
 $AutoYes    = $env:MYHQ_YES -eq "1"
-$Tutorial   = "https://gyorgy.sh/blog/claude-code-telegram"
+$Tutorial   = "https://gyorgy.sh/blog/myhq"
 
 $Script:PanelPortChosen = ""
 

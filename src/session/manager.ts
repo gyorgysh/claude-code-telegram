@@ -46,6 +46,10 @@ export class SessionManager {
   private sessions = new Map<number, Session>();
   private saveTimer?: NodeJS.Timeout;
   private stateFile: string;
+  /** Chats that have sent a message (or been explicitly marked) this process
+   *  lifetime. Lets us detect the first message after a restart so we can offer
+   *  to resume the persisted Claude context instead of silently dropping it. */
+  private seenThisProcess = new Set<number>();
 
   /** `stateFile` defaults to STATE_FILE; a bare filename resolves next to it
    *  (so e.g. lead bots can keep their own state alongside the main one). */
@@ -87,6 +91,25 @@ export class SessionManager {
       this.sessions.set(chatId, s);
     }
     return s;
+  }
+
+  /**
+   * Whether this is the first interaction with `chatId` since the process
+   * started AND the session was rehydrated from disk with a resumable Claude
+   * context. True only once per chat per process: the call marks the chat as
+   * seen, so subsequent calls return false. Used to offer a "resume vs fresh"
+   * prompt after a restart instead of silently dropping the persisted context.
+   */
+  isFirstSinceRestart(chatId: number): boolean {
+    if (this.seenThisProcess.has(chatId)) return false;
+    this.seenThisProcess.add(chatId);
+    return Boolean(this.sessions.get(chatId)?.sessionId);
+  }
+
+  /** Mark a chat as seen this process without checking (e.g. autonomous runs
+   *  that shouldn't trigger a resume prompt on the next user message). */
+  markSeen(chatId: number): void {
+    this.seenThisProcess.add(chatId);
   }
 
   /** All live sessions (for shutdown / broadcast). */

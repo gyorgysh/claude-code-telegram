@@ -20,6 +20,11 @@ import { downloadIncomingFile, isViewableImage, readImageInput } from "./telegra
 import { isGitCallback, resolveGitCallback } from "./telegram/gitFlow.js";
 import { isProjectCallback, resolveProjectCallback } from "./telegram/projects.js";
 import { isModelCallback, resolveModelCallback } from "./commands.js";
+import {
+  isResumeCallback,
+  resolveResumeCallback,
+  maybeOfferResume,
+} from "./telegram/resumePrompt.js";
 import { transcribeAudio, voiceEnabled, voiceSetupHint } from "./telegram/voice.js";
 import { schedules, type ScheduleRunner } from "./schedule/manager.js";
 import { heartbeat } from "./core/heartbeat.js";
@@ -80,6 +85,10 @@ export function buildBot(): Telegraf {
         const toast = await resolveModelCallback(ctx.telegram, ctx.chat.id, messageId, data);
         await ctx.answerCbQuery(toast.slice(0, 200)).catch(() => {});
       }
+    } else if (data && isResumeCallback(data) && ctx.chat) {
+      log.debug("Resume button pressed", { chatId: ctx.chat.id, data });
+      const toast = resolveResumeCallback(ctx.telegram, ctx.chat.id, data);
+      await ctx.answerCbQuery(toast.slice(0, 200)).catch(() => {});
     } else {
       await ctx.answerCbQuery().catch(() => {});
     }
@@ -102,7 +111,10 @@ export function buildBot(): Telegraf {
         ? `${caption}\n\n(The user uploaded a file, saved at: ${path})`
         : `The user uploaded a file, saved at: ${path}. Take a look.`;
       const images = isViewableImage(path) ? await imageInputs(path) : undefined;
-      void runUserPrompt(permissions, ctx.chat.id, prompt, ctx.telegram, { images });
+      const run = () =>
+        runUserPrompt(permissions, ctx.chat.id, prompt, ctx.telegram, { images });
+      if (await maybeOfferResume(ctx.telegram, ctx.chat.id, run)) return;
+      run();
     } catch (err) {
       log.error("File download failed", { chatId: ctx.chat.id, error: errText(err) });
       await ctx.reply(`⚠️ Could not download file: ${errText(err)}`);
@@ -125,9 +137,11 @@ export function buildBot(): Telegraf {
       const prompt = caption
         ? `${caption}\n\n(The user sent an image, also saved at: ${path})`
         : `The user sent this image (also saved at: ${path}).`;
-      void runUserPrompt(permissions, ctx.chat.id, prompt, ctx.telegram, {
-        images: await imageInputs(path),
-      });
+      const images = await imageInputs(path);
+      const run = () =>
+        runUserPrompt(permissions, ctx.chat.id, prompt, ctx.telegram, { images });
+      if (await maybeOfferResume(ctx.telegram, ctx.chat.id, run)) return;
+      run();
     } catch (err) {
       log.error("Photo download failed", { chatId: ctx.chat.id, error: errText(err) });
       await ctx.reply(`⚠️ Could not download image: ${errText(err)}`);
@@ -158,7 +172,9 @@ export function buildBot(): Telegraf {
       }
       log.info("Voice transcribed", { chatId, text: preview(text) });
       await ctx.replyWithHTML(`🎤 <i>${escapeHtml(text)}</i>`).catch(() => {});
-      void runUserPrompt(permissions, chatId, text, ctx.telegram);
+      const run = () => runUserPrompt(permissions, chatId, text, ctx.telegram);
+      if (await maybeOfferResume(ctx.telegram, chatId, run)) return;
+      run();
     } catch (err) {
       log.error("Voice handling failed", { chatId, error: errText(err) });
       await ctx.reply(`⚠️ Voice transcription failed: ${errText(err)}`);
@@ -176,7 +192,10 @@ export function buildBot(): Telegraf {
         return;
       }
     }
-    void runUserPrompt(permissions, ctx.chat.id, text, ctx.telegram);
+    const chatId = ctx.chat.id;
+    const run = () => runUserPrompt(permissions, chatId, text, ctx.telegram);
+    if (await maybeOfferResume(ctx.telegram, chatId, run)) return;
+    run();
   });
 
   bot.catch((err, ctx) => {
@@ -284,6 +303,9 @@ async function handleUserPrompt(
 ): Promise<void> {
   const { images, autonomous = false } = opts;
   const session = sessions.get(chatId);
+  // An autonomous turn (scheduled/heartbeat) that resumes the persisted context
+  // counts as "using" it, so the user's next message shouldn't re-offer a resume.
+  if (autonomous) sessions.markSeen(chatId);
   if (session.busy) {
     log.info("Prompt rejected — chat busy", { chatId });
     await tg.sendMessage(chatId, "⏳ Still working on the previous request. Send /stop to cancel.");

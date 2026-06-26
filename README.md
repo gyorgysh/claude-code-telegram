@@ -171,10 +171,10 @@ You can also ask Atlas to restart himself: "restart yourself" triggers `./script
 | `MAINTENANCE_CRON` | no | `HH:MM` (24h server time) for daily memory compaction and skill pruning |
 | `MEMORY_MAX_ENTRIES` | no | Warm entry cap before compaction triggers (default `500`) |
 | `COLD_MAX` | no | Cold entry cap before deletion (default `200`) |
-| `EMBEDDING_ENABLED` | no | `true` to rank memory recall by meaning via a local embedding model (default `false`) |
-| `EMBEDDING_PROVIDER` | no | `ollama` (POST `/api/embeddings`) or `openai` (POST `/v1/embeddings`, for LM Studio and OpenAI) |
-| `EMBEDDING_BASE_URL` | no | Embedding endpoint base URL (default `http://localhost:11434`) |
-| `EMBEDDING_MODEL` | no | Embedding model id (default `nomic-embed-text`) |
+| `EMBEDDING_ENABLED` | no | Leave unset to auto-detect a local backend (Ollama or LM Studio) and enable embeddings when one is live. Set `true` to pin the `EMBEDDING_*` backend below instead of auto-detecting |
+| `EMBEDDING_PROVIDER` | no | Pinned backend shape: `ollama` (POST `/api/embeddings`) or `openai` (POST `/v1/embeddings`, for LM Studio and OpenAI) |
+| `EMBEDDING_BASE_URL` | no | Pinned embedding endpoint base URL (default `http://localhost:11434`) |
+| `EMBEDDING_MODEL` | no | Pinned embedding model id (default `nomic-embed-text`) |
 | `EMBEDDING_AUTH_TOKEN` | no | Optional auth token for the embedding endpoint (plain or `vault:<id>`) |
 | `LOG_LEVEL` | no | `error`, `warn`, `info` (default), `debug` |
 | `TRANSCRIBE_PROVIDER` | no | Voice backend: `openai` (default) or `vosk` (local) |
@@ -273,7 +273,7 @@ Lead bots default to standard mode with the same approve/deny prompts.
 - **Council votes**: `/council <idea>` calls every enabled Lead, gets a SUPPORT/OPPOSE vote with domain reasoning from each, and delivers a tally to Telegram. Full history in the panel Crew tab.
 - **Inter-agent crew tools**: `crew_delegate` (hand a task to a Lead and get their output back), `crew_report` (log a summary and optionally notify the president), `crew_ask_president` (pause until the user replies, then continue).
 - **Memory tiers**: hot (every turn), warm (keyword-recalled), cold (panel-only). Auto-decay and promote/demote controls in the panel.
-- **Semantic memory (optional)**: with `EMBEDDING_ENABLED=true`, recall ranks by meaning using a local embedding model (Ollama or LM Studio), blending cosine similarity with keyword overlap and salience. Off by default; falls back to keyword search whenever the endpoint is unreachable. The Settings tab shows live up/down status and available models for each local backend, one-click connect, and a preferred-backend pick when both are running.
+- **Semantic memory**: recall ranks by meaning using a local embedding model, blending cosine similarity with keyword overlap and salience. On by default in auto mode: at startup the bot probes Ollama then LM Studio and enables embeddings against whichever is live, with zero configuration, re-selecting the live backend on every restart. It falls back to keyword search whenever no backend is reachable, so it is always safe to leave on. The Settings tab shows live up/down status and available models for each local backend, one-click connect, and a preferred-backend pick when both are running. Set `EMBEDDING_ENABLED=true` to pin a fixed backend instead of auto-detecting.
 - **Auto skill extraction**: after expensive turns, an async haiku pass checks whether the work established a reusable procedure and proposes a skill entry. Gated by `AUTO_SKILL_GENERATION=true`.
 - **Maintenance scheduler**: daily window for memory compaction (demote stale entries, AI deduplication of warm entries) and skill pruning (auto-archive unused skills older than 14 days). Triggered by `MAINTENANCE_CRON=HH:MM`.
 - **Personas**: preset options (Concise, Warm, Formal, Analytical, Playful) or fully custom. Persona shapes character and tone; domain knowledge stays separate in the system prompt.

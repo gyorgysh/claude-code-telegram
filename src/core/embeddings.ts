@@ -9,7 +9,7 @@ const PROBE_TIMEOUT_MS = 3_000;
 const FILE = "embeddings.json";
 /** Which local backend the user prefers when both are running. */
 export type PreferredBackend = "ollama" | "lmstudio";
-interface EmbeddingsFile { version: 1; enabled: boolean; provider: "ollama" | "openai"; baseUrl: string; model: string; preferredBackend?: PreferredBackend | null; }
+interface EmbeddingsFile { version: 1; enabled: boolean; provider: "ollama" | "openai"; baseUrl: string; model: string; preferredBackend?: PreferredBackend | null; auto?: boolean; }
 
 /** Runtime override: null = follow EMBEDDING_ENABLED from .env */
 let _runtimeEnabled: boolean | null = null;
@@ -18,6 +18,13 @@ let _runtimeBaseUrl: string | null = null;
 let _runtimeModel: string | null = null;
 /** Preferred local backend for auto-probe ordering; null = no preference. */
 let _preferredBackend: PreferredBackend | null = null;
+/**
+ * Auto mode (the default): each startup probes Ollama then LM Studio and enables
+ * embeddings against whichever is live. Turned off only by an explicit manual
+ * pin (a panel save or a one-click connect) or an explicit disable, so the user
+ * always wins. A fresh install, or any prior run that auto-enabled, stays auto.
+ */
+let _auto = true;
 
 function loadOverride(): void {
   const f = loadJson<EmbeddingsFile>(FILE, null as unknown as EmbeddingsFile);
@@ -27,6 +34,9 @@ function loadOverride(): void {
     _runtimeBaseUrl = f.baseUrl ?? null;
     _runtimeModel = f.model ?? null;
     _preferredBackend = f.preferredBackend ?? null;
+    // Files predating the auto flag default to auto, so existing installs pick
+    // up the new auto-detect-by-default behaviour on their next start.
+    _auto = f.auto ?? true;
   }
 }
 loadOverride();
@@ -41,6 +51,7 @@ function saveOverride(): void {
     baseUrl: c.baseUrl,
     model: c.model,
     preferredBackend: _preferredBackend,
+    auto: _auto,
   });
 }
 
@@ -66,21 +77,30 @@ export function activeBackend(): PreferredBackend | null {
   return null;
 }
 
-/** Toggle semantic embeddings at runtime (panel toggle / auto-probe). */
-export function setEmbeddingsEnabled(enabled: boolean, opts?: { provider?: "ollama" | "openai"; baseUrl?: string; model?: string }): void {
+/**
+ * Toggle semantic embeddings at runtime. `auto` marks the change as coming from
+ * the startup auto-probe (so it stays in auto mode); any other caller (panel
+ * save, one-click connect) is an explicit manual pin and leaves auto mode.
+ */
+export function setEmbeddingsEnabled(
+  enabled: boolean,
+  opts?: { provider?: "ollama" | "openai"; baseUrl?: string; model?: string },
+  auto = false,
+): void {
   _runtimeEnabled = enabled;
+  _auto = auto;
   if (opts?.provider) _runtimeProvider = opts.provider;
   if (opts?.baseUrl) _runtimeBaseUrl = opts.baseUrl;
   if (opts?.model) _runtimeModel = opts.model;
   saveOverride();
-  log.info("Embeddings toggled", { enabled, provider: _runtimeProvider, model: _runtimeModel });
+  log.info("Embeddings toggled", { enabled, auto, provider: _runtimeProvider, model: _runtimeModel });
 }
 
 /**
  * Local-first text embedding client for semantic memory search (Phase 2).
  *
- * Talks to a local (or proxy) embedding endpoint — Ollama, LM Studio, or any
- * OpenAI-compatible `/v1/embeddings` server — selected via `EMBEDDING_*` config.
+ * Talks to a local (or proxy) embedding endpoint (Ollama, LM Studio, or any
+ * OpenAI-compatible `/v1/embeddings` server) selected via `EMBEDDING_*` config.
  * Everything is best-effort: on any failure (endpoint down, model missing,
  * bad response) the caller falls back to keyword search, so the bot keeps
  * working with no embedding backend at all.
@@ -219,14 +239,19 @@ function toNumberArray(v: unknown): number[] {
 }
 
 /**
- * Probe local endpoints (Ollama :11434, LM Studio :1234) and auto-enable
- * embeddings when a compatible model is found — but only if the user hasn't
- * already explicitly configured EMBEDDING_ENABLED in .env or via the panel.
- * No-op when embeddings are already on or if the user explicitly set it off.
+ * Auto mode (the default): probe local endpoints (Ollama :11434, LM Studio :1234)
+ * and enable embeddings against whichever is live, preferred backend first. Runs
+ * on every startup so the live backend is re-selected each boot. Skipped only
+ * when the user has made an explicit choice: an env opt-in (EMBEDDING_ENABLED=true
+ * pins the configured backend), an explicit panel disable, or a manual pin
+ * (panel save or one-click connect).
  */
 export async function autoProbeEmbeddings(): Promise<void> {
-  // Skip if the user made an explicit choice (env or panel save).
-  if (_runtimeEnabled !== null || config.EMBEDDING_ENABLED) return;
+  if (config.EMBEDDING_ENABLED) return;       // explicit env opt-in to a fixed backend
+  // `!_auto` covers both a manual pin and an explicit panel disable (either path
+  // leaves auto mode). In auto mode we always re-probe, even if a previous boot
+  // left embeddings off because no backend was up.
+  if (!_auto) return;
 
   const ollamaCandidate = { provider: "ollama" as const, baseUrl: "http://localhost:11434", model: "nomic-embed-text", backend: "ollama" as const };
   // LM Studio: discover the real embedding model id at runtime (it ships as
@@ -248,13 +273,21 @@ export async function autoProbeEmbeddings(): Promise<void> {
     try {
       const found = await probeEndpoint(c.provider, c.baseUrl, c.model);
       if (found) {
-        setEmbeddingsEnabled(true, c);
+        setEmbeddingsEnabled(true, c, true);
         log.info("Embeddings auto-enabled (local model detected)", { provider: c.provider, baseUrl: c.baseUrl, model: c.model });
         return;
       }
     } catch {
-      // Unreachable — probeEndpoint swallows errors.
+      // Unreachable: probeEndpoint swallows errors.
     }
+  }
+
+  // No backend reachable. Stay in auto mode but keep embeddings off so recall
+  // does not POST to a dead endpoint each turn (keyword search still works); the
+  // next boot re-probes and re-enables if a backend comes back.
+  if (_runtimeEnabled) {
+    setEmbeddingsEnabled(false, undefined, true);
+    log.info("Embeddings auto-disabled (no local backend reachable)");
   }
 }
 

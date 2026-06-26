@@ -281,24 +281,90 @@ function describeTool(tool: string, t: TFn): { icon: string; verb: string } {
   }
 }
 
-/** Derive the activity feed from "Tool use" log entries (which carry
- *  meta.tool + meta.arg), newest at the bottom so it reads like a live stream. */
+/** Map a known lifecycle log message to a friendly activity row. Returns null
+ *  for messages that aren't part of the high-level activity feed. */
+function describeLifecycle(
+  l: LogEntry,
+  t: TFn,
+): { icon: string; verb: string; target: string } | null {
+  const m = l.meta ?? {};
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
+  switch (l.msg) {
+    case "Prompt received":
+      return { icon: "💬", verb: t("logs_act_prompt"), target: str(m.text) };
+    case "Voice transcribed":
+      return { icon: "🎙️", verb: t("logs_act_voice"), target: str(m.text) };
+    case "File received":
+      return { icon: "📥", verb: t("logs_act_file_in"), target: str(m.name) || str(m.path) };
+    case "Photo received":
+      return { icon: "🖼️", verb: t("logs_act_photo_in"), target: str(m.path) };
+    case "Turn complete":
+      return { icon: "✅", verb: t("logs_act_replied"), target: "" };
+    case "Scheduler started":
+      return { icon: "⏰", verb: t("logs_act_scheduler"), target: "" };
+    case "Scheduled task firing":
+      return { icon: "⏱️", verb: t("logs_act_sched_fire"), target: "" };
+    case "Heartbeat started":
+      return { icon: "💓", verb: t("logs_act_heartbeat"), target: str(m.mode) };
+    case "Update check":
+      return {
+        icon: "🔄",
+        verb: t("logs_act_update_check"),
+        target:
+          typeof m.behindBy === "number" && m.behindBy > 0
+            ? t("logs_act_update_behind").replace("{n}", String(m.behindBy))
+            : t("logs_act_update_uptodate"),
+      };
+    case "Usage probe starting":
+      return { icon: "📊", verb: t("logs_act_usage_probe"), target: "" };
+    case "Maintenance run starting":
+      return { icon: "🧹", verb: t("logs_act_maintenance"), target: "" };
+    case "Bot is listening for updates":
+      return { icon: "🚀", verb: t("logs_act_bot_ready"), target: "" };
+    case "Management panel listening":
+      return { icon: "🖥️", verb: t("logs_act_panel_ready"), target: "" };
+    case "Council command failed":
+    case "Worker run failed":
+    case "Task delegation failed":
+      return { icon: "⚠️", verb: l.msg, target: str(m.error) };
+    default:
+      return null;
+  }
+}
+
+/** Derive the activity feed from log entries: "Tool use" rows (which carry
+ *  meta.tool + meta.arg) plus high-level lifecycle events (scheduler/heartbeat/
+ *  update checks, incoming messages, etc.) so it reads like a live, friendly
+ *  counterpart to the raw text logs. Newest at the bottom. */
 function toActivities(source: LogEntry[], t: TFn): Activity[] {
   const out: Activity[] = [];
   for (const l of source) {
-    if (l.msg !== "Tool use" || !l.meta) continue;
-    const tool = typeof l.meta.tool === "string" ? l.meta.tool : "";
-    if (!tool) continue;
-    const arg = typeof l.meta.arg === "string" ? l.meta.arg : "";
-    const { icon, verb } = describeTool(tool, t);
-    out.push({
-      key: `${l.seq}-${l.ts}`,
-      ts: l.ts,
-      icon,
-      verb,
-      target: arg,
-      tone: l.level === "error" ? "error" : "normal",
-    });
+    if (l.msg === "Tool use" && l.meta) {
+      const tool = typeof l.meta.tool === "string" ? l.meta.tool : "";
+      if (!tool) continue;
+      const arg = typeof l.meta.arg === "string" ? l.meta.arg : "";
+      const { icon, verb } = describeTool(tool, t);
+      out.push({
+        key: `${l.seq}-${l.ts}`,
+        ts: l.ts,
+        icon,
+        verb,
+        target: arg,
+        tone: l.level === "error" ? "error" : "normal",
+      });
+      continue;
+    }
+    const life = describeLifecycle(l, t);
+    if (life) {
+      out.push({
+        key: `${l.seq}-${l.ts}`,
+        ts: l.ts,
+        icon: life.icon,
+        verb: life.verb,
+        target: life.target,
+        tone: l.level === "error" ? "error" : "normal",
+      });
+    }
   }
   return out;
 }

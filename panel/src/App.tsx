@@ -26,8 +26,9 @@ import { SettingsView } from "./components/Settings.tsx";
 import { TerminalView } from "./components/Terminal.tsx";
 
 /** Tab from the URL path (e.g. /status), falling back to health. */
-function tabFromPath(): Tab {
+function tabFromPath(): Tab | "settings" {
   const seg = location.pathname.replace(/^\/+/, "").split("/")[0];
+  if (seg === "settings") return "settings";
   return isTab(seg) ? seg : "health";
 }
 

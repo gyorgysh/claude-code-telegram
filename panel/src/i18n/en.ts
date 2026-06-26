@@ -741,6 +741,22 @@ export const en = {
   ra_token_hint:
     "Stored as written. Use a vault:<id> reference to keep the secret out of this config file.",
   ra_advanced: "Advanced",
+  ra_autostart: "Start automatically",
+  ra_autostart_hint:
+    "Bring the tunnel back up on its own after a reboot or software update. Turn off to only start it manually.",
+  ra_login_title: "Require a login (recommended)",
+  ra_login_hint:
+    "Put a username and password in front of the public URL. Anyone opening the tunnel link must enter these before the panel loads.",
+  ra_login_user: "Username",
+  ra_login_user_hint: "Fixed to myhq. Only the password can be changed.",
+  ra_login_password: "Password",
+  ra_pw_show: "Show",
+  ra_pw_hide: "Hide",
+  ra_pw_rotate: "Generate new",
+  ra_pw_pending: "A password is generated automatically when you save.",
+  ra_pw_set_placeholder: "Set your own password",
+  ra_pw_set: "Set",
+  ra_edit_locked: "Stop the tunnel to change these settings.",
   ra_domain: "Reserved domain (optional)",
   ra_domain_placeholder: "myapp.example.com",
   ra_domain_hint: "For a paid ngrok domain or a named Cloudflare tunnel. Leave blank for a random URL.",

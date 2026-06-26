@@ -743,6 +743,22 @@ export const hu: Translations = {
   ra_token_hint:
     "Úgy tárolódik, ahogy beírtad. Használj vault:<id> hivatkozást, hogy a titok kimaradjon ebből a konfigból.",
   ra_advanced: "Speciális",
+  ra_autostart: "Automatikus indítás",
+  ra_autostart_hint:
+    "Az alagút magától újraindul újraindítás vagy szoftverfrissítés után. Kapcsold ki, ha csak kézzel szeretnéd indítani.",
+  ra_login_title: "Bejelentkezés kötelező (ajánlott)",
+  ra_login_hint:
+    "Felhasználónév és jelszó a nyilvános URL elé. Aki megnyitja az alagút linkjét, ezeket kell megadnia, mielőtt a panel betöltődik.",
+  ra_login_user: "Felhasználónév",
+  ra_login_user_hint: "Fixen myhq. Csak a jelszó módosítható.",
+  ra_login_password: "Jelszó",
+  ra_pw_show: "Mutat",
+  ra_pw_hide: "Elrejt",
+  ra_pw_rotate: "Új generálása",
+  ra_pw_pending: "Mentéskor automatikusan generálódik egy jelszó.",
+  ra_pw_set_placeholder: "Saját jelszó megadása",
+  ra_pw_set: "Beállít",
+  ra_edit_locked: "Állítsd le az alagutat a beállítások módosításához.",
   ra_domain: "Fenntartott domain (opcionális)",
   ra_domain_placeholder: "myapp.example.com",
   ra_domain_hint: "Fizetős ngrok domainhez vagy nevesített Cloudflare tunnelhez. Hagyd üresen véletlenszerű URL-hez.",

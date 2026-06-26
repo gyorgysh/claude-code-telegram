@@ -328,18 +328,30 @@ still behind the panel login. Off unless `PANEL_TUNNEL_ENABLED=true`; the relay
 binary (`ngrok` or `cloudflared`) must be installed on the host.
 
 ```bash
-# View tunnel config + live state (provider, hasToken, url, state)
+# View tunnel config + live state (provider, hasToken, url, state, autoStart,
+# basicAuth, basicAuthUser, hasPassword)
 curl -H "$AUTH" $BASE/api/tunnel
 
-# Configure provider/token/domain (blank authToken keeps the saved one)
+# Configure provider/token/domain/autoStart/basicAuth (blank authToken keeps the saved one)
 curl -X PUT -H "$AUTH" -H "Content-Type: application/json" $BASE/api/tunnel \
-  -d '{ "provider": "ngrok", "authToken": "vault:<id>", "domain": "" }'
+  -d '{ "provider": "ngrok", "authToken": "vault:<id>", "domain": "", "autoStart": true, "basicAuth": true }'
 # provider: "ngrok" (needs a token) | "cloudflare" (free quick tunnel, no token)
+# autoStart: relaunch the relay after a reboot/update (default true)
+# basicAuth: HTTP login (user "myhq" + auto-generated password) in front of the
+#   public URL (default true); a password is generated + vaulted on first enable.
+
+# Reveal the current Basic Auth login (user + plaintext password)
+curl -H "$AUTH" $BASE/api/tunnel/password
+
+# Rotate to a new random password (no body) or set your own (>=6 chars)
+curl -X POST -H "$AUTH" $BASE/api/tunnel/password
+curl -X POST -H "$AUTH" -H "Content-Type: application/json" $BASE/api/tunnel/password \
+  -d '{ "password": "my-own-secret" }'
 
 # Start / stop the relay (start returns once launched; the public URL arrives async)
 curl -X POST -H "$AUTH" $BASE/api/tunnel/start
 curl -X POST -H "$AUTH" $BASE/api/tunnel/stop
-# All three (PUT/start/stop) return 403 when PANEL_TUNNEL_ENABLED is false.
+# PUT/start/stop/password all return 403 when PANEL_TUNNEL_ENABLED is false.
 ```
 
 ### System / status

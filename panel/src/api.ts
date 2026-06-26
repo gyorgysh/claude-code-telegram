@@ -537,9 +537,17 @@ export interface TunnelView {
   provider: TunnelProviderId;
   hasToken: boolean;
   domain: string;
+  autoStart: boolean;
+  basicAuth: boolean;
+  basicAuthUser: string;
+  hasPassword: boolean;
   url?: string;
   error?: string;
   startedAt?: number;
+}
+export interface TunnelPassword {
+  user: string;
+  password: string | null;
 }
 
 export const api = {
@@ -725,8 +733,12 @@ export const api = {
     req<{ ok: boolean }>("POST", "/api/terminal/resize", { cols, rows }),
 
   tunnel: () => get<TunnelView>("/api/tunnel"),
-  saveTunnel: (s: { provider?: TunnelProviderId; authToken?: string; domain?: string }) =>
+  saveTunnel: (s: { provider?: TunnelProviderId; authToken?: string; domain?: string; autoStart?: boolean; basicAuth?: boolean }) =>
     req<TunnelView>("PUT", "/api/tunnel", s),
   startTunnel: () => req<TunnelView>("POST", "/api/tunnel/start"),
   stopTunnel: () => req<TunnelView>("POST", "/api/tunnel/stop"),
+  tunnelPassword: () => get<TunnelPassword>("/api/tunnel/password"),
+  // No password → rotate to a fresh random one; a password → set it.
+  setTunnelPassword: (password?: string) =>
+    req<TunnelPassword>("POST", "/api/tunnel/password", password ? { password } : {}),
 };

@@ -78,7 +78,7 @@ import { getUpdateStatus, checkForUpdate, runUpdate, runRestore } from "../core/
 import { recentAudit } from "../core/audit.js";
 import { sessions } from "../session/manager.js";
 import { ptyManager } from "../core/ptyManager.js";
-import { tunnelManager } from "../core/tunnelManager.js";
+import { tunnelManager, BASIC_AUTH_USER } from "../core/tunnelManager.js";
 import { PanelHub } from "./hub.js";
 import { runTurn } from "../claude/runner.js";
 
@@ -126,6 +126,23 @@ export async function startPanel(): Promise<(() => Promise<void>) | undefined> {
   setTimeout(() => void checkForUpdate(), 10_000).unref();
   const updateTimer = setInterval(() => void checkForUpdate(), 6 * 3_600_000);
   updateTimer.unref();
+
+  // Remote-access gate: when a request arrives through the public tunnel (ngrok /
+  // cloudflared proxy to loopback and set x-forwarded-* headers), it must clear an
+  // HTTP Basic Auth challenge (user `myhq` + the generated password) BEFORE anything
+  // — including the SPA shell and the login page — is served. Local/LAN access to
+  // the panel is unaffected (no forwarding header → gate skipped). This is a second
+  // factor in front of the existing panel token, not a replacement.
+  app.addHook("onRequest", async (req, reply) => {
+    if (!tunnelManager.basicAuthActive) return;
+    const forwarded = req.headers["x-forwarded-for"] || req.headers["x-forwarded-host"];
+    if (!forwarded) return; // direct loopback/LAN request, gate doesn't apply
+    if (tunnelManager.verifyBasic(req.headers.authorization)) return;
+    await reply
+      .code(401)
+      .header("WWW-Authenticate", 'Basic realm="MyHQ Remote Access", charset="UTF-8"')
+      .send("Authentication required");
+  });
 
   // Auth: every /api and /ws request needs the shared token. Static SPA assets
   // are served freely (they hold no secrets; the token gates the data + actions).
@@ -945,12 +962,35 @@ Respond with ONLY a JSON array, no markdown fences, no explanation. Example form
   app.get("/api/tunnel", async () => tunnelManager.view());
   app.put("/api/tunnel", async (req, reply) => {
     if (!tunnelManager.enabled) return reply.code(403).send({ error: "remote access disabled" });
-    const { provider, authToken, domain } = (req.body ?? {}) as {
+    const { provider, authToken, domain, autoStart, basicAuth } = (req.body ?? {}) as {
       provider?: "ngrok" | "cloudflare";
       authToken?: string;
       domain?: string;
+      autoStart?: boolean;
+      basicAuth?: boolean;
     };
-    return tunnelManager.setConfig({ provider, authToken, domain });
+    tunnelManager.setConfig({ provider, authToken, domain, autoStart, basicAuth });
+    // Turning the gate on generates the password immediately if none exists yet.
+    if (basicAuth === true) tunnelManager.ensurePassword();
+    return tunnelManager.view();
+  });
+  // Reveal / rotate / set the Basic Auth password. Username is fixed to `myhq`.
+  app.get("/api/tunnel/password", async (_req, reply) => {
+    if (!tunnelManager.enabled) return reply.code(403).send({ error: "remote access disabled" });
+    const password = tunnelManager.revealPassword();
+    return { user: BASIC_AUTH_USER, password: password ?? null };
+  });
+  app.post("/api/tunnel/password", async (req, reply) => {
+    if (!tunnelManager.enabled) return reply.code(403).send({ error: "remote access disabled" });
+    const { password } = (req.body ?? {}) as { password?: string };
+    if (typeof password === "string" && password.trim()) {
+      if (!tunnelManager.setPassword(password)) {
+        return reply.code(400).send({ error: "password must be at least 6 characters" });
+      }
+      return { user: BASIC_AUTH_USER, password: password.trim() };
+    }
+    // No password supplied → rotate to a fresh random one.
+    return { user: BASIC_AUTH_USER, password: tunnelManager.rotatePassword() };
   });
   app.post("/api/tunnel/start", async (_req, reply) => {
     if (!tunnelManager.enabled) return reply.code(403).send({ error: "remote access disabled" });

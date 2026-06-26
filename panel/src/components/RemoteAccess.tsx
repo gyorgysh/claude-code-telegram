@@ -27,7 +27,14 @@ export function RemoteAccessView({ onAuthError }: { onAuthError: () => void }) {
   const [provider, setProvider] = useState<TunnelProviderId>("ngrok");
   const [token, setToken] = useState("");
   const [domain, setDomain] = useState("");
+  const [autoStart, setAutoStart] = useState(true);
+  const [basicAuth, setBasicAuth] = useState(true);
   const [advanced, setAdvanced] = useState(false);
+
+  // Basic Auth password (revealed on demand). `pwInput` is a draft for "set my own".
+  const [password, setPassword] = useState<string | null>(null);
+  const [pwShown, setPwShown] = useState(false);
+  const [pwInput, setPwInput] = useState("");
 
   const fail = (e: unknown) => (e instanceof AuthError ? onAuthError() : setError(String(e)));
 
@@ -38,11 +45,54 @@ export function RemoteAccessView({ onAuthError }: { onAuthError: () => void }) {
         setView(v);
         setProvider(v.provider);
         setDomain(v.domain);
+        setAutoStart(v.autoStart);
+        setBasicAuth(v.basicAuth);
         // Reveal the Advanced section up front only if a domain is already set,
         // so a configured value is never hidden behind the collapse.
         if (v.domain) setAdvanced(true);
       })
       .catch(fail);
+
+  const loadPassword = () =>
+    api
+      .tunnelPassword()
+      .then((r) => {
+        setPassword(r.password);
+        setPwShown(true);
+      })
+      .catch(fail);
+
+  const rotatePassword = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const r = await api.setTunnelPassword();
+      setPassword(r.password);
+      setPwShown(true);
+      void load();
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveOwnPassword = async () => {
+    if (!pwInput.trim()) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const r = await api.setTunnelPassword(pwInput.trim());
+      setPassword(r.password);
+      setPwShown(true);
+      setPwInput("");
+      void load();
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useEffect(() => {
     void load();
@@ -65,7 +115,7 @@ export function RemoteAccessView({ onAuthError }: { onAuthError: () => void }) {
     try {
       // Blank token = keep the saved one. A `vault:<id>` reference or plaintext
       // both flow straight through to the manager.
-      const v = await api.saveTunnel({ provider, authToken: token.trim() || undefined, domain });
+      const v = await api.saveTunnel({ provider, authToken: token.trim() || undefined, domain, autoStart, basicAuth });
       setView(v);
       setToken("");
     } catch (e) {
@@ -80,7 +130,7 @@ export function RemoteAccessView({ onAuthError }: { onAuthError: () => void }) {
     setBusy(true);
     try {
       // Persist the current form first, then launch.
-      await api.saveTunnel({ provider, authToken: token.trim() || undefined, domain });
+      await api.saveTunnel({ provider, authToken: token.trim() || undefined, domain, autoStart, basicAuth });
       setToken("");
       setView(await api.startTunnel());
     } catch (e) {
@@ -164,6 +214,33 @@ export function RemoteAccessView({ onAuthError }: { onAuthError: () => void }) {
                 {t("ra_started").replace("{time}", relTime(view.startedAt))}
               </div>
             )}
+            {view.basicAuth && view.hasPassword && (
+              <div className="mt-3 grid gap-2 border-t border-accent/20 pt-3 sm:grid-cols-2">
+                <div>
+                  <div className="text-xs font-medium uppercase tracking-wider text-fg-dim">
+                    {t("ra_login_user")}
+                  </div>
+                  <div className="mono text-sm text-fg">{view.basicAuthUser}</div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium uppercase tracking-wider text-fg-dim">
+                    {t("ra_login_password")}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="mono text-sm text-fg">
+                      {pwShown && password ? password : "••••••••"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => (pwShown ? setPwShown(false) : void loadPassword())}
+                      className="text-xs text-accent hover:underline"
+                    >
+                      {pwShown ? t("ra_pw_hide") : t("ra_pw_show")}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
         {starting && (
@@ -227,6 +304,72 @@ export function RemoteAccessView({ onAuthError }: { onAuthError: () => void }) {
           <p className="mt-1 text-xs text-fg-faint">{t("ra_token_hint")}</p>
         </div>
 
+        {/* Remote access password — HTTP login in front of the public tunnel.
+            On by default; this is the username/password a phone enters first. */}
+        <div className="mb-4 rounded-lg border border-line bg-surface-2 p-3">
+          <label className="flex cursor-pointer items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={basicAuth}
+              disabled={live}
+              onChange={(e) => setBasicAuth(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-accent disabled:opacity-50"
+            />
+            <span>
+              <span className="text-sm font-medium text-fg">{t("ra_login_title")}</span>
+              <span className="mt-0.5 block text-xs text-fg-faint">{t("ra_login_hint")}</span>
+            </span>
+          </label>
+          {basicAuth && (
+            <div className="mt-3 space-y-3 border-t border-line pt-3">
+              <div>
+                <Label>{t("ra_login_user")}</Label>
+                <Input value={view.basicAuthUser} disabled readOnly />
+                <p className="mt-1 text-xs text-fg-faint">{t("ra_login_user_hint")}</p>
+              </div>
+              <div>
+                <Label>{t("ra_login_password")}</Label>
+                {view.hasPassword ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="mono text-sm text-fg">
+                      {pwShown && password ? password : "••••••••"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => (pwShown ? setPwShown(false) : void loadPassword())}
+                      className="text-xs text-accent hover:underline"
+                    >
+                      {pwShown ? t("ra_pw_hide") : t("ra_pw_show")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={rotatePassword}
+                      disabled={busy}
+                      className="text-xs text-accent hover:underline disabled:opacity-50"
+                    >
+                      {t("ra_pw_rotate")}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-fg-faint">{t("ra_pw_pending")}</p>
+                )}
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Input
+                    type="password"
+                    className="flex-1"
+                    placeholder={t("ra_pw_set_placeholder")}
+                    value={pwInput}
+                    onChange={(e) => setPwInput(e.target.value)}
+                  />
+                  <Button onClick={saveOwnPassword} disabled={busy || !pwInput.trim()}>
+                    {t("ra_pw_set")}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Advanced — reserved domain, hidden by default (most users use a
             random ngrok/cloudflare URL). */}
         <div className="mb-4">
@@ -251,6 +394,25 @@ export function RemoteAccessView({ onAuthError }: { onAuthError: () => void }) {
             </div>
           )}
         </div>
+
+        {/* Auto-start — bring the relay back after a reboot/update. On by default. */}
+        <label className="mb-4 flex cursor-pointer items-start gap-2.5">
+          <input
+            type="checkbox"
+            checked={autoStart}
+            onChange={(e) => setAutoStart(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-accent"
+          />
+          <span>
+            <span className="text-sm font-medium text-fg">{t("ra_autostart")}</span>
+            <span className="mt-0.5 block text-xs text-fg-faint">{t("ra_autostart_hint")}</span>
+          </span>
+        </label>
+
+        {/* Settings are locked while the relay is live — tell the user why. */}
+        {live && (
+          <p className="mb-3 text-xs text-fg-faint">{t("ra_edit_locked")}</p>
+        )}
 
         {/* Controls */}
         <div className="flex flex-wrap items-center gap-2">

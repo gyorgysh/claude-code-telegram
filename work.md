@@ -1,8 +1,8 @@
 # Work Playbook
 
 Operational conventions for this machine. The bot loads this file on **every**
-turn, so edits take effect immediately — keep it short, accurate, and specific.
-Everything below is an editable example; replace it with what's true for your box.
+turn, so edits take effect immediately, so keep it short, accurate, and specific.
+Everything below is an editable example; replace it with what's true for your machine.
 
 ## Ground rules
 - This runs unattended over Telegram. Prefer non-interactive commands (no prompts
@@ -14,7 +14,7 @@ Everything below is an editable example; replace it with what's true for your bo
 ## Services
 When asked to start/stop/restart a service, use these exact commands:
 
-- **Apache (httpd)**: `sudo apachectl restart` — config test first with `sudo apachectl configtest`.
+- **Apache (httpd)**: `sudo apachectl restart`. Config test first with `sudo apachectl configtest`.
   - Logs: `/usr/local/var/log/httpd/` (or `/var/log/apache2/`).
 - **nginx**: `sudo nginx -t && sudo nginx -s reload`.
 - **PostgreSQL** (Homebrew): `brew services restart postgresql`.
@@ -31,7 +31,7 @@ When asked to start/stop/restart a service, use these exact commands:
 
 ## Deploys / common tasks
 <!-- Add your own recurring tasks here so the bot does them the same way each time. -->
-- Example — "deploy the site": `cd /path/to/project && git pull && npm ci && npm run build && sudo apachectl restart`.
+- Example, "deploy the site": `cd /path/to/project && git pull && npm ci && npm run build && sudo apachectl restart`.
 
 ## Managing this agent (self-service)
 This bot runs as an OS service: **systemd** (`myhq`) on Linux, or a
@@ -50,7 +50,7 @@ Native equivalents if you need them:
 Notes:
 - On Linux the systemctl management commands are passwordless (a scoped sudoers
   rule installed by the installer). On macOS it is a per-user agent, so no sudo.
-- **Restarting kills the current process** — the in-flight reply stops and the
+- **Restarting kills the current process**: the in-flight reply stops and the
   Telegram connection re-establishes automatically. That is expected: run the
   restart command last, and do not try to report back afterward in the same turn.
 
@@ -62,13 +62,13 @@ similar, run the project's update script from the project directory:
 ./scripts/update.sh
 ```
 
-**Always use this script — never hand-roll `git pull` + restart.** The script is
+**Always use this script, never hand-roll `git pull` + restart.** The script is
 the only path that also reinstalls dependencies and rebuilds; pulling by hand
 skips `npm install` / `npm run build`, so new code or dependency changes won't
 actually take effect until someone runs them manually.
 
 It does everything in one shot: fetches `origin`, **hard-resets** the checkout to
-the remote ref (local edits to *tracked* files are discarded — untracked files
+the remote ref (local edits to *tracked* files are discarded; untracked files
 and the gitignored `data/` dir are left alone), runs `npm install`, rebuilds the
 panel UI + bot (`npm run build`, which also runs `npm install` inside `panel/`),
 and restarts the service **only if** one is installed.
@@ -83,7 +83,7 @@ and restarts the service **only if** one is installed.
 - Your customizations are preserved: panel-managed config (workers, providers,
   schedules, main-agent model, sessions) lives in the gitignored `data/` dir and
   is untouched, and this `work.md` is backed up and restored across the reset.
-  Other local edits to *tracked* files are discarded — say so first if you have any.
+  Other local edits to *tracked* files are discarded; say so first if you have any.
 
 ## Fleet API (Panel)
 
@@ -283,7 +283,7 @@ curl -H "$AUTH" $BASE/api/vault
 # Store a secret
 curl -X POST -H "$AUTH" -H "Content-Type: application/json" $BASE/api/vault \
   -d '{ "name": "DevOps Lead Telegram token", "value": "7123456789:AAH...", "hint": "lead-bot" }'
-# Returns { id: "vault:<uuid>" } — use that id anywhere a token is referenced
+# Returns { id: "vault:<uuid>" }; use that id anywhere a token is referenced
 
 # Reveal a secret value
 curl -H "$AUTH" $BASE/api/vault/<id>/reveal
@@ -340,6 +340,118 @@ curl -H "$AUTH" $BASE/api/usage
 curl -H "$AUTH" $BASE/api/audit
 ```
 
+### Council votes
+
+```bash
+# Council vote history (each entry has the proposal, per-Lead votes, and tally)
+curl -H "$AUTH" $BASE/api/council
+
+# Cross-agent delegation log
+curl -H "$AUTH" $BASE/api/delegations
+
+# Worker run history across the whole fleet
+curl -H "$AUTH" $BASE/api/runs
+```
+
+A council vote itself is triggered from Telegram with `/council <proposal>`, not
+over REST.
+
+### Local model backends and embeddings
+
+```bash
+# Probe a locally running backend (reachability, models, embed-model presence)
+curl -H "$AUTH" $BASE/api/integrations/ollama
+curl -H "$AUTH" $BASE/api/integrations/lmstudio
+
+# One-click connect: register the backend as a provider and turn embeddings on
+curl -X POST -H "$AUTH" $BASE/api/integrations/ollama/connect
+curl -X POST -H "$AUTH" $BASE/api/integrations/lmstudio/connect
+
+# When both backends run, pick which one auto-detect prefers on startup
+curl -X PUT -H "$AUTH" -H "Content-Type: application/json" $BASE/api/agent/embeddings/preferred \
+  -d '{ "preferredBackend": "lmstudio" }'
+# preferredBackend: "ollama" | "lmstudio" | null (null = auto, Ollama first)
+
+# List a provider's models without saving it first
+curl -X POST -H "$AUTH" -H "Content-Type: application/json" $BASE/api/providers/models \
+  -d '{ "baseUrl": "http://localhost:1234/v1", "authToken": "lm-studio" }'
+```
+
+### Plan and budget
+
+```bash
+# View plan, monthly cap, billing day, alert threshold
+curl -H "$AUTH" $BASE/api/plan
+
+# Update (plan: "pro" | "max" | "api")
+curl -X PUT -H "$AUTH" -H "Content-Type: application/json" $BASE/api/plan \
+  -d '{ "plan": "api", "monthlyCap": 100, "billingDay": 1, "alertThresholdPct": 80 }'
+
+# Send a test cost report to Telegram now
+curl -X POST -H "$AUTH" $BASE/api/plan/report-test
+
+# Live OAuth usage probe (5h session + 7d weekly limits); add /run to refresh
+curl -H "$AUTH" $BASE/api/usage-probe
+curl -X POST -H "$AUTH" $BASE/api/usage-probe/run
+```
+
+### Playbook and maintenance
+
+```bash
+# Read or write this operator playbook (work.md) and the read-only personality
+curl -H "$AUTH" $BASE/api/prompt
+curl -X PUT -H "$AUTH" -H "Content-Type: application/json" $BASE/api/prompt \
+  -d '{ "work": "# Work Playbook\n..." }'
+
+# Maintenance status, and trigger a compaction/pruning pass now
+curl -H "$AUTH" $BASE/api/maintenance
+curl -X POST -H "$AUTH" $BASE/api/maintenance/run
+```
+
+### Task columns and WIP limits
+
+```bash
+# List columns (also returned inline by GET /api/tasks)
+curl -H "$AUTH" $BASE/api/tasks/columns
+
+# Add a column
+curl -X POST -H "$AUTH" -H "Content-Type: application/json" $BASE/api/tasks/columns \
+  -d '{ "title": "Review" }'
+
+# Rename a column
+curl -X PUT -H "$AUTH" -H "Content-Type: application/json" $BASE/api/tasks/columns/<id> \
+  -d '{ "title": "In Review" }'
+
+# Reorder columns or cards (send the full id order)
+curl -X POST -H "$AUTH" -H "Content-Type: application/json" $BASE/api/tasks/columns/reorder \
+  -d '{ "order": ["backlog", "doing", "review", "done"] }'
+curl -X POST -H "$AUTH" -H "Content-Type: application/json" $BASE/api/tasks/reorder \
+  -d '{ "column": "doing", "order": ["task-id-1", "task-id-2"] }'
+
+# Set per-column WIP limits (0 = unlimited)
+curl -X PUT -H "$AUTH" -H "Content-Type: application/json" $BASE/api/tasks/wip \
+  -d '{ "doing": 3 }'
+
+# Delete a column (its cards move back to the first column)
+curl -X DELETE -H "$AUTH" $BASE/api/tasks/columns/<id>
+```
+
+### Other endpoints
+
+A few more endpoints exist, mostly mirroring panel views:
+
+- `GET /api/languages`: the agent language catalogue.
+- `POST /api/vault/import`: scan provider tokens into the vault and rewrite them to references.
+- `POST /api/workers/wizard`: draft a worker config from a plain-text description.
+- `POST /api/schedules/<id>/run`: fire a schedule immediately.
+- `GET /api/claude-usage`: historical activity from `~/.claude/stats-cache.json`.
+- `GET /api/claude-files`, `GET|PUT /api/claude-files/content`: browse and edit on-disk `.claude/*` and `CLAUDE.md` files under known working dirs.
+- `GET /api/logs`, `GET /api/logs/dates`: live ring buffer or a dated NDJSON log file (`?date=&q=&level=&limit=`).
+- `GET /api/update`, `POST /api/update/check|run|restore`: in-panel update check, apply, and rollback.
+- `GET /api/connectors`, `PUT /api/connectors/<id>`: the external-connector catalogue (placeholders for now).
+- `GET /api/chat`, `POST /api/chat/send|stop|clear|approve`, `PUT /api/chat/settings`: the panel's own Claude chat session.
+- `GET /api/terminal`, `POST /api/terminal/spawn|resize`: the panel terminal session.
+
 ## Temporary swap (Linux only)
 When a task requires more memory than is available (large builds, model inference,
 bulk data processing), add temporary swap from the project directory:
@@ -352,7 +464,7 @@ bulk data processing), add temporary swap from the project directory:
 
 The script checks that the requested size does not exceed 80% of free disk space
 before creating the file. The swap lives at `/var/tmp/myhq-swap` by default and
-is NOT added to `/etc/fstab` — it disappears on reboot even if you forget to run
+is NOT added to `/etc/fstab`; it disappears on reboot even if you forget to run
 `off`. Always remove it after the task to reclaim the disk space.
 
 On macOS the script exits cleanly with a message: macOS manages swap automatically.

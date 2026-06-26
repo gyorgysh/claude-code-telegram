@@ -42,7 +42,7 @@ The same agents, two front doors:
 | ![Heartbeat panel: proactive monitoring](images/prev_hearthbeat.webp) | ![Schedules panel: timed autonomous prompts](images/prev_scheduler.webp) |
 | **Heartbeat**: proactive monitoring. Set CPU/mem/swap/disk thresholds; Atlas pings Telegram on breach, or runs an autonomous turn to investigate and act first. | **Schedules**: create timed autonomous prompts (`30m`, `2h`, `HH:MM`) from the panel or via `/schedule` in chat, with results pushed back to Telegram. |
 
-Also inside: **System** (live CPU per-core, memory, swap, disk I/O), **Status** (Claude service status + provider/local-backend probes), **Memory** (tier-based fact store with hot/warm/cold recall), **Vault** (AES-256-GCM secrets), **Skills** (reusable workflows), **Prompt** (playbook editor), **Logs** (live tail + searchable history by date, level, and keyword; 72h rotation), **Settings** (main agent, plan and budget tracker, language, model providers), and more.
+Also inside: **System** (live CPU per-core, memory, swap, disk I/O), **Status** (Claude service status + provider/local-backend probes), **Memory** (tier-based fact store with hot/warm/cold recall plus optional semantic search), **Vault** (AES-256-GCM secrets), **Skills** (reusable workflows), **Prompt** (playbook editor), **Logs** (live tail + searchable history by date, level, and keyword; 72h rotation), **Terminal** (a live shell session in the browser), **Connectors** (external-service catalogue), **Updates** (check, apply, and roll back versions in place), **Settings** (main agent, plan and budget tracker, language, model providers with live local-backend status), and more.
 
 ## In Telegram
 
@@ -171,6 +171,11 @@ You can also ask Atlas to restart himself: "restart yourself" triggers `./script
 | `MAINTENANCE_CRON` | no | `HH:MM` (24h server time) for daily memory compaction and skill pruning |
 | `MEMORY_MAX_ENTRIES` | no | Warm entry cap before compaction triggers (default `500`) |
 | `COLD_MAX` | no | Cold entry cap before deletion (default `200`) |
+| `EMBEDDING_ENABLED` | no | `true` to rank memory recall by meaning via a local embedding model (default `false`) |
+| `EMBEDDING_PROVIDER` | no | `ollama` (POST `/api/embeddings`) or `openai` (POST `/v1/embeddings`, for LM Studio and OpenAI) |
+| `EMBEDDING_BASE_URL` | no | Embedding endpoint base URL (default `http://localhost:11434`) |
+| `EMBEDDING_MODEL` | no | Embedding model id (default `nomic-embed-text`) |
+| `EMBEDDING_AUTH_TOKEN` | no | Optional auth token for the embedding endpoint (plain or `vault:<id>`) |
 | `LOG_LEVEL` | no | `error`, `warn`, `info` (default), `debug` |
 | `TRANSCRIBE_PROVIDER` | no | Voice backend: `openai` (default) or `vosk` (local) |
 | `OPENAI_API_KEY` | no | API key for the `openai` voice backend (OpenAI, Groq, ...) |
@@ -223,6 +228,29 @@ npm run build && npm start
 
 Open `http://127.0.0.1:8787` and unlock with your `PANEL_TOKEN`. Keep the bind on loopback and reach it only behind a reverse proxy or private network (e.g. Tailscale). Light / dark / hacker themes, URL per view.
 
+## Panel API
+
+Everything the panel does is a REST call you can script. Auth is the same `PANEL_TOKEN`, sent as a Bearer header (`Authorization: Bearer $PANEL_TOKEN`) for REST and `?token=` for the WebSocket. All write endpoints take and return JSON. The full catalogue with copy-paste `curl` examples lives in [`work.md`](work.md) under "Fleet API (Panel)"; the groups are:
+
+| Group | Endpoints |
+| --- | --- |
+| Main agent | `GET\|PUT /api/agent`, `PUT /api/agent/embeddings`, `PUT /api/agent/embeddings/preferred`, `POST /api/agent/reset`, `POST /api/agent/restart` |
+| Workers (Leads/Assistants) | `GET\|POST /api/workers`, `GET\|PUT\|DELETE /api/workers/:id`, `POST /api/workers/:id/run\|stop`, `GET /api/workers/:id/runs`, `POST /api/workers/wizard` |
+| Crew | `GET /api/council`, `GET /api/delegations`, `GET /api/runs` |
+| Tasks | `GET\|POST /api/tasks`, `PATCH\|DELETE /api/tasks/:id`, `POST /api/tasks/:id/delegate\|stop`, `POST /api/tasks/reorder`, `GET\|POST /api/tasks/columns`, `PUT\|DELETE /api/tasks/columns/:id`, `POST /api/tasks/columns/reorder`, `PUT /api/tasks/wip` |
+| Schedules | `GET\|POST /api/schedules`, `PUT\|DELETE /api/schedules/:id`, `PUT /api/schedules/:id/enabled`, `POST /api/schedules/:id/run` |
+| Memory | `GET\|POST /api/memories`, `PUT\|DELETE /api/memories/:id`, `PATCH /api/memories/:id/tier` |
+| Skills | `GET\|POST /api/skills`, `PUT\|DELETE /api/skills/:id` |
+| Providers and backends | `GET\|POST /api/providers`, `PUT\|DELETE /api/providers/:id`, `GET /api/providers/:id/models`, `POST /api/providers/models`, `GET /api/integrations/ollama\|lmstudio`, `POST /api/integrations/ollama\|lmstudio/connect` |
+| Vault | `GET\|POST /api/vault`, `PUT\|DELETE /api/vault/:id`, `GET /api/vault/:id/reveal`, `POST /api/vault/import` |
+| Plan and usage | `GET\|PUT /api/plan`, `POST /api/plan/report-test`, `GET /api/usage`, `GET /api/usage-probe`, `POST /api/usage-probe/run`, `GET /api/claude-usage` |
+| Monitoring | `GET /api/health`, `GET /api/status`, `GET /api/sessions`, `GET /api/audit`, `GET\|PUT /api/heartbeat`, `POST /api/heartbeat/run`, `GET /api/maintenance`, `POST /api/maintenance/run` |
+| Content and config | `GET\|PUT /api/prompt`, `GET /api/claude-files`, `GET\|PUT /api/claude-files/content`, `GET /api/languages`, `GET /api/connectors`, `PUT /api/connectors/:id` |
+| Logs | `GET /api/logs`, `GET /api/logs/dates` |
+| Updates | `GET /api/update`, `POST /api/update/check\|run\|restore` |
+| Panel chat and terminal | `GET /api/chat`, `POST /api/chat/send\|stop\|clear\|approve`, `PUT /api/chat/settings`, `GET /api/terminal`, `POST /api/terminal/spawn\|resize` |
+| Realtime | `GET /ws` (worker, chat, task, health, and log frames) |
+
 ## Permissions
 
 Nothing runs without your say-so. For every non-read-only tool call you get an inline prompt showing exactly what is about to happen:
@@ -245,6 +273,7 @@ Lead bots default to standard mode with the same approve/deny prompts.
 - **Council votes**: `/council <idea>` calls every enabled Lead, gets a SUPPORT/OPPOSE vote with domain reasoning from each, and delivers a tally to Telegram. Full history in the panel Crew tab.
 - **Inter-agent crew tools**: `crew_delegate` (hand a task to a Lead and get their output back), `crew_report` (log a summary and optionally notify the president), `crew_ask_president` (pause until the user replies, then continue).
 - **Memory tiers**: hot (every turn), warm (keyword-recalled), cold (panel-only). Auto-decay and promote/demote controls in the panel.
+- **Semantic memory (optional)**: with `EMBEDDING_ENABLED=true`, recall ranks by meaning using a local embedding model (Ollama or LM Studio), blending cosine similarity with keyword overlap and salience. Off by default; falls back to keyword search whenever the endpoint is unreachable. The Settings tab shows live up/down status and available models for each local backend, one-click connect, and a preferred-backend pick when both are running.
 - **Auto skill extraction**: after expensive turns, an async haiku pass checks whether the work established a reusable procedure and proposes a skill entry. Gated by `AUTO_SKILL_GENERATION=true`.
 - **Maintenance scheduler**: daily window for memory compaction (demote stale entries, AI deduplication of warm entries) and skill pruning (auto-archive unused skills older than 14 days). Triggered by `MAINTENANCE_CRON=HH:MM`.
 - **Personas**: preset options (Concise, Warm, Formal, Analytical, Playful) or fully custom. Persona shapes character and tone; domain knowledge stays separate in the system prompt.
@@ -267,6 +296,10 @@ Lead bots default to standard mode with the same approve/deny prompts.
 - **Scheduled runs**: timed autonomous prompts on any interval or daily time, per-agent.
 - **Persistent logs**: agent activity is written to dated NDJSON files in `logs/` (one per day, never truncated on restart). Files older than 72 hours rotate automatically. The panel Logs view lets you browse and search any past day by date, level, or keyword.
 - **Live model switching**: `/model` shows shortcut buttons for the main Claude tiers (Opus, Sonnet, Haiku) and lists any configured local or provider models as text. Switch with one tap or `/model <name>` directly. Takes effect on the next message.
+- **Session resume after restart**: the first Telegram message after a restart offers to resume the previous conversation or start fresh, so a deploy or reboot never silently drops your context. Auto-resumes after 10 seconds if you do not pick.
+- **Panel terminal**: a real shell session in the browser for quick checks without SSH, served over the same authenticated WebSocket as the rest of the panel.
+- **In-panel updates**: the Updates view checks for a new version, applies it, and can roll back, mirroring `scripts/update.sh` without leaving the dashboard.
+- **Connectors catalogue**: a registry for external services (Gmail, Google Calendar, Google Drive, Notion, Apple Calendar, Apple Mail) with a vault-backed credential slot, ready to wire up (placeholders for now).
 
 ## Commands (Atlas)
 
@@ -319,6 +352,7 @@ src/
     snapshot.ts       read-only session/usage views
     chat.ts           the panel's dedicated Claude chat session
     memory.ts         tiered fact store (hot/warm/cold, decay, recall)
+    embeddings.ts     optional local embedding client for semantic recall
     vault.ts          AES-256-GCM secrets (keychain/file master key)
     heartbeat.ts      proactive host/kanban monitoring loop
     council.ts        council vote runner and formatter
@@ -364,6 +398,7 @@ src/
     voice.ts           voice-note transcription dispatcher (openai or vosk)
     vosk.ts            local offline transcription (ffmpeg + Vosk)
     files.ts           incoming file downloads + image decoding for vision
+    resumePrompt.ts    first-message-after-restart resume-or-fresh offer
 
 panel/                MyHQ Panel frontend (React + Vite + Tailwind v4)
                       built to panel/dist, served by src/panel/server.ts
@@ -380,7 +415,7 @@ panel/                MyHQ Panel frontend (React + Vite + Tailwind v4)
     Settings.tsx      main agent config + language settings + model providers
     Health.tsx        live system health + maintenance status card
     Memory.tsx        tiered memory view with promote/demote controls
-    ...               Chat, Tasks, Schedules, Vault, Skills, Logs, ...
+    ...               Chat, Terminal, Tasks, Schedules, Vault, Skills, Logs, Status, Updates, Connectors, ...
 ```
 
 Built on [`telegraf`](https://github.com/telegraf/telegraf) and [`@anthropic-ai/claude-agent-sdk`](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk); the panel uses [`fastify`](https://fastify.dev) + [`systeminformation`](https://systeminformation.io) on the server and React + Vite + Tailwind on the client.

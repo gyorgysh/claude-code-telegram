@@ -39,10 +39,14 @@ export function TerminalView({ onAuthError }: { onAuthError: () => void }) {
     let destroyed = false;
 
     void (async () => {
-      // Dynamic import — bundle only loaded when this tab is visited.
+      // Dynamic import — bundle only loaded when this tab is visited. The
+      // stylesheet is essential: it hides the off-screen helper textarea
+      // (.xterm-helper-textarea) and positions the cursor; without it that
+      // textarea renders as a visible second input.
       const [{ Terminal }, { FitAddon }] = await Promise.all([
         import("@xterm/xterm"),
         import("@xterm/addon-fit"),
+        import("@xterm/xterm/css/xterm.css"),
       ]);
 
       // Bail if the effect was torn down while the import was in flight

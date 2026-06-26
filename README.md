@@ -2,7 +2,7 @@
 
 **A self-hosted fleet of autonomous AI agents, deeply integrated with Telegram.** Talk to Atlas, your central coordinator, from your phone. He runs day-to-day operations, remembers everything, learns your workflows, and commands a team of specialized Leads. Each Lead owns a domain and can have its own Telegram bot.
 
-![MyHQ Panel dashboard](images/prev_dashboard.webp)
+![MyHQ Panel dashboard](images/v01_dashboard.webp)
 
 Open source. Built on real **Claude Code** agents running on your machine, so every agent can read files, run commands, edit code, check services, and ship things. Replies stream back live and risky actions are gated behind your approval.
 
@@ -37,10 +37,12 @@ The same agents, two front doors:
 
 | | |
 | --- | --- |
-| ![Agents panel: Atlas and the crew](images/prev_agents.webp) | ![Tasks panel: Kanban board with delegate-to-agent](images/prev_tasks.webp) |
+| ![Agents panel: Atlas and the crew](images/v01_agents.webp) | ![Tasks panel: Kanban board with delegate-to-agent](images/v01_tasks.webp) |
 | **Crew**: see the full org chart (President, Atlas, Leads, Assistants). Delegation log and council vote history are shown here. | **Tasks**: a Kanban board with drag-and-drop, priority, WIP limits, and a Delegate button that hands a card to an autonomous agent run. Columns are fully customizable: rename them or add your own. |
-| ![Heartbeat panel: proactive monitoring](images/prev_hearthbeat.webp) | ![Schedules panel: timed autonomous prompts](images/prev_scheduler.webp) |
+| ![Heartbeat panel: proactive monitoring](images/v01_heartbeat.webp) | ![Schedules panel: timed autonomous prompts](images/v01_scheduler.webp) |
 | **Heartbeat**: proactive monitoring. Set CPU/mem/swap/disk thresholds; Atlas pings Telegram on breach, or runs an autonomous turn to investigate and act first. | **Schedules**: create timed autonomous prompts (`30m`, `2h`, `HH:MM`) from the panel or via `/schedule` in chat, with results pushed back to Telegram. |
+| ![Memory panel: tier-based fact store](images/v01_memory.webp) | |
+| **Memory**: a tier-based fact store (hot/warm/cold) that agents write to and recall from automatically, with optional semantic search. Search, edit, promote, demote, and delete entries from the panel. | |
 
 Also inside: **System** (live CPU per-core, memory, swap, disk I/O), **Status** (Claude service status + provider/local-backend probes), **Memory** (tier-based fact store with hot/warm/cold recall plus optional semantic search), **Vault** (AES-256-GCM secrets), **Skills** (reusable workflows), **Prompt** (playbook editor), **Logs** (live tail + searchable history by date, level, and keyword; 72h rotation), **Terminal** (a live shell session in the browser), **Connectors** (external-service catalogue), **Updates** (check, apply, and roll back versions in place), **Settings** (main agent, plan and budget tracker, language, model providers with live local-backend status), and more.
 
@@ -48,10 +50,10 @@ Also inside: **System** (live CPU per-core, memory, swap, disk I/O), **Status** 
 
 | | |
 | --- | --- |
-| ![Upload a file, Claude sees it and approves a Bash call](images/tg-claude-1.webp) | ![Reply streaming live as it's written](images/tg-claude-2.webp) |
-| Upload files and photos: Atlas sees images inline. Here he asks for approval before running a `Bash` command. | Replies stream back live as they're written using Telegram's Rich Messages API, then land as a clean formatted message. |
-| ![Inline approve / deny / always-allow buttons](images/tg-claude-4.webp) | ![A tool call paused for approval](images/tg-claude-3.webp) |
-| Tap **Approve**, **Deny**, or **Always allow**: the last option whitelists the tool for the rest of the session. | Every non-read-only tool call pauses and shows exactly what's about to run before it happens. |
+| ![Atlas creating tasks and running a scheduled briefing from chat](images/v01_mobile_1.webp) | ![Reply streaming live as it's written](images/v01_mobile_2.webp) |
+| Just talk to Atlas: he creates task-board cards, runs scheduled briefings, ships commits, and reports back, all from the chat. | Replies stream back live as they're written using Telegram's Rich Messages API, then land as a clean formatted message. |
+| ![Inline approve / deny / always-allow buttons](images/v01_mobile_3.webp) | ![Approve and deny outcomes for a paused tool call](images/v01_mobile_5.webp) |
+| Every non-read-only tool call pauses and shows exactly what's about to run. Tap **Approve**, **Deny**, or **Always allow** to whitelist the tool for the session. | Switch modes with `/mode`. Approve and the action runs; deny and Atlas backs off and tells you what it skipped. |
 
 ## What Makes It a Fleet, Not Just a Bot
 

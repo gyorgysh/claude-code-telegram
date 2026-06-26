@@ -416,6 +416,8 @@ export interface ChatView {
   bypassAllowed: boolean;
   auto: boolean;
   hasContext: boolean;
+  /** Approvals are handled in Telegram (the panel mirrors the main chat). */
+  approvalsInTelegram?: boolean;
 }
 
 export type Autonomy = "supervised" | "standard" | "full";
@@ -618,8 +620,6 @@ export const api = {
   clearChat: () => req<ChatView>("POST", "/api/chat/clear"),
   chatSettings: (s: { cwd?: string; auto?: boolean }) =>
     req<ChatView>("PUT", "/api/chat/settings", s),
-  approveChat: (approvalId: string, allow: boolean) =>
-    req<{ ok: boolean }>("POST", "/api/chat/approve", { approvalId, allow }),
 
   providers: () => get<{ providers: Provider[] }>("/api/providers"),
   createProvider: (p: Partial<Provider>) => req<Provider>("POST", "/api/providers", p),
@@ -629,4 +629,10 @@ export const api = {
   fetchModels: (baseUrl: string, authToken: string) =>
     req<{ models: string[] }>("POST", "/api/providers/models", { baseUrl, authToken }),
   providerModels: (id: string) => get<{ models: string[] }>(`/api/providers/${id}/models`),
+
+  terminalStatus: () => get<{ available: boolean; shell: string }>("/api/terminal"),
+  terminalSpawn: (cols: number, rows: number) =>
+    req<{ ok: boolean }>("POST", "/api/terminal/spawn", { cols, rows }),
+  terminalResize: (cols: number, rows: number) =>
+    req<{ ok: boolean }>("POST", "/api/terminal/resize", { cols, rows }),
 };

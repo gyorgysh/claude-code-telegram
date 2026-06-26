@@ -63,6 +63,7 @@ import { isActive } from "../core/activity.js";
 import { getUpdateStatus, checkForUpdate, runUpdate, runRestore } from "../core/updateControl.js";
 import { recentAudit } from "../core/audit.js";
 import { sessions } from "../session/manager.js";
+import { ptyManager } from "../core/ptyManager.js";
 import { PanelHub } from "./hub.js";
 import { runTurn } from "../claude/runner.js";
 
@@ -98,6 +99,8 @@ export async function startPanel(): Promise<(() => Promise<void>) | undefined> {
   chat.start((m) => hub.broadcast(m));
   // Wire delegated-task run streams to all clients.
   taskDelegator.start((m) => hub.broadcast(m));
+  // Wire the PTY terminal session to all clients.
+  ptyManager.start((m) => hub.broadcast(m));
   // Stream live log lines to every panel client.
   const unsubLog = onLog((entry) => hub.broadcast({ type: "log", entry }));
 
@@ -136,6 +139,7 @@ export async function startPanel(): Promise<(() => Promise<void>) | undefined> {
     clearInterval(updateTimer);
     workers.stop();
     taskDelegator.stopAll();
+    ptyManager.kill();
     hub.stop();
     await app.close();
   };
@@ -780,11 +784,45 @@ Respond with ONLY a JSON array, no markdown fences, no explanation. Example form
       return reply.code(404).send({ error: "not found" });
     return { ok: true };
   });
+
+  // --- Terminal ---
+  app.get("/api/terminal", async () => ({
+    available: ptyManager.available,
+    shell: ptyManager.currentShell,
+  }));
+  app.post("/api/terminal/spawn", async (req) => {
+    const { cols, rows } = (req.body ?? {}) as { cols?: number; rows?: number };
+    ptyManager.spawn(cols ?? 120, rows ?? 30);
+    return { ok: true };
+  });
+  app.post("/api/terminal/resize", async (req) => {
+    const { cols, rows } = (req.body ?? {}) as { cols?: number; rows?: number };
+    if (typeof cols === "number" && typeof rows === "number") ptyManager.resize(cols, rows);
+    return { ok: true };
+  });
 }
 
 function registerWs(app: FastifyInstance, hub: PanelHub): void {
   app.get("/ws", { websocket: true }, (socket) => {
     hub.add(socket);
+
+    // Send terminal scrollback history to this client immediately.
+    const history = ptyManager.getHistory();
+    if (history) {
+      try {
+        socket.send(JSON.stringify({ type: "terminal", event: "history", data: history }));
+      } catch { /* client gone */ }
+    }
+
+    // Relay terminal input from this client to the PTY.
+    socket.on("message", (raw) => {
+      try {
+        const msg = JSON.parse(raw.toString());
+        if (msg?.type === "terminal" && msg.event === "input" && typeof msg.data === "string") {
+          ptyManager.write(msg.data);
+        }
+      } catch { /* ignore malformed frames */ }
+    });
   });
 }
 

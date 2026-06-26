@@ -4,6 +4,7 @@ import type { TranslationKey } from "../i18n/en.ts";
 
 export type Tab =
   | "chat"
+  | "terminal"
   | "crew"
   | "health"
   | "status"
@@ -38,6 +39,7 @@ export const NAV: Group[] = [
     headingKey: "nav_operate",
     items: [
       { id: "chat", labelKey: "nav_chat", icon: "❯" },
+      { id: "terminal", labelKey: "nav_terminal", icon: "▸" },
       { id: "crew", labelKey: "nav_crew", icon: "⬡" },
       { id: "workers", labelKey: "nav_workers", icon: "◈" },
       { id: "tasks", labelKey: "nav_tasks", icon: "▤" },

@@ -7,29 +7,20 @@ export interface ChatStream {
   tool?: string;
 }
 
-export interface ApprovalReq {
-  approvalId: string;
-  tool: string;
-  arg: string;
-}
-
 type ChatMsg =
   | { type: "chat"; event: "user" | "end"; message: ChatMessage }
   | { type: "chat"; event: "start"; id: string }
   | { type: "chat"; event: "delta"; id: string; delta: string }
   | { type: "chat"; event: "tool"; id: string; tool: string; arg: string }
-  | { type: "chat"; event: "approval"; approvalId: string; tool: string; arg: string }
-  | { type: "chat"; event: "approval-resolved"; approvalId: string; allow: boolean }
   | { type: "chat"; event: "busy"; busy: boolean }
   | { type: "chat"; event: "cleared" };
 
-/** Subscribe to the panel chat stream over the shared /ws and track the live
- *  conversation: messages, the in-flight assistant turn, busy + approvals. */
+/** Subscribe to the shared chat stream over /ws and track the live conversation
+ *  (mirrored from the main Telegram chat): messages, the in-flight turn, busy. */
 export function useChatEvents(onAuthError: () => void) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [stream, setStream] = useState<ChatStream | null>(null);
   const [busy, setBusy] = useState(false);
-  const [approval, setApproval] = useState<ApprovalReq | null>(null);
   const [view, setView] = useState<ChatView | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -76,12 +67,6 @@ export function useChatEvents(onAuthError: () => void) {
           case "tool":
             setStream((s) => (s ? { ...s, tool: `${m.tool} ${m.arg}`.trim() } : s));
             break;
-          case "approval":
-            setApproval({ approvalId: m.approvalId, tool: m.tool, arg: m.arg });
-            break;
-          case "approval-resolved":
-            setApproval((a) => (a?.approvalId === m.approvalId ? null : a));
-            break;
           case "end":
             setStream(null);
             setMessages((xs) => [...xs, m.message]);
@@ -93,7 +78,6 @@ export function useChatEvents(onAuthError: () => void) {
           case "cleared":
             setMessages([]);
             setStream(null);
-            setApproval(null);
             break;
         }
       };
@@ -110,5 +94,5 @@ export function useChatEvents(onAuthError: () => void) {
     };
   }, []);
 
-  return { messages, stream, busy, approval, view, setView, refresh };
+  return { messages, stream, busy, view, setView, refresh };
 }

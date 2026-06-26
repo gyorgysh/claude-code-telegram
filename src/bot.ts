@@ -29,6 +29,7 @@ import { workers } from "./core/workers.js";
 import { escapeHtml, normalizeAgentText } from "./telegram/formatting.js";
 import { resolveAsk, hasPendingAsk } from "./core/crewAsk.js";
 import { reflectOnTurn } from "./core/reflect.js";
+import { chatBridge, mainChatId } from "./core/chatBridge.js";
 import type { ImageInput, RunResult } from "./claude/runner.js";
 import type { Autonomy } from "./session/manager.js";
 import { sessions } from "./session/manager.js";
@@ -41,6 +42,16 @@ export function buildBot(): Telegraf {
 
   bot.use(authMiddleware);
   registerCommands(bot);
+
+  // Panel Chat is a window onto the main Telegram chat: let it drive turns and
+  // abort them through the same flow the Telegram handlers use.
+  chatBridge.attach(
+    (chatId, prompt) => runUserPrompt(permissions, chatId, prompt, bot.telegram),
+    (chatId) => {
+      const s = sessions.get(chatId);
+      s.abort?.abort();
+    },
+  );
 
   // --- Tool-approval button presses ---
   bot.on("callback_query", async (ctx) => {
@@ -280,6 +291,14 @@ async function handleUserPrompt(
   }
   const cwd = opts.cwd ?? session.cwd;
 
+  // Mirror this turn into the panel Chat view when it's the main chat, so the
+  // conversation is visible (and drivable) from the web UI too.
+  const mirror = chatBridge.isEnabled() && chatId === mainChatId();
+  if (mirror) {
+    chatBridge.mirrorUser(prompt);
+    chatBridge.mirrorBusy(true);
+  }
+
   log.info("Prompt received", {
     chatId,
     autonomy: session.autonomy,
@@ -386,6 +405,10 @@ async function handleUserPrompt(
     fromAgentId: "atlas",
   });
 
+  // Panel mirror: a stable assistant message id the streamed text/tools fold into.
+  const mirrorMsgId = mirror ? chatBridge.mirrorStart() : "";
+  let mirrorText = "";
+
   try {
     const res = await runTurn({
       prompt,
@@ -408,16 +431,31 @@ async function handleUserPrompt(
         crew: crewMcp,
       },
       canUseTool,
-      onText: (delta) => streamer.appendText(normalizeAgentText(delta)),
+      onText: (delta) => {
+        streamer.appendText(normalizeAgentText(delta));
+        if (mirror) {
+          mirrorText += delta;
+          chatBridge.mirrorDelta(mirrorMsgId, delta);
+        }
+      },
       onToolUse: (name, input) => {
         log.info("Tool use", { chatId, tool: name, arg: preview(summarizeArg(input), 80) });
         streamer.setStatus(`🔧 <i>${name}</i> ${summarizeInput(input)}`);
+        if (mirror) chatBridge.mirrorTool(mirrorMsgId, name, preview(summarizeArg(input), 120));
       },
       onSessionId: (id) => {
         log.debug("Session id", { chatId, sessionId: id });
         session.sessionId = id;
       },
     });
+    if (mirror) {
+      // Prefer the model's final text; fall back to the streamed accumulation.
+      const finalText = res.text?.trim() || mirrorText;
+      chatBridge.mirrorEnd(mirrorMsgId, finalText, {
+        error: res.isError,
+        costUsd: res.costUsd,
+      });
+    }
 
     await streamer.finalize();
     sessions.recordUsage(chatId, res.costUsd ?? 0, res.durationMs ?? 0);
@@ -464,12 +502,18 @@ async function handleUserPrompt(
     }
   } catch (err) {
     await streamer.finalize().catch(() => {});
-    if (session.abort?.signal.aborted) {
+    const stopped = session.abort?.signal.aborted;
+    if (stopped) {
       log.info("Turn stopped by user", { chatId, ms: Date.now() - startedAt });
       await tg.sendMessage(chatId, "⏹ Stopped.").catch(() => {});
     } else {
       log.error("Turn errored", { chatId, ms: Date.now() - startedAt, error: errText(err) });
       await tg.sendMessage(chatId, friendlyError(err)).catch(() => {});
+    }
+    if (mirror) {
+      chatBridge.mirrorEnd(mirrorMsgId, mirrorText || (stopped ? "Stopped." : friendlyError(err)), {
+        error: true,
+      });
     }
   } finally {
     clearInterval(typing);
@@ -478,6 +522,7 @@ async function handleUserPrompt(
     }
     session.busy = false;
     session.abort = undefined;
+    if (mirror) chatBridge.mirrorBusy(false);
   }
 }
 

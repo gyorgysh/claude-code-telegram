@@ -1,60 +1,25 @@
-import { randomBytes } from "node:crypto";
 import { config } from "../config.js";
-import { runTurn, AUTO_ALLOWED_TOOLS, type PermissionResult } from "../claude/runner.js";
-import { memoryMcp } from "../mcp/memory.js";
-import { tasksMcp } from "../mcp/tasks.js";
-import { skillsMcp } from "../mcp/skills.js";
-import { selfUpdateMcp } from "../mcp/selfUpdate.js";
-import { resolveMainRun } from "./mainSettings.js";
-import { loadJson, saveJson } from "./jsonStore.js";
+import { sessions } from "../session/manager.js";
+import { chatBridge, mainChatId, type BridgeMessage } from "./chatBridge.js";
 import { audit } from "./audit.js";
-import { log } from "../logger.js";
 
-const FILE = "chat.json";
-const HISTORY_CAP = 200;
-
-export interface ChatMessage {
-  id: string;
-  role: "user" | "assistant";
-  text: string;
-  ts: number;
-  error?: boolean;
-  costUsd?: number;
-}
-
-interface ChatFile {
-  version: 1;
-  sessionId?: string;
-  cwd?: string;
-  /** User-chosen auto (bypass) mode. Only honoured when PANEL_CHAT_BYPASS. */
-  auto?: boolean;
-  messages: ChatMessage[];
-}
-
-interface Pending {
-  tool: string;
-  resolve: (r: PermissionResult) => void;
-  timer: ReturnType<typeof setTimeout>;
-}
+export type ChatMessage = BridgeMessage;
 
 type Broadcaster = (msg: unknown) => void;
 
 /**
- * A single, persistent Claude session driven from the panel chat view — its own
- * resume token + cwd, separate from any Telegram chat. Default permission model
- * is safe: read-only tools auto-run, anything risky is held behind an in-panel
- * approve/deny prompt. "auto" (bypassPermissions) is only reachable when
- * PANEL_CHAT_BYPASS is set in the env.
+ * Panel Chat is a window onto the *main* Telegram conversation (the first
+ * allowed user's session). It no longer keeps its own isolated Claude session:
+ * messages typed in Telegram show up here, messages sent from the panel are
+ * driven through the same turn flow (shared resume token, cwd, autonomy), and
+ * tool approvals surface as the usual Telegram inline buttons.
+ *
+ * This class is a thin facade over `chatBridge` (the live mirror) + the main
+ * `Session`, preserving the REST surface the panel server already speaks.
  */
 export class ChatManager {
-  private state = loadJson<ChatFile>(FILE, { version: 1, messages: [] });
-  private busy = false;
-  private abort?: AbortController;
-  private pending = new Map<string, Pending>();
-  private broadcast: Broadcaster = () => {};
-
   start(broadcast: Broadcaster): void {
-    this.broadcast = broadcast;
+    chatBridge.start(broadcast);
   }
 
   isEnabled(): boolean {
@@ -65,189 +30,74 @@ export class ChatManager {
     return config.PANEL_CHAT_BYPASS;
   }
 
-  private get autoActive(): boolean {
-    return this.bypassAllowed && Boolean(this.state.auto);
+  /** The main Telegram session, or undefined if no allowed user is configured. */
+  private mainSession() {
+    const id = mainChatId();
+    return id === undefined ? undefined : sessions.get(id);
   }
 
   /** Panel-facing snapshot. */
   view() {
+    const s = this.mainSession();
     return {
       enabled: this.isEnabled(),
-      messages: this.state.messages,
-      cwd: this.state.cwd ?? config.WORKDIR,
-      busy: this.busy,
+      messages: chatBridge.history(),
+      cwd: s?.cwd ?? config.WORKDIR,
+      busy: s?.busy ?? false,
       bypassAllowed: this.bypassAllowed,
-      auto: this.autoActive,
-      hasContext: Boolean(this.state.sessionId),
+      // "auto" maps to the shared session's full-autonomy mode.
+      auto: s?.autonomy === "full",
+      hasContext: Boolean(s?.sessionId),
+      // The panel no longer holds approvals; they happen in Telegram.
+      approvalsInTelegram: true,
     };
   }
 
   setCwd(cwd: string): void {
-    this.state.cwd = cwd.trim() || undefined;
-    this.persist();
+    const s = this.mainSession();
+    if (!s) return;
+    s.cwd = cwd.trim() || config.WORKDIR;
+    sessions.save();
   }
 
-  /** Toggle auto/bypass mode. Forced off unless the env unlocks it. */
+  /** Toggle auto/bypass mode → maps to the shared session's autonomy. */
   setAuto(auto: boolean): void {
-    this.state.auto = this.bypassAllowed ? auto : false;
-    this.persist();
+    const s = this.mainSession();
+    if (!s) return;
+    if (auto && !this.bypassAllowed) return; // locked unless env unlocks it
+    s.autonomy = auto ? "full" : "standard";
+    sessions.save();
   }
 
-  /** Start a fresh conversation (drop resume token + history). */
+  /** Start a fresh conversation (drop resume token + mirrored history). */
   clear(): void {
-    this.abort?.abort();
-    this.state.sessionId = undefined;
-    this.state.messages = [];
-    this.persist();
+    const id = mainChatId();
+    if (id !== undefined) {
+      const s = sessions.get(id);
+      s.abort?.abort();
+      sessions.reset(id);
+    }
+    chatBridge.clearTranscript();
     audit("chat.clear", {});
-    this.broadcast({ type: "chat", event: "cleared" });
   }
 
   stop(): void {
-    this.abort?.abort();
+    chatBridge.stop();
   }
 
-  resolveApproval(id: string, allow: boolean): boolean {
-    const p = this.pending.get(id);
-    if (!p) return false;
-    clearTimeout(p.timer);
-    this.pending.delete(id);
-    p.resolve(
-      allow
-        ? { behavior: "allow", updatedInput: {} }
-        : { behavior: "deny", message: "Denied in panel" },
-    );
-    this.broadcast({ type: "chat", event: "approval-resolved", approvalId: id, allow });
-    return true;
+  /** Approvals now happen in Telegram; kept for REST back-compat (no-op). */
+  resolveApproval(_id: string, _allow: boolean): boolean {
+    return false;
   }
 
-  /** Send a user message and stream the assistant turn. */
+  /** Send a user message — drives a turn on the main Telegram chat. */
   send(text: string): { ok: boolean; error?: string } {
-    if (!this.isEnabled()) return { ok: false, error: "disabled" };
-    if (this.busy) return { ok: false, error: "busy" };
-    const trimmed = text.trim();
-    if (!trimmed) return { ok: false, error: "empty" };
-
-    const userMsg: ChatMessage = {
-      id: randomBytes(4).toString("hex"),
-      role: "user",
-      text: trimmed,
-      ts: Date.now(),
-    };
-    this.append(userMsg);
-    audit("chat.send", { chars: trimmed.length, auto: this.autoActive });
-    this.broadcast({ type: "chat", event: "user", message: userMsg });
-
-    this.busy = true;
-    this.abort = new AbortController();
-    this.broadcast({ type: "chat", event: "busy", busy: true });
-    void this.run(trimmed, this.abort);
-    return { ok: true };
+    const s = this.mainSession();
+    if (s?.busy) return { ok: false, error: "busy" };
+    const r = chatBridge.send(text);
+    if (r.ok) audit("chat.send", { chars: text.trim().length });
+    return r;
   }
-
-  private async run(prompt: string, abort: AbortController): Promise<void> {
-    const id = randomBytes(4).toString("hex");
-    const assistant: ChatMessage = { id, role: "assistant", text: "", ts: Date.now() };
-    this.broadcast({ type: "chat", event: "start", id });
-    const { model, env } = resolveMainRun();
-
-    try {
-      const res = await runTurn({
-        prompt,
-        cwd: this.state.cwd ?? config.WORKDIR,
-        resume: this.state.sessionId,
-        model,
-        env,
-        permissionMode: this.autoActive ? "bypassPermissions" : "default",
-        abortController: abort,
-        mcpServers: { memory: memoryMcp, tasks: tasksMcp, skills: skillsMcp, self_update: selfUpdateMcp },
-        canUseTool: (name, input) => this.canUseTool(name, input, abort),
-        onText: (delta) => {
-          assistant.text += delta;
-          this.broadcast({ type: "chat", event: "delta", id, delta });
-        },
-        onToolUse: (name, input) => {
-          this.broadcast({ type: "chat", event: "tool", id, tool: name, arg: summarize(input) });
-        },
-        onSessionId: (sid) => {
-          this.state.sessionId = sid;
-        },
-      });
-      assistant.error = res.isError;
-      assistant.costUsd = res.costUsd;
-      if (res.isError && res.text) assistant.text ||= res.text;
-    } catch (err) {
-      assistant.error = true;
-      if (!abort.signal.aborted) {
-        assistant.text ||= err instanceof Error ? err.message : String(err);
-        log.error("Panel chat turn failed", { error: assistant.text });
-      } else {
-        assistant.text ||= "Stopped.";
-      }
-    } finally {
-      // Reject any approvals left dangling by an aborted/finished turn.
-      for (const [pid] of this.pending) this.resolveApproval(pid, false);
-      assistant.ts = Date.now();
-      this.append(assistant);
-      this.busy = false;
-      this.abort = undefined;
-      this.persist();
-      this.broadcast({ type: "chat", event: "end", message: assistant });
-      this.broadcast({ type: "chat", event: "busy", busy: false });
-    }
-  }
-
-  private canUseTool(
-    name: string,
-    input: Record<string, unknown>,
-    abort: AbortController,
-  ): Promise<PermissionResult> {
-    if (AUTO_ALLOWED_TOOLS.has(name) || this.autoActive) {
-      return Promise.resolve({ behavior: "allow", updatedInput: input });
-    }
-    const approvalId = randomBytes(4).toString("hex");
-    return new Promise<PermissionResult>((resolve) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(approvalId);
-        this.broadcast({ type: "chat", event: "approval-resolved", approvalId, allow: false });
-        resolve({ behavior: "deny", message: "Approval timed out" });
-      }, config.APPROVAL_TIMEOUT_MS);
-      timer.unref?.();
-      // Resolve with the model's input on allow (we send {} from the button).
-      const wrapped = (r: PermissionResult): void =>
-        resolve(r.behavior === "allow" ? { behavior: "allow", updatedInput: input } : r);
-      this.pending.set(approvalId, { tool: name, resolve: wrapped, timer });
-      abort.signal.addEventListener("abort", () => {
-        if (this.pending.delete(approvalId)) {
-          clearTimeout(timer);
-          resolve({ behavior: "deny", message: "Aborted" });
-        }
-      });
-      this.broadcast({
-        type: "chat",
-        event: "approval",
-        approvalId,
-        tool: name,
-        arg: summarize(input),
-      });
-    });
-  }
-
-  private append(m: ChatMessage): void {
-    this.state.messages.push(m);
-    if (this.state.messages.length > HISTORY_CAP) {
-      this.state.messages = this.state.messages.slice(-HISTORY_CAP);
-    }
-  }
-
-  private persist(): void {
-    saveJson<ChatFile>(FILE, this.state);
-  }
-}
-
-function summarize(input: unknown): string {
-  const o = (input ?? {}) as Record<string, unknown>;
-  return String(o.command ?? o.file_path ?? o.pattern ?? o.path ?? o.url ?? "").slice(0, 120);
 }
 
 export const chat = new ChatManager();

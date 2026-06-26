@@ -12,6 +12,7 @@ export const hu: Translations = {
   nav_usage: "Felhasználás",
   nav_logs: "Naplók",
   nav_chat: "Csevegés",
+  nav_terminal: "Terminál",
   nav_crew: "Csapat",
   nav_workers: "Ügynökök",
   nav_tasks: "Feladatok",
@@ -161,15 +162,16 @@ export const hu: Translations = {
 
   // Csevegés
   chat_title: "Csevegés",
+  chat_shared_badge: "Telegrammal megosztva",
   chat_change_cwd: "Munkakönyvtár módosítása",
   chat_toggle_auto: "Automatikus futtatás be/ki (jóváhagyások átugrása)",
   chat_toggle_locked: "Állítsd be a PANEL_CHAT_BYPASS=true értéket és indítsd újra a feloldáshoz",
   chat_auto: "● auto",
   chat_safe: "○ biztonságos",
   chat_clear: "Törlés",
-  chat_empty: "Beszélj az ügynökkel. A fenti könyvtárban fut",
+  chat_empty: "Beszélj az ügynökkel. Ez ugyanaz a beszélgetés, mint a Telegram csevegésed",
   chat_empty_auto: "és automatikusan futtatja az eszközöket.",
-  chat_empty_safe: "és kockázatos eszközök előtt rákérdez.",
+  chat_empty_safe: "és kockázatos eszközök előtt rákérdez (jóváhagyás a Telegramban).",
   chat_allow: "Engedélyezés:",
   chat_approve: "Jóváhagyás",
   chat_deny: "Elutasítás",
@@ -594,6 +596,13 @@ export const hu: Translations = {
   updates_tip_active_body: "Jelenleg fut egy feladat. Ha most frissítesz, a bot újraindul és a feladat leáll.",
   updates_restore_confirm:
     "Visszaállítod a kódot a legutóbbi GitHub commitra? A helyi kódváltoztatások elvesznek; az adatok és a konfiguráció megmaradnak. A bot újraépül és újraindul.",
+
+  // Terminál
+  terminal_connecting: "Csatlakozás…",
+  terminal_unavailable_title: "Terminál nem elérhető",
+  terminal_unavailable_body:
+    "A node-pty nem töltődött be ezen a gépen. Telepítsd a build eszközöket (build-essential + python3 Linuxon), majd futtasd az npm install parancsot a terminál engedélyezéséhez.",
+  terminal_shared_hint: "Megosztott munkamenet",
 
   // Kanban alapértelmezett oszlopnevek (csak átnevezetlen állapotban fordítva)
   col_planned: "Tervezett",

@@ -23,6 +23,7 @@ import { WorkersView } from "./components/Workers.tsx";
 import { LogsView } from "./components/Logs.tsx";
 import { HeartbeatView_ } from "./components/Heartbeat.tsx";
 import { SettingsView } from "./components/Settings.tsx";
+import { TerminalView } from "./components/Terminal.tsx";
 
 /** Tab from the URL path (e.g. /status), falling back to health. */
 function tabFromPath(): Tab {
@@ -155,6 +156,7 @@ export function App() {
 
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6">
           {tab === "chat" && <ChatView onAuthError={onAuthError} />}
+          {tab === "terminal" && <TerminalView onAuthError={onAuthError} />}
           {tab === "crew" && <CrewView onAuthError={onAuthError} />}
           {tab === "health" && <HealthView />}
           {tab === "status" && <StatusView onAuthError={onAuthError} />}
@@ -173,7 +175,7 @@ export function App() {
           {tab === "usage" && <UsageView onAuthError={onAuthError} />}
           {tab === "settings" && <SettingsView onAuthError={onAuthError} />}
 
-          {tab !== "chat" && (
+          {tab !== "chat" && tab !== "terminal" && (
           <footer className="mt-10 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-xs text-fg-faint">
             <span>Made open source with Claude &amp; Coffee ☕</span>
             <span className="text-fg-faint/50">·</span>

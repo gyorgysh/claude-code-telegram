@@ -10,6 +10,7 @@ export const en = {
   nav_usage: "Usage",
   nav_logs: "Logs",
   nav_chat: "Chat",
+  nav_terminal: "Terminal",
   nav_crew: "Crew",
   nav_workers: "Agents",
   nav_tasks: "Tasks",
@@ -159,15 +160,16 @@ export const en = {
 
   // Chat
   chat_title: "Chat",
+  chat_shared_badge: "shared with Telegram",
   chat_change_cwd: "Change working directory",
   chat_toggle_auto: "Toggle auto-run (bypass approvals)",
   chat_toggle_locked: "Set PANEL_CHAT_BYPASS=true and restart to unlock",
   chat_auto: "● auto",
   chat_safe: "○ safe",
   chat_clear: "Clear",
-  chat_empty: "Talk to the agent. It runs in the directory above",
+  chat_empty: "Talk to the agent. This is the same conversation as your Telegram chat",
   chat_empty_auto: "and auto-runs tools.",
-  chat_empty_safe: "and asks before risky tools.",
+  chat_empty_safe: "and asks before risky tools (approve in Telegram).",
   chat_allow: "Allow",
   chat_approve: "Approve",
   chat_deny: "Deny",
@@ -620,6 +622,13 @@ export const en = {
   updates_tip_active_body: "A task is currently running. If you apply an update now, the bot will restart and the task will be stopped.",
   updates_restore_confirm:
     "Restore the code to the latest GitHub commit? Local code changes are discarded; your data and config are kept. The bot will rebuild and restart.",
+
+  // Terminal
+  terminal_connecting: "Connecting…",
+  terminal_unavailable_title: "Terminal unavailable",
+  terminal_unavailable_body:
+    "node-pty could not be loaded on this host. Install build tools (build-essential + python3 on Linux) and run npm install to enable the terminal.",
+  terminal_shared_hint: "Shared session",
 
   // Kanban default column names (translated only when not renamed)
   col_planned: "Planned",

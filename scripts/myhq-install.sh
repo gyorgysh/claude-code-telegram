@@ -267,6 +267,15 @@ build_app() {
   say "Installing dependencies and building…"
   ( cd "$APP_DIR" && npm install && npm run build )
   ok "Built."
+  if ( cd "$APP_DIR" && node -e "require('node-pty')" >/dev/null 2>&1 ); then
+    ok "Terminal backend (node-pty) is available."
+  else
+    warn "Terminal backend (node-pty) not built — the panel Terminal tab will be disabled."
+    case "$(uname -s)" in
+      Linux)  say "  To enable it: install build tools ('sudo apt-get install -y build-essential python3') and re-run this installer." ;;
+      Darwin) say "  To enable it: install Xcode command line tools ('xcode-select --install') and re-run this installer." ;;
+    esac
+  fi
 }
 
 # --- .env -------------------------------------------------------------------

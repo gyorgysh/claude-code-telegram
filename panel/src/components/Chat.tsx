@@ -6,7 +6,7 @@ import { Button } from "./ui.tsx";
 
 export function ChatView({ onAuthError }: { onAuthError: () => void }) {
   const { t } = useI18n();
-  const { messages, stream, busy, approval, view, setView } = useChatEvents(onAuthError);
+  const { messages, stream, busy, view, setView } = useChatEvents(onAuthError);
   const [text, setText] = useState("");
   const [editingCwd, setEditingCwd] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -15,7 +15,7 @@ export function ChatView({ onAuthError }: { onAuthError: () => void }) {
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, stream?.text, approval]);
+  }, [messages, stream?.text]);
 
   const send = async () => {
     const t = text.trim();
@@ -50,7 +50,12 @@ export function ChatView({ onAuthError }: { onAuthError: () => void }) {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-fg">{t("chat_title")}</h2>
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
+            {t("chat_title")}
+            <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
+              {t("chat_shared_badge")}
+            </span>
+          </h2>
           {editingCwd ? (
             <input
               autoFocus
@@ -124,24 +129,6 @@ export function ChatView({ onAuthError }: { onAuthError: () => void }) {
           </div>
         )}
       </div>
-
-      {/* Approval prompt */}
-      {approval && (
-        <div className="mb-3 rounded-xl border border-accent/40 bg-accent/5 p-3">
-          <div className="mb-2 text-sm text-fg">
-            {t("chat_allow")} <span className="font-semibold text-accent">{approval.tool}</span>
-            {approval.arg && <span className="mono text-fg-dim"> · {approval.arg}</span>}?
-          </div>
-          <div className="flex gap-2">
-            <Button variant="primary" onClick={() => void api.approveChat(approval.approvalId, true)}>
-              {t("chat_approve")}
-            </Button>
-            <Button variant="danger" onClick={() => void api.approveChat(approval.approvalId, false)}>
-              {t("chat_deny")}
-            </Button>
-          </div>
-        </div>
-      )}
 
       {/* Composer */}
       <div className="flex items-end gap-2 border-t border-line pt-3">

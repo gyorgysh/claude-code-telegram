@@ -20,3 +20,8 @@ logs/
 
 # Machine-local Claude Code settings (keep personal allowlists out of the repo)
 .claude/settings.local.json
+# Agent worktrees and other machine-local Claude Code scratch
+.claude/
+
+# TypeScript incremental build cache
+*.tsbuildinfo

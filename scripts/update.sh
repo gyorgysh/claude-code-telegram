@@ -67,6 +67,22 @@ npm install
 say "Building (panel UI + bot)…"
 npm run build
 
+# Probe the optional node-pty native addon (powers the panel Terminal tab). It's
+# an optionalDependency, so a missing build toolchain doesn't fail the install —
+# the terminal just stays disabled. Surface that here with a fix hint.
+probe_node_pty() {
+  if node -e "require('node-pty')" >/dev/null 2>&1; then
+    ok "Terminal backend (node-pty) is available."
+  else
+    say "Terminal backend (node-pty) not built — the panel Terminal tab will be disabled."
+    case "$(uname -s)" in
+      Linux)  say "  To enable it: install build tools (e.g. 'sudo apt-get install -y build-essential python3') and re-run this script." ;;
+      Darwin) say "  To enable it: install Xcode command line tools ('xcode-select --install') and re-run this script." ;;
+    esac
+  fi
+}
+probe_node_pty || true
+
 # Restart only if a service is installed for this machine.
 restart_if_service() {
   case "$(uname -s)" in

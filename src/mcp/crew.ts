@@ -152,10 +152,10 @@ export function createCrewMcp(opts: CrewMcpOptions) {
       tool(
         "crew_suggest",
         "File a proposal, idea, or finding for the president's review. It queues " +
-          "in the suggestion inbox (NOT an immediate DM) so Atlas can triage and " +
-          "batch it into a digest; the president then accepts (→ a task) or " +
-          "dismisses it. Use this for non-urgent ideas instead of messaging the " +
-          "president directly.",
+          "in the suggestion inbox (the president gets a light heads-up ping, not " +
+          "the full proposal as a DM) so Atlas can triage and batch it into a " +
+          "digest; the president then accepts (→ a task) or dismisses it. Use this " +
+          "for non-urgent ideas instead of messaging the president directly.",
         {
           title: z.string().describe("Short, specific headline for the suggestion."),
           detail: z.string().describe("The full proposal: what, why, and any specifics."),

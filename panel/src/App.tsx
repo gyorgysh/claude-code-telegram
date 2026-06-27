@@ -17,6 +17,7 @@ import { SkillsView } from "./components/Skills.tsx";
 import { MemoryView } from "./components/Memory.tsx";
 import { VaultView } from "./components/Vault.tsx";
 import { ConnectorsView } from "./components/Connectors.tsx";
+import { useSuggestionEvents } from "./lib/useSuggestionEvents.ts";
 import { UpdatesView } from "./components/Updates.tsx";
 import { TasksView } from "./components/Tasks.tsx";
 import { InboxView } from "./components/Inbox.tsx";
@@ -41,8 +42,22 @@ export function App() {
   const [chatEnabled, setChatEnabled] = useState(true);
   const [brandName, setBrandName] = useState("MyHQ");
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [inboxPending, setInboxPending] = useState(0);
   const { theme, toggle, set } = useTheme();
   const { t } = useI18n();
+
+  // Live pending-suggestions count for the Inbox nav badge: seed it once, then
+  // let the shared /ws keep it current (the server pushes the full list on change).
+  useEffect(() => {
+    if (!authed) return;
+    api
+      .suggestions("pending")
+      .then((r) => setInboxPending(r.suggestions.length))
+      .catch(() => {});
+  }, [authed]);
+  useSuggestionEvents((list) =>
+    setInboxPending(list.filter((s) => s.status === "pending").length),
+  );
 
   // Switch tab and reflect it in the URL (so a refresh reloads the same view).
   const select = (t: Tab | "settings") => {
@@ -111,6 +126,7 @@ export function App() {
           onSignOut={onAuthError}
           chatEnabled={chatEnabled}
           updateAvailable={updateAvailable}
+          inboxPending={inboxPending}
           brandName={brandName}
         />
       </aside>
@@ -131,6 +147,7 @@ export function App() {
               onSignOut={onAuthError}
               chatEnabled={chatEnabled}
               updateAvailable={updateAvailable}
+              inboxPending={inboxPending}
               expanded
               brandName={brandName}
             />

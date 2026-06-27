@@ -41,6 +41,7 @@ export interface SuggestionInput {
 }
 
 type ChangeCb = () => void;
+type NotifyCb = (s: Suggestion) => void;
 
 /**
  * The president's suggestion inbox. Singleton + JSON-store pattern, mirroring
@@ -52,10 +53,16 @@ class SuggestionStore {
     suggestions: [],
   }).suggestions;
   private onChangeCb?: ChangeCb;
+  private onAddCb?: NotifyCb;
 
   /** Notify a watcher (panel hub) on any mutation. */
   onChange(cb: ChangeCb): void {
     this.onChangeCb = cb;
+  }
+
+  /** Register a Telegram notifier, called once when a new suggestion is filed. */
+  onAdd(cb: NotifyCb): void {
+    this.onAddCb = cb;
   }
 
   private persist(): void {
@@ -78,6 +85,7 @@ class SuggestionStore {
     this.items.push(s);
     this.persist();
     audit("suggestion.add", { id: s.id, from: s.fromAgentId });
+    this.onAddCb?.(s);
     return s;
   }
 

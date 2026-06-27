@@ -17,6 +17,7 @@ import { RichDraftStreamer } from "./telegram/richDraftStreamer.js";
 import { sendFormattedMarkdown, sendRichMarkdown, sendExpandableQuote } from "./telegram/send.js";
 import { PermissionManager, bashLeadCmd } from "./telegram/permissions.js";
 import { LoopPromptManager } from "./telegram/loopPrompt.js";
+import { AskQuestionManager } from "./telegram/askQuestion.js";
 import { LoopDetector } from "./core/loopDetector.js";
 import { downloadIncomingFile, isViewableImage, readImageInput } from "./telegram/files.js";
 import { isGitCallback, resolveGitCallback } from "./telegram/gitFlow.js";
@@ -49,6 +50,7 @@ export function buildBot(): Telegraf {
   const bot = new Telegraf(config.TELEGRAM_BOT_TOKEN);
   const permissions = new PermissionManager(bot.telegram);
   const loops = new LoopPromptManager(bot.telegram);
+  const asks = new AskQuestionManager(bot.telegram);
 
   bot.use(authMiddleware);
   registerCommands(bot);
@@ -56,7 +58,7 @@ export function buildBot(): Telegraf {
   // Panel Chat is a window onto the main Telegram chat: let it drive turns and
   // abort them through the same flow the Telegram handlers use.
   chatBridge.attach(
-    (chatId, prompt) => runUserPrompt(permissions, loops, chatId, prompt, bot.telegram),
+    (chatId, prompt) => runUserPrompt(permissions, loops, asks, chatId, prompt, bot.telegram),
     (chatId) => {
       const s = sessions.get(chatId);
       s.abort?.abort();
@@ -74,6 +76,10 @@ export function buildBot(): Telegraf {
     } else if (data && loops.isLoopCallback(data)) {
       log.debug("Loop button pressed", { chatId: ctx.chat?.id, data });
       const toast = await loops.resolve(data);
+      await ctx.answerCbQuery(toast.slice(0, 200)).catch(() => {});
+    } else if (data && asks.isAskCallback(data)) {
+      log.debug("AskQuestion button pressed", { chatId: ctx.chat?.id, data });
+      const toast = await asks.resolve(data);
       await ctx.answerCbQuery(toast.slice(0, 200)).catch(() => {});
     } else if (data && isGitCallback(data) && ctx.chat) {
       log.debug("Git button pressed", { chatId: ctx.chat.id, data });
@@ -126,7 +132,7 @@ export function buildBot(): Telegraf {
         : `The user uploaded a file, saved at: ${path}. Take a look.`;
       const images = isViewableImage(path) ? await imageInputs(path) : undefined;
       const run = () =>
-        runUserPrompt(permissions, loops, ctx.chat.id, prompt, ctx.telegram, { images });
+        runUserPrompt(permissions, loops, asks, ctx.chat.id, prompt, ctx.telegram, { images });
       if (await maybeOfferResume(ctx.telegram, ctx.chat.id, run)) return;
       run();
     } catch (err) {
@@ -153,7 +159,7 @@ export function buildBot(): Telegraf {
         : `The user sent this image (also saved at: ${path}).`;
       const images = await imageInputs(path);
       const run = () =>
-        runUserPrompt(permissions, loops, ctx.chat.id, prompt, ctx.telegram, { images });
+        runUserPrompt(permissions, loops, asks, ctx.chat.id, prompt, ctx.telegram, { images });
       if (await maybeOfferResume(ctx.telegram, ctx.chat.id, run)) return;
       run();
     } catch (err) {
@@ -186,7 +192,7 @@ export function buildBot(): Telegraf {
       }
       log.info("Voice transcribed", { chatId, text: preview(text) });
       await ctx.replyWithHTML(`🎤 <i>${escapeHtml(text)}</i>`).catch(() => {});
-      const run = () => runUserPrompt(permissions, loops, chatId, text, ctx.telegram);
+      const run = () => runUserPrompt(permissions, loops, asks, chatId, text, ctx.telegram);
       if (await maybeOfferResume(ctx.telegram, chatId, run)) return;
       run();
     } catch (err) {
@@ -206,8 +212,15 @@ export function buildBot(): Telegraf {
         return;
       }
     }
+    // If an AskUserQuestion is armed for a free-text ("Other") answer, consume
+    // this message as the answer instead of starting a new turn (the asking turn
+    // still holds busy=true, so this must short-circuit before the run path).
+    if (asks.hasPendingText(ctx.chat.id) && asks.resolveText(ctx.chat.id, text)) {
+      log.info("AskUserQuestion answered by typed reply", { chatId: ctx.chat.id });
+      return;
+    }
     const chatId = ctx.chat.id;
-    const run = () => runUserPrompt(permissions, loops, chatId, text, ctx.telegram);
+    const run = () => runUserPrompt(permissions, loops, asks, chatId, text, ctx.telegram);
     if (await maybeOfferResume(ctx.telegram, chatId, run)) return;
     run();
   });
@@ -225,7 +238,7 @@ export function buildBot(): Telegraf {
         parse_mode: "HTML",
       })
       .catch(() => {});
-    runUserPrompt(permissions, loops, s.chatId, s.prompt, bot.telegram, {
+    runUserPrompt(permissions, loops, asks, s.chatId, s.prompt, bot.telegram, {
       autonomous: true,
       cwd: s.cwd,
     });
@@ -256,7 +269,7 @@ export function buildBot(): Telegraf {
     runActive: async (prompt) => {
       const chatId = alertTargets[0];
       if (chatId === undefined || sessions.get(chatId).busy) return false;
-      runUserPrompt(permissions, loops, chatId, prompt, bot.telegram, { autonomous: true });
+      runUserPrompt(permissions, loops, asks, chatId, prompt, bot.telegram, { autonomous: true });
       return true;
     },
   });
@@ -279,6 +292,20 @@ export function buildBot(): Telegraf {
       .catch(() => {});
   });
 
+  // New inbox suggestion filed by an agent — give the president a light ping so
+  // nothing waits unseen (the full triage/decision still happens via /inbox).
+  suggestions.onAdd(async (s) => {
+    const n = suggestions.pendingCount();
+    const cat = s.category ? ` [${s.category}]` : "";
+    const text =
+      `💡 New inbox suggestion from <b>${escapeHtml(s.fromAgentName)}</b>${escapeHtml(cat)}\n` +
+      `${escapeHtml(s.title)}\n\n` +
+      `${n} pending — review with /inbox`;
+    for (const chatId of alertTargets) {
+      await bot.telegram.sendMessage(chatId, text, { parse_mode: "HTML" }).catch(() => {});
+    }
+  });
+
   return bot;
 }
 
@@ -294,12 +321,13 @@ interface TurnOptions {
 function runUserPrompt(
   permissions: PermissionManager,
   loops: LoopPromptManager,
+  asks: AskQuestionManager,
   chatId: number,
   prompt: string,
   tg: Telegraf["telegram"],
   opts: TurnOptions = {},
 ): void {
-  handleUserPrompt(permissions, loops, chatId, prompt, tg, opts).catch((err) => {
+  handleUserPrompt(permissions, loops, asks, chatId, prompt, tg, opts).catch((err) => {
     const session = sessions.get(chatId);
     session.busy = false;
     session.abort = undefined;
@@ -312,6 +340,7 @@ function runUserPrompt(
 async function handleUserPrompt(
   permissions: PermissionManager,
   loops: LoopPromptManager,
+  asks: AskQuestionManager,
   chatId: number,
   prompt: string,
   tg: Telegraf["telegram"],
@@ -394,6 +423,17 @@ async function handleUserPrompt(
     toolName: string,
     input: Record<string, unknown>,
   ): Promise<PermissionResult> => {
+    // AskUserQuestion has a TUI-native picker with no Telegram equivalent, so we
+    // intercept it: render the questions as inline buttons (with a free-text
+    // fallback), then hand the collected answers back to the model as the tool
+    // result via a deny message. Runs in every autonomy mode — we always want to
+    // surface the question rather than silently auto-resolve it to nothing.
+    if (toolName === "AskUserQuestion") {
+      log.info("AskUserQuestion intercepted — prompting user", { chatId });
+      const answer = await asks.ask(chatId, input);
+      return { behavior: "deny", message: answer };
+    }
+
     const lead = toolName === "Bash" ? bashLeadCmd(input) : undefined;
 
     // Loop guard runs before the normal permission flow so a runaway retry is

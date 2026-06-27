@@ -19,6 +19,7 @@ import { VaultView } from "./components/Vault.tsx";
 import { ConnectorsView } from "./components/Connectors.tsx";
 import { UpdatesView } from "./components/Updates.tsx";
 import { TasksView } from "./components/Tasks.tsx";
+import { InboxView } from "./components/Inbox.tsx";
 import { WorkersView } from "./components/Workers.tsx";
 import { LogsView } from "./components/Logs.tsx";
 import { HeartbeatView_ } from "./components/Heartbeat.tsx";
@@ -164,6 +165,7 @@ export function App() {
           {tab === "status" && <StatusView onAuthError={onAuthError} />}
           {tab === "updates" && <UpdatesView onAuthError={onAuthError} onStatus={setUpdateAvailable} />}
           {tab === "workers" && <WorkersView onAuthError={onAuthError} />}
+          {tab === "inbox" && <InboxView onAuthError={onAuthError} />}
           {tab === "tasks" && <TasksView onAuthError={onAuthError} />}
           {tab === "skills" && <SkillsView onAuthError={onAuthError} />}
           {tab === "memory" && <MemoryView onAuthError={onAuthError} />}

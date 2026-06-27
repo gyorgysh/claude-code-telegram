@@ -8,6 +8,7 @@ import { runCouncil, formatCouncilTelegram } from "./core/council.js";
 import { sessions } from "./session/manager.js";
 import { sendDiff } from "./telegram/gitFlow.js";
 import { sendProjectsMenu } from "./telegram/projects.js";
+import { sendInbox } from "./telegram/inboxFlow.js";
 import { schedules, parseWhen, describeSpec } from "./schedule/manager.js";
 import * as git from "./git.js";
 import { escapeHtml } from "./telegram/formatting.js";
@@ -165,6 +166,7 @@ function buildHelp(): string {
 /allow &lt;Tool&gt; · /allowed · /disallow &lt;Tool|all&gt;: persistent tool allow-rules
 
 <b>Crew</b>
+/inbox: review suggestions agents filed for you (accept → a task, or dismiss)
 /council &lt;idea&gt;: put a proposal to a full Lead council vote
 
 <b>Scheduling</b>
@@ -663,6 +665,11 @@ export function registerCommands(bot: Telegraf): void {
         ? `🌐 Language set to English.`
         : `🌐 Language set to ${languageName(arg)}. The agent will respond in ${languageName(arg)} from now on.`,
     );
+  });
+
+  bot.command("inbox", async (ctx) => {
+    log.info("Command /inbox", { chatId: ctx.chat.id });
+    await sendInbox(ctx.telegram, ctx.chat.id);
   });
 
   bot.command("council", async (ctx) => {

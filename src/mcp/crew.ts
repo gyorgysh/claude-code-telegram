@@ -7,6 +7,7 @@ import { memoryMcp } from "./memory.js";
 import { tasksMcp } from "./tasks.js";
 import { skillsMcp } from "./skills.js";
 import { workers } from "../core/workers.js";
+import { suggestions } from "../core/suggestions.js";
 import { getSkill } from "../core/skills.js";
 import { getProvider } from "../core/providers.js";
 import { resolveSecret } from "../core/vault.js";
@@ -116,14 +117,20 @@ export function createCrewMcp(opts: CrewMcpOptions) {
 
       tool(
         "crew_report",
-        "Record a summary of completed work in the delegation log and optionally " +
-          "send it to the president over Telegram.",
+        "Record a summary of COMPLETED WORK in the delegation log. For a " +
+          "proposal, idea, or finding the president should review, use " +
+          "crew_suggest instead (it queues in the inbox for triage). Set " +
+          "toPresident only for time-critical results that can't wait.",
         {
           summary: z.string().describe("Concise summary of the work done or outcome."),
           toPresident: z
             .boolean()
             .optional()
-            .describe("If true, also sends the summary to the president via Telegram."),
+            .describe(
+              "If true, also DMs the summary to the president immediately. Use " +
+                "sparingly, only for time-critical results; otherwise prefer " +
+                "crew_suggest so Atlas can triage and batch.",
+            ),
         },
         async (args) => {
           logDelegation({
@@ -139,6 +146,43 @@ export function createCrewMcp(opts: CrewMcpOptions) {
             }
           }
           return { content: [{ type: "text", text: "Report logged." + (args.toPresident ? " Sent to president." : "") }] };
+        },
+      ),
+
+      tool(
+        "crew_suggest",
+        "File a proposal, idea, or finding for the president's review. It queues " +
+          "in the suggestion inbox (NOT an immediate DM) so Atlas can triage and " +
+          "batch it into a digest; the president then accepts (→ a task) or " +
+          "dismisses it. Use this for non-urgent ideas instead of messaging the " +
+          "president directly.",
+        {
+          title: z.string().describe("Short, specific headline for the suggestion."),
+          detail: z.string().describe("The full proposal: what, why, and any specifics."),
+          category: z
+            .string()
+            .optional()
+            .describe("Optional grouping label, e.g. 'ui', 'infra', 'process'."),
+        },
+        async (args) => {
+          const fromId = opts.fromAgentId ?? "atlas";
+          const fromName = workers.get(fromId)?.name ?? fromId;
+          const s = suggestions.add({
+            fromAgentId: fromId,
+            fromAgentName: fromName,
+            title: args.title,
+            detail: args.detail,
+            category: args.category,
+          });
+          logDelegation({ fromAgentId: fromId, type: "suggestion", summary: args.title });
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Suggestion filed for the president's review (id ${s.id}). Atlas will triage it.`,
+              },
+            ],
+          };
         },
       ),
 

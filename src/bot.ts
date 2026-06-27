@@ -21,6 +21,7 @@ import { LoopDetector } from "./core/loopDetector.js";
 import { downloadIncomingFile, isViewableImage, readImageInput } from "./telegram/files.js";
 import { isGitCallback, resolveGitCallback } from "./telegram/gitFlow.js";
 import { isProjectCallback, resolveProjectCallback } from "./telegram/projects.js";
+import { isInboxCallback, resolveInboxCallback } from "./telegram/inboxFlow.js";
 import { isModelCallback, resolveModelCallback } from "./commands.js";
 import {
   isResumeCallback,
@@ -33,6 +34,7 @@ import { heartbeat } from "./core/heartbeat.js";
 import { taskDelegator } from "./core/taskRunner.js";
 import { resolveMainRun } from "./core/mainSettings.js";
 import { workers } from "./core/workers.js";
+import { suggestions } from "./core/suggestions.js";
 import { escapeHtml, normalizeAgentText } from "./telegram/formatting.js";
 import { resolveAsk, hasPendingAsk } from "./core/crewAsk.js";
 import { reflectOnTurn } from "./core/reflect.js";
@@ -82,6 +84,11 @@ export function buildBot(): Telegraf {
       log.debug("Project button pressed", { chatId: ctx.chat.id, data });
       const messageId = ctx.callbackQuery.message?.message_id;
       const toast = await resolveProjectCallback(ctx.telegram, ctx.chat.id, data, messageId);
+      await ctx.answerCbQuery(toast.slice(0, 200)).catch(() => {});
+    } else if (data && isInboxCallback(data) && ctx.chat) {
+      log.debug("Inbox button pressed", { chatId: ctx.chat.id, data });
+      const messageId = ctx.callbackQuery.message?.message_id;
+      const toast = await resolveInboxCallback(ctx.telegram, ctx.chat.id, data, messageId);
       await ctx.answerCbQuery(toast.slice(0, 200)).catch(() => {});
     } else if (data && isModelCallback(data) && ctx.chat) {
       if (data.startsWith("mdl:noop")) {
@@ -474,6 +481,24 @@ async function handleUserPrompt(
           .join("\n")
       : undefined;
 
+  // Pending suggestion inbox (main agent only): a compact digest so Atlas can
+  // triage and surface noteworthy items. Capped so it never bloats the prompt.
+  const pendingItems = suggestions.pending();
+  const pendingSuggestions =
+    pendingItems.length > 0
+      ? [
+          ...pendingItems
+            .slice(0, 10)
+            .map(
+              (s) =>
+                `- ${s.id} · ${s.fromAgentName}${s.category ? ` [${s.category}]` : ""}: ${s.title}`,
+            ),
+          pendingItems.length > 10 ? `…and ${pendingItems.length - 10} more` : "",
+        ]
+          .filter(Boolean)
+          .join("\n")
+      : undefined;
+
   // Build crew MCP: notify goes to all allowed chats, ask goes to this chat.
   const notifyAll = async (text: string) => {
     for (const targetId of allowedUserIds) {
@@ -503,6 +528,7 @@ async function handleUserPrompt(
       model: mainRun.model,
       env: mainRun.env,
       crew,
+      pendingSuggestions,
       persona: mainRun.persona,
       language: session.language ?? mainRun.defaultLanguage,
       permissionMode: autonomy === "full" ? "bypassPermissions" : "default",

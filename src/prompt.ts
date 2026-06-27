@@ -113,6 +113,7 @@ export function systemPrompt(
   crew?: string,
   persona?: string,
   language?: string,
+  pendingSuggestions?: string,
 ): { type: "preset"; preset: "claude_code"; append: string } {
   let append = getPersonality();
 
@@ -145,6 +146,9 @@ export function systemPrompt(
   }
   if (crew?.trim()) {
     append += `\n\n# Your team (${config.BRAND_NAME} Leads)\nYou coordinate these specialists. Mention them when relevant or when delegating.\n\n${crew.trim()}`;
+  }
+  if (pendingSuggestions?.trim()) {
+    append += `\n\n# Pending suggestions (president's inbox)\nAgents have filed these proposals for the president's review. You are the triage layer: when it's relevant, surface the noteworthy ones to the president in your own words, group related ones, and let them accept (→ a Kanban card) or dismiss via /inbox. Don't dump the raw list unprompted; bring only what's worth their attention. Don't act on a suggestion yourself unless asked.\n\n${pendingSuggestions.trim()}`;
   }
   if (extraAppend?.trim()) {
     append += `\n\n# Worker instructions\n${extraAppend.trim()}`;

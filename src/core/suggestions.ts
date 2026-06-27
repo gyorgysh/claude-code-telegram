@@ -1,0 +1,135 @@
+import { randomBytes } from "node:crypto";
+import { loadJson, saveJson } from "./jsonStore.js";
+import { audit } from "./audit.js";
+import { createTask } from "./tasks.js";
+
+const FILE = "suggestions.json";
+
+export type SuggestionStatus = "pending" | "accepted" | "dismissed";
+
+/**
+ * A proposal/idea/finding filed by an agent (Lead, Assistant, specialist) for
+ * the president's review. Unlike crew_report, suggestions are NOT pushed to the
+ * president directly: they queue in this inbox so Atlas can triage them and the
+ * president decides (accept → Kanban card, or dismiss) in one place.
+ */
+export interface Suggestion {
+  id: string;
+  fromAgentId: string;
+  fromAgentName: string;
+  title: string;
+  detail: string;
+  category?: string;
+  status: SuggestionStatus;
+  createdAt: number;
+  decidedAt?: number;
+  /** Kanban card id created when the suggestion was accepted. */
+  taskId?: string;
+}
+
+interface SuggestionFile {
+  version: 1;
+  suggestions: Suggestion[];
+}
+
+export interface SuggestionInput {
+  fromAgentId: string;
+  fromAgentName: string;
+  title: string;
+  detail: string;
+  category?: string;
+}
+
+type ChangeCb = () => void;
+
+/**
+ * The president's suggestion inbox. Singleton + JSON-store pattern, mirroring
+ * WorkerManager / MemoryStore. Persists to suggestions.json in the data dir.
+ */
+class SuggestionStore {
+  private items: Suggestion[] = loadJson<SuggestionFile>(FILE, {
+    version: 1,
+    suggestions: [],
+  }).suggestions;
+  private onChangeCb?: ChangeCb;
+
+  /** Notify a watcher (panel hub) on any mutation. */
+  onChange(cb: ChangeCb): void {
+    this.onChangeCb = cb;
+  }
+
+  private persist(): void {
+    saveJson<SuggestionFile>(FILE, { version: 1, suggestions: this.items });
+    this.onChangeCb?.();
+  }
+
+  /** File a new suggestion (always starts pending). */
+  add(input: SuggestionInput): Suggestion {
+    const s: Suggestion = {
+      id: randomBytes(4).toString("hex"),
+      fromAgentId: input.fromAgentId,
+      fromAgentName: input.fromAgentName || input.fromAgentId,
+      title: input.title.trim() || "Untitled",
+      detail: input.detail.trim(),
+      category: input.category?.trim() || undefined,
+      status: "pending",
+      createdAt: Date.now(),
+    };
+    this.items.push(s);
+    this.persist();
+    audit("suggestion.add", { id: s.id, from: s.fromAgentId });
+    return s;
+  }
+
+  /** All suggestions, newest first, optionally filtered by status. */
+  list(status?: SuggestionStatus): Suggestion[] {
+    const all = [...this.items].sort((a, b) => b.createdAt - a.createdAt);
+    return status ? all.filter((s) => s.status === status) : all;
+  }
+
+  /** Pending suggestions, oldest first (so the digest reads chronologically). */
+  pending(): Suggestion[] {
+    return this.items.filter((s) => s.status === "pending").sort((a, b) => a.createdAt - b.createdAt);
+  }
+
+  pendingCount(): number {
+    return this.items.reduce((n, s) => n + (s.status === "pending" ? 1 : 0), 0);
+  }
+
+  get(id: string): Suggestion | undefined {
+    return this.items.find((s) => s.id === id);
+  }
+
+  /**
+   * Accept a pending suggestion: file it as a Kanban backlog card and mark it
+   * accepted. No-op if already decided. Returns the updated suggestion.
+   */
+  accept(id: string): Suggestion | undefined {
+    const s = this.get(id);
+    if (!s || s.status !== "pending") return s;
+    const task = createTask({
+      title: s.title,
+      notes: [s.detail, `— suggested by ${s.fromAgentName}`].filter(Boolean).join("\n\n"),
+      column: "backlog",
+    });
+    s.status = "accepted";
+    s.decidedAt = Date.now();
+    s.taskId = task.id;
+    this.persist();
+    audit("suggestion.accept", { id, taskId: task.id });
+    return s;
+  }
+
+  /** Dismiss (archive) a pending suggestion. No-op if already decided. */
+  dismiss(id: string): Suggestion | undefined {
+    const s = this.get(id);
+    if (!s || s.status !== "pending") return s;
+    s.status = "dismissed";
+    s.decidedAt = Date.now();
+    this.persist();
+    audit("suggestion.dismiss", { id });
+    return s;
+  }
+}
+
+export const suggestions = new SuggestionStore();

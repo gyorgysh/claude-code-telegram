@@ -38,6 +38,9 @@ export const AUTO_ALLOWED_TOOLS = new Set([
   "mcp__skills__skill_save",
   "mcp__skills__skill_patch",
   "mcp__skills__skill_list",
+  // Filing a suggestion just queues it in the president's inbox for triage
+  // (no DM, no sub-run), so it's safe and frictionless like a Kanban edit.
+  "mcp__crew__crew_suggest",
   // Shipping own source edits: only queues a build-gated, deferred restart and
   // is announced to the user, so it's safe to run without a prompt.
   "mcp__self_update__self_update",
@@ -70,6 +73,8 @@ export interface RunOptions {
   systemPromptAppend?: string;
   /** Roster of MyHQ Leads, folded into the system prompt for coordination. */
   crew?: string;
+  /** Pending suggestion-inbox digest (main agent only) for Atlas to triage. */
+  pendingSuggestions?: string;
   /**
    * Character and tone override (persona). Injected into the system prompt after
    * the base personality block, before work.md and worker instructions.
@@ -128,7 +133,14 @@ export async function runTurn(opts: RunOptions): Promise<RunResult> {
       // Only override the child env when asked (e.g. a local-model provider);
       // otherwise the SDK defaults to process.env.
       env: opts.env ? { ...process.env, ...opts.env } : undefined,
-      systemPrompt: systemPrompt(opts.systemPromptAppend, memoryBlock, opts.crew, opts.persona, opts.language),
+      systemPrompt: systemPrompt(
+        opts.systemPromptAppend,
+        memoryBlock,
+        opts.crew,
+        opts.persona,
+        opts.language,
+        opts.pendingSuggestions,
+      ),
       permissionMode: opts.permissionMode,
       includePartialMessages: true,
       abortController: opts.abortController,

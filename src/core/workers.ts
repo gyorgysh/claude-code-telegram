@@ -4,6 +4,7 @@ import { memoryMcp } from "../mcp/memory.js";
 import { tasksMcp } from "../mcp/tasks.js";
 import { skillsMcp } from "../mcp/skills.js";
 import { selfUpdateMcp } from "../mcp/selfUpdate.js";
+import { createCrewMcp } from "../mcp/crew.js";
 import { nextRun, parseWhen, describeSpec } from "../schedule/manager.js";
 import type { ScheduleSpec } from "../schedule/store.js";
 import { loadJson, saveJson } from "./jsonStore.js";
@@ -269,6 +270,14 @@ export class WorkerManager {
     //   supervised → deny everything that isn't in AUTO_ALLOWED_TOOLS.
     const permissionMode = autonomy === "full" ? "bypassPermissions" : "default";
 
+    // Unattended worker: no human chat, so crew_suggest just files into the
+    // president's inbox (notify is a no-op; it never DMs from a worker run).
+    const crewMcp = createCrewMcp({
+      notify: async () => {},
+      primaryChatId: 0,
+      fromAgentId: w.id,
+    });
+
     try {
       const res = await runTurn({
         prompt: w.prompt,
@@ -280,7 +289,7 @@ export class WorkerManager {
         language: w.language,
         permissionMode,
         abortController: abort,
-        mcpServers: { memory: memoryMcp, tasks: tasksMcp, skills: skillsMcp, self_update: selfUpdateMcp },
+        mcpServers: { memory: memoryMcp, tasks: tasksMcp, skills: skillsMcp, self_update: selfUpdateMcp, crew: crewMcp },
         canUseTool: async (toolName, input) => {
           // supervised/standard: only AUTO_ALLOWED_TOOLS pass for unattended workers.
           if (AUTO_ALLOWED_TOOLS.has(toolName)) return { behavior: "allow", updatedInput: input };

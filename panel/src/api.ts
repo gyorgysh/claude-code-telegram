@@ -416,6 +416,21 @@ export interface MemoryStats {
   lastRecalledAt?: number;
 }
 
+export type SuggestionStatus = "pending" | "accepted" | "dismissed";
+
+export interface Suggestion {
+  id: string;
+  fromAgentId: string;
+  fromAgentName: string;
+  title: string;
+  detail: string;
+  category?: string;
+  status: SuggestionStatus;
+  createdAt: number;
+  decidedAt?: number;
+  taskId?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -706,6 +721,11 @@ export const api = {
   setMemoryTier: (id: string, tier: MemoryTier) =>
     req<MemoryEntry>("PATCH", `/api/memories/${id}/tier`, { tier }),
   deleteMemory: (id: string) => req<{ ok: boolean }>("DELETE", `/api/memories/${id}`),
+
+  suggestions: (status?: SuggestionStatus) =>
+    get<{ suggestions: Suggestion[] }>(`/api/suggestions${status ? `?status=${status}` : ""}`),
+  acceptSuggestion: (id: string) => req<Suggestion>("POST", `/api/suggestions/${id}/accept`),
+  dismissSuggestion: (id: string) => req<Suggestion>("POST", `/api/suggestions/${id}/dismiss`),
 
   maintenance: () => get<MaintenanceStats>("/api/maintenance"),
   runMaintenance: () => req<MaintenanceStats>("POST", "/api/maintenance/run"),

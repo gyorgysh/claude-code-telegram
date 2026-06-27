@@ -53,6 +53,7 @@ import { taskDelegator } from "../core/taskRunner.js";
 import { workers, describeWorkerSchedule, type Worker } from "../core/workers.js";
 import { chat } from "../core/chat.js";
 import { memory, type MemoryEntry } from "../core/memory.js";
+import { suggestions } from "../core/suggestions.js";
 import { getStatus } from "../core/status.js";
 import { heartbeat } from "../core/heartbeat.js";
 import { listConnectors, setConnector } from "../core/connectors.js";
@@ -118,6 +119,8 @@ export async function startPanel(): Promise<(() => Promise<void>) | undefined> {
   ptyManager.start((m) => hub.broadcast(m));
   // Wire remote-access tunnel state changes to all clients.
   tunnelManager.start((m) => hub.broadcast(m));
+  // Push suggestion-inbox changes to every panel client.
+  suggestions.onChange(() => hub.broadcast({ type: "suggestion", suggestions: suggestions.list() }));
   // Stream live log lines to every panel client.
   const unsubLog = onLog((entry) => hub.broadcast({ type: "log", entry }));
 
@@ -571,6 +574,24 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
     if (!memory.remove((req.params as { id: string }).id))
       return reply.code(404).send({ error: "not found" });
     return { ok: true };
+  });
+
+  // --- suggestion inbox ---
+  app.get("/api/suggestions", async (req) => {
+    const { status } = req.query as { status?: string };
+    const filter =
+      status === "pending" || status === "accepted" || status === "dismissed" ? status : undefined;
+    return { suggestions: suggestions.list(filter) };
+  });
+  app.post("/api/suggestions/:id/accept", async (req, reply) => {
+    const updated = suggestions.accept((req.params as { id: string }).id);
+    if (!updated) return reply.code(404).send({ error: "not found" });
+    return updated;
+  });
+  app.post("/api/suggestions/:id/dismiss", async (req, reply) => {
+    const updated = suggestions.dismiss((req.params as { id: string }).id);
+    if (!updated) return reply.code(404).send({ error: "not found" });
+    return updated;
   });
 
   // --- external connectors (placeholders) ---

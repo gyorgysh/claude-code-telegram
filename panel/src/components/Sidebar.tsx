@@ -9,6 +9,7 @@ export type Tab =
   | "health"
   | "status"
   | "workers"
+  | "inbox"
   | "tasks"
   | "skills"
   | "prompt"
@@ -43,6 +44,7 @@ export const NAV: Group[] = [
       { id: "terminal", labelKey: "nav_terminal", icon: "▸" },
       { id: "crew", labelKey: "nav_crew", icon: "⬡" },
       { id: "workers", labelKey: "nav_workers", icon: "◈" },
+      { id: "inbox", labelKey: "nav_inbox", icon: "✉" },
       { id: "tasks", labelKey: "nav_tasks", icon: "▤" },
       { id: "schedules", labelKey: "nav_schedules", icon: "◷" },
       { id: "heartbeat", labelKey: "nav_heartbeat", icon: "♡" },

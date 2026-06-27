@@ -84,6 +84,13 @@ export interface RunOptions {
   language?: string;
   /** "default" = interactive approval; "bypassPermissions" = autonomous. */
   permissionMode: "default" | "bypassPermissions";
+  /**
+   * Which Claude config sources to load. Defaults to ["user","project","local"]
+   * (full project context). Pass ["user"] for autonomous/wizard runs where the
+   * cwd may be the bot's own repo or an unrelated project — avoids injecting a
+   * foreign CLAUDE.md into the system prompt.
+   */
+  settingSources?: ("user" | "project" | "local")[];
   abortController: AbortController;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mcpServers: Record<string, any>;
@@ -153,8 +160,7 @@ export async function runTurn(opts: RunOptions): Promise<RunResult> {
           log.debug("claude stderr", { line: line.slice(0, 500) });
         }
       },
-      // Load project context (CLAUDE.md, settings) for a real Claude Code feel.
-      settingSources: ["user", "project", "local"],
+      settingSources: opts.settingSources ?? ["user", "project", "local"],
     },
   }) as unknown as AsyncIterable<SdkMessage>;
 

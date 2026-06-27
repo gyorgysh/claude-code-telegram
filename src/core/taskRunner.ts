@@ -270,6 +270,7 @@ export class TaskDelegator {
         systemPromptAppend: append,
         persona: lead?.persona,
         permissionMode: "bypassPermissions",
+        settingSources: ["user"],
         abortController: abort,
         mcpServers: { memory: memoryMcp, tasks: createTasksMcp({ createdBy: lead?.id ?? "atlas" }), skills: skillsMcp, self_update: selfUpdateMcp, ...buildConnectorMcps() },
         canUseTool: async (_n, input) => ({ behavior: "allow", updatedInput: input }),

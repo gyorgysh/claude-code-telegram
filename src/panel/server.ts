@@ -1002,6 +1002,7 @@ Respond with ONLY a JSON array, no markdown fences, no explanation. Example form
         model: mainRun.model,
         env: mainRun.env,
         permissionMode: "bypassPermissions",
+        settingSources: ["user"],
         abortController: abort,
         mcpServers: {},
         canUseTool: async (_name, input) => ({ behavior: "allow" as const, updatedInput: input }),

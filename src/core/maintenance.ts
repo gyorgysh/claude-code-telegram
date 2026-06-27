@@ -23,6 +23,8 @@ export interface MaintenanceStats {
   memoriesMerged: number;
   /** Entries whose text the dedup pass rewrote into a clearer consolidated form. */
   memoriesRewritten: number;
+  /** Verbose entries the shorten pass condensed into a terse one-liner. */
+  memoriesShortened: number;
   skillsArchived: number;
 }
 
@@ -74,6 +76,7 @@ class MaintenanceScheduler {
     memoriesDeleted: 0,
     memoriesMerged: 0,
     memoriesRewritten: 0,
+    memoriesShortened: 0,
     skillsArchived: 0,
   });
   private timer?: ReturnType<typeof setInterval>;
@@ -132,6 +135,7 @@ class MaintenanceScheduler {
       memoriesDeleted: 0,
       memoriesMerged: 0,
       memoriesRewritten: 0,
+      memoriesShortened: 0,
       skillsArchived: 0,
     };
     try {
@@ -208,6 +212,48 @@ class MaintenanceScheduler {
     // collapse those first, then do the same for warm.
     await this.consolidateTier("hot", run);
     await this.consolidateTier("warm", run);
+
+    // Step 4: shorten any remaining verbose entries into terse one-liners. Dedup
+    // only rewrites duplicate groups; a single long entry with no twin still
+    // bloats recall context, so condense it (meaning preserved) here. Hot first.
+    await this.shortenVerbose("hot", run);
+    await this.shortenVerbose("warm", run);
+  }
+
+  /**
+   * Rewrite any entry longer than MEMORY_SHORTEN_CHARS into one terse sentence
+   * that keeps the meaning, dropping filler and play-by-play detail. Keeps the
+   * recall context small over time even when the agent saved a wordy entry.
+   */
+  private async shortenVerbose(tier: "hot" | "warm", run: MaintenanceStats): Promise<void> {
+    const limit = config.MEMORY_SHORTEN_CHARS;
+    if (limit <= 0) return;
+    const verbose = memory
+      .allRaw()
+      .filter((e) => e.tier === tier && e.text.length > limit);
+    for (let i = 0; i < verbose.length; i += BATCH_SIZE) {
+      const batch = verbose.slice(i, i + BATCH_SIZE);
+      const numbered = batch.map((e) => `[${e.id}] ${e.text}`).join("\n");
+      const prompt =
+        `You are tidying an AI agent's long-term memory. Each line below is a memory ` +
+        `entry (id in square brackets) that is too long. Rewrite EACH into ONE terse ` +
+        `sentence under ${limit} characters that preserves every distinct fact while ` +
+        `dropping filler, long file lists, and play-by-play detail. Keep ids, paths, and ` +
+        `identifiers that matter. Return ONLY a JSON array, no prose:\n` +
+        `[{"id":"<id>","text":"<shortened text>"}]\n\n${numbered}`;
+      const raw = await callHaiku(prompt);
+      if (!raw) continue;
+      const items = parseJsonArray<{ id: string; text?: string }>(raw);
+      if (!items) continue;
+      for (const it of items) {
+        const entry = memory.get(it.id);
+        const newText = it.text?.trim();
+        // Only accept a genuine shortening that didn't blow up or go empty.
+        if (!entry || !newText || newText === entry.text || newText.length >= entry.text.length) continue;
+        memory.update(it.id, { text: newText });
+        run.memoriesShortened++;
+      }
+    }
   }
 
   /**

@@ -342,6 +342,7 @@ function MaintenanceCard() {
           <div><span className="text-fg-faint">{t("health_maint_deleted")}</span><p className="font-medium text-fg">{stats.memoriesDeleted}</p></div>
           <div><span className="text-fg-faint">{t("health_maint_merged")}</span><p className="font-medium text-fg">{stats.memoriesMerged}</p></div>
           <div><span className="text-fg-faint">{t("health_maint_rewritten")}</span><p className="font-medium text-fg">{stats.memoriesRewritten}</p></div>
+          <div><span className="text-fg-faint">{t("health_maint_shortened")}</span><p className="font-medium text-fg">{stats.memoriesShortened}</p></div>
           <div><span className="text-fg-faint">{t("health_maint_archived")}</span><p className="font-medium text-fg">{stats.skillsArchived}</p></div>
         </div>
       ) : (

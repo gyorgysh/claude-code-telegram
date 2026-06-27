@@ -185,6 +185,7 @@ You can also ask Atlas to restart himself: "restart yourself" triggers `./script
 | `MAINTENANCE_CRON` | no | memory compaction + skill pruning. Unset (default) runs every 24h; `HH:MM` (server time) pins a daily run; `off` disables |
 | `MEMORY_MAX_ENTRIES` | no | Warm entry cap before compaction triggers (default `500`) |
 | `COLD_MAX` | no | Cold entry cap before deletion (default `200`) |
+| `MEMORY_SHORTEN_CHARS` | no | Maintenance rewrites any memory longer than this into a terse one-liner (default `220`; `0` disables) |
 | `EMBEDDING_ENABLED` | no | `auto` (default): probe and auto-detect a live local backend (Ollama or LM Studio). `on`: pin the `EMBEDDING_*` backend below. `off`: force embeddings off. `on`/`off` lock the panel control |
 | `EMBEDDING_PROVIDER` | no | Pinned backend shape: `ollama` (POST `/api/embeddings`) or `openai` (POST `/v1/embeddings`, for LM Studio and OpenAI) |
 | `EMBEDDING_BASE_URL` | no | Pinned embedding endpoint base URL (default `http://localhost:11434`) |

@@ -449,6 +449,7 @@ export const en = {
   health_maint_deleted: "Deleted",
   health_maint_merged: "Merged",
   health_maint_rewritten: "Rewritten",
+  health_maint_shortened: "Shortened",
   health_maint_archived: "Archived skills",
 
   // Usage-limit window labels (shared by System + Usage)

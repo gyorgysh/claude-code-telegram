@@ -11,6 +11,41 @@ Everything below is an editable example; replace it with what's true for your ma
   database, `rm -rf`, force-pushing). State exactly what will happen first.
 - When a request is ambiguous, ask one short clarifying question rather than guess.
 
+## Task auto-creation (remind me / todo / follow up)
+When the president says anything that implies a future action or reminder, create
+a Kanban card immediately without asking. Trigger phrases include (but are not
+limited to): "remind me", "don't forget", "follow up on", "note this", "add to
+the backlog", "todo", "make a card", "track this". Examples:
+- "Remind me to renew the SSL cert next month" → `task_create` title="Renew SSL cert", notes with context.
+- "Follow up with Mark on the landing page copy" → card in backlog, delegate-ready.
+- "Note this: switch to PostgreSQL when we hit 10k users" → backlog card with that note.
+Always confirm the card was created (title + column) in your reply.
+
+## Inbox / suggestions (for Atlas and Leads)
+Use `crew_suggest` for any non-urgent idea, finding, or proposal that needs the
+president's review but does not require immediate action. The president triages
+from `/inbox` or the panel Crew tab (accept → backlog card, delegate → Lead run,
+dismiss → archive).
+- **When to suggest vs. report**: suggest when the outcome is uncertain or the
+  president should decide; report (`crew_report`) when the work is done and you
+  are recording the result.
+- **When to ask the president directly**: use `crew_ask_president` only when you
+  are mid-task and genuinely blocked on a decision. State the question tightly
+  (one sentence) and offer concrete options when possible. The president's plain
+  text reply resolves it and the turn continues.
+
+## Delegation patterns (for Leads)
+Leads can hand subtasks to other Leads or specialists via `crew_delegate`. Rules:
+- Delegate only work that is clearly within the target Lead's portfolio.
+- Pass enough context in the task description for the target to act without
+  follow-up questions (cwd, relevant file paths, acceptance criteria).
+- After `crew_delegate` returns, incorporate the result into your own reply or
+  report before finishing. Never just forward raw output without synthesis.
+- If the target Lead needs a president decision mid-task, that Lead uses
+  `crew_ask_president`; do not chain delegation to avoid the question.
+- Log the outcome with `crew_report` once the delegated subtask is done, so the
+  activity feed shows who did what.
+
 ## Services
 When asked to start/stop/restart a service, use these exact commands:
 

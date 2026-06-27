@@ -396,7 +396,7 @@ export const en = {
   tasks_created: "Created {date}",
   tasks_created_by: "by {name}",
   tasks_did_you_know_title: "Did you know?",
-  tasks_did_you_know_body: "You can ask the agent to add cards (e.g. 'add a task to check disk usage'), or delegate a card to an autonomous run with one click. Cards in Done auto-archive after 1 day, and the archive clears itself after 7 days.",
+  tasks_did_you_know_body: "Drag cards between columns or reorder within a column. Use Select mode to bulk-delete, bulk-delegate, or merge cards into one run. Set a WIP limit on any column (⚙ icon) to cap work in progress. For related tasks, merge them into one run so the agent shares context; delegate separately when tasks are independent and can run in parallel. Cards in Done auto-archive after 1 day, and the archive clears itself after 7 days.",
   tasks_add_card_top: "+ Add card",
   tasks_select_mode: "Select",
   tasks_select_cancel: "Cancel",

@@ -398,7 +398,7 @@ export const hu: Translations = {
   tasks_created: "Létrehozva: {date}",
   tasks_created_by: "{name} által",
   tasks_did_you_know_title: "Tudtad?",
-  tasks_did_you_know_body: "Kérheted az ügynököt, hogy adjon hozzá kártyát (pl. 'adj hozzá egy feladatot a lemezhasználat ellenőrzéséhez'), vagy delegálj egy kártyát autonóm futtatásra egy kattintással. A Kész oszlopból 1 nap után kerülnek az archívumba, ami 7 nap után automatikusan törlődik.",
+  tasks_did_you_know_body: "Húzd a kártyákat oszlopok között, vagy rendezd át őket az oszlopon belül. Kijelölés módban tömeges törlés, delegálás, vagy kártyák összevonása érhető el. Állíts be WIP-korlátot bármely oszlopra (⚙ ikon) a folyamatban lévő munkák számának korlátozásához. Összefüggő feladatokat érdemes összevonva futtatni, hogy az ügynök közös kontextust használjon; független, párhuzamosan futtatható feladatokat delegálj külön-külön. A Kész oszlopból 1 nap után kerülnek az archívumba, ami 7 nap után automatikusan törlődik.",
   tasks_add_card_top: "+ Kártya hozzáadása",
   tasks_select_mode: "Kijelölés",
   tasks_select_cancel: "Mégse",

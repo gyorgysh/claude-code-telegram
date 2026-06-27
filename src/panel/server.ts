@@ -135,6 +135,37 @@ export async function startPanel(): Promise<(() => Promise<void>) | undefined> {
   const updateTimer = setInterval(() => void checkForUpdate(), 6 * 3_600_000);
   updateTimer.unref();
 
+  // SEC: security headers on every response. The panel SPA keeps the PANEL_TOKEN
+  // in localStorage and sends it as the Bearer header, so a single XSS would let an
+  // injected script read and exfiltrate it. A strict Content-Security-Policy is the
+  // main mitigation: scripts/styles/connections are limited to same-origin (no
+  // inline scripts, no eval), so injected <script> or `javascript:` payloads won't
+  // run and data can't be POSTed to an attacker host. The theme bootstrap was moved
+  // to an external file (/theme-init.js) so no inline script is needed. style-src
+  // allows 'unsafe-inline' because React sets element style attributes at runtime
+  // (inline styles can't exfiltrate data); connect-src includes ws/wss for the
+  // panel's own WebSocket. The other headers are standard hardening.
+  const CSP = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self'",
+    "connect-src 'self' ws: wss:",
+    "manifest-src 'self'",
+    "worker-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+  app.addHook("onRequest", async (_req, reply) => {
+    reply.header("Content-Security-Policy", CSP);
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("X-Frame-Options", "DENY");
+    reply.header("Referrer-Policy", "no-referrer");
+  });
+
   // Remote-access gate: when a request arrives through the public tunnel (ngrok /
   // cloudflared proxy to loopback and set x-forwarded-* headers), it must clear an
   // HTTP Basic Auth challenge (user `myhq` + the generated password) BEFORE anything

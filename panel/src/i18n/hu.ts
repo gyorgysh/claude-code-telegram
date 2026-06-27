@@ -331,6 +331,16 @@ export const hu: Translations = {
   setup_open_remote: "Távoli elérés megnyitása",
   setup_remote_env:
     "A távoli elérés ki van kapcsolva. Állítsd be a PANEL_TUNNEL_ENABLED=true értéket a .env fájlban, majd konfiguráld az alagutat a Távoli elérésben.",
+  setup_ready: "Készen állsz",
+  setup_ready_desc:
+    "A beállítás kész. A lényeg ez: nyisd meg a botodat a Telegramban, és beszélgess Atlasszal, mintha egy emberrel tennéd. Olvasni, írni és parancsokat futtatni is tud ezen a gépen helyetted.",
+  setup_ready_open: "Bot megnyitása a Telegramban",
+  setup_ready_sample_label: "Nem tudod, mit írj? Küldd el elsőként ezt:",
+  setup_ready_sample: "Szia Atlas, mutatkozz be, és mondd el, mire vagy képes.",
+  setup_ready_copy: "Másolás",
+  setup_ready_copied: "Másolva",
+  setup_ready_no_bot:
+    "Még nincs bot-felhasználónév. Állítsd be a TELEGRAM_BOT_TOKEN értéket a .env fájlban, indítsd újra, és itt megjelenik a botod hivatkozása.",
   settings_title: "Beállítások",
   settings_agent: "Főügynök",
   settings_agent_desc: "Atlas modellje, személyisége és autonómiája.",

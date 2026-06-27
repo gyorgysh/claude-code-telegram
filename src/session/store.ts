@@ -1,4 +1,4 @@
-import { readFileSync, renameSync, writeFileSync } from "node:fs";
+import { chmodSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { config } from "../config.js";
 import { log } from "../logger.js";
 import { ensureDataDir } from "../core/jsonStore.js";
@@ -72,7 +72,10 @@ export function saveState(sessions: PersistedSession[], file: string = config.ST
   try {
     ensureDataDir();
     const tmp = `${file}.tmp`;
-    writeFileSync(tmp, JSON.stringify(data, null, 2));
+    // state.json holds Claude sessionIds (resume tokens, i.e. auth credentials),
+    // so lock the file to owner-only as defence-in-depth beyond the 0700 dir.
+    writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
+    chmodSync(tmp, 0o600); // enforce mode even if a stale tmp pre-existed
     renameSync(tmp, file);
   } catch (err) {
     log.error("Failed to persist state", { error: errText(err) });

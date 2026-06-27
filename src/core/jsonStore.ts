@@ -57,7 +57,10 @@ export function saveJson<T>(file: string, data: T): void {
     ensureDataDir();
     const target = dataPath(file);
     const tmp = `${target}.tmp`;
-    writeFileSync(tmp, JSON.stringify(data, null, 2));
+    // Stores can hold secrets at rest (memory, vault metadata, resume tokens), so
+    // lock each file to owner-only as defence-in-depth beyond the 0700 data dir.
+    writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
+    chmodSync(tmp, 0o600); // enforce mode even if a stale tmp pre-existed
     renameSync(tmp, target);
   } catch (err) {
     log.error("Failed to persist store", { file, error: errText(err) });

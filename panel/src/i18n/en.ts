@@ -328,6 +328,16 @@ export const en = {
   setup_open_remote: "Open Remote Access",
   setup_remote_env:
     "Remote access is off. Set PANEL_TUNNEL_ENABLED=true in .env to enable it, then configure the relay in Remote Access.",
+  setup_ready: "You're ready",
+  setup_ready_desc:
+    "That's the setup done. The whole point is this: open your bot in Telegram and just talk to Atlas like you would a person. It can read, write, and run things on this machine for you.",
+  setup_ready_open: "Open the bot in Telegram",
+  setup_ready_sample_label: "Not sure what to say? Send this first:",
+  setup_ready_sample: "Hey Atlas, introduce yourself and tell me what you can do.",
+  setup_ready_copy: "Copy",
+  setup_ready_copied: "Copied",
+  setup_ready_no_bot:
+    "No bot username yet. Set TELEGRAM_BOT_TOKEN in .env and restart, then the deep-link to your bot will appear here.",
   settings_title: "Settings",
   settings_agent: "Main Agent",
   settings_agent_desc: "Model, persona, and autonomy for Atlas, the agent driving your Telegram chats.",

@@ -11,18 +11,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="MyHQ" />
     <title>MyHQ</title>
-    <script>
-      // Apply the saved theme before first paint to avoid a flash.
-      // Defaults to dark when nothing is stored.
-      (function () {
-        var t = "dark";
-        try {
-          var s = localStorage.getItem("cct.panel.theme");
-          if (s === "light" || s === "dark" || s === "matrix") t = s;
-        } catch (e) {}
-        document.documentElement.setAttribute("data-theme", t);
-      })();
-    </script>
+    <!-- Theme is applied by an external script (not inline) so the panel can
+         enforce a strict CSP without script-src 'unsafe-inline'. -->
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

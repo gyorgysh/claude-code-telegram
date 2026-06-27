@@ -386,8 +386,13 @@ curl -H "$AUTH" $BASE/api/delegations
 curl -H "$AUTH" $BASE/api/runs
 ```
 
-A council vote itself is triggered from Telegram with `/council <proposal>`, not
-over REST.
+A council vote can be triggered from Telegram with `/council <proposal>` or from the panel Crew tab:
+
+```bash
+# Trigger a council vote (returns the full tally)
+curl -X POST -H "$AUTH" -H "Content-Type: application/json" $BASE/api/council \
+  -d '{ "proposal": "Should we migrate to PostgreSQL?" }'
+```
 
 ### Local model backends and embeddings
 
@@ -439,6 +444,9 @@ curl -X PUT -H "$AUTH" -H "Content-Type: application/json" $BASE/api/prompt \
 # Maintenance status, and trigger a compaction/pruning pass now
 curl -H "$AUTH" $BASE/api/maintenance
 curl -X POST -H "$AUTH" $BASE/api/maintenance/run
+
+# Dry-run preview: see what would be deleted/demoted without running compaction
+curl -X POST -H "$AUTH" $BASE/api/maintenance/preview
 ```
 
 ### Task columns and WIP limits

@@ -159,7 +159,7 @@ export function LogsView({ onAuthError }: { onAuthError: () => void }) {
   const source = histLogs ?? liveLogs;
 
   return (
-    <div className="flex h-[90vh] flex-col gap-3">
+    <div className="flex h-[calc(100dvh-9rem)] flex-col gap-3 pb-safe md:h-[calc(100vh-6rem)] md:pb-0">
       {/* Top-level tabs */}
       <div className="flex items-center gap-1 rounded-lg border border-line bg-surface p-1 self-start">
         <TabButton active={tab === "activity"} onClick={() => setTab("activity")}>
@@ -397,6 +397,24 @@ function toActivities(source: LogEntry[], t: TFn): Activity[] {
 /** Sentinel agent-filter key for activities with no detectable agent label. */
 const UNKNOWN_AGENT = "__unknown__";
 
+/** Trigger a client-side download of `text` as a file (no server round-trip). */
+function downloadText(text: string, filename: string, type = "text/plain"): void {
+  const blob = new Blob([text], { type: `${type};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Timestamp suffix for export filenames, e.g. 2026-06-27T14-32-05. */
+function stamp(): string {
+  return new Date().toISOString().slice(0, 19).replace(/:/g, "-");
+}
+
 function ActivityFeed({
   source,
   follow,
@@ -459,7 +477,7 @@ function ActivityFeed({
 
   return (
     <>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-fg-faint">{t("logs_activity_hint")}</span>
         <span className="tabular ml-auto text-xs text-fg-faint">
           {t("logs_lines").replace("{n}", String(activities.length))}
@@ -485,6 +503,24 @@ function ActivityFeed({
           />
           {t("logs_follow")}
         </label>
+        <button
+          type="button"
+          disabled={activities.length === 0}
+          onClick={() => {
+            const text = activities
+              .map((a) => {
+                const ts = new Date(a.ts).toISOString();
+                const who = a.agentLabel ? ` [${a.agentLabel}]` : "";
+                return `${ts}${who} ${a.verb}${a.target ? ` — ${a.target}` : ""}`;
+              })
+              .join("\n");
+            downloadText(text, `activity-${stamp()}.txt`);
+          }}
+          aria-label={t("logs_download")}
+          className="rounded border border-line px-2 py-1 text-xs text-fg-muted hover:bg-surface-2 disabled:opacity-40"
+        >
+          {t("logs_download")}
+        </button>
       </div>
 
       {/* Per-agent filter buttons */}
@@ -548,7 +584,12 @@ function ActivityFeed({
                       {a.verb}
                     </span>
                     {a.target && (
-                      <span className="font-mono text-[11px] text-fg-dim break-all max-w-full leading-snug">{a.target}</span>
+                      <span
+                        title={a.target}
+                        className="min-w-0 flex-1 truncate font-mono text-[11px] text-fg-dim leading-snug"
+                      >
+                        {a.target}
+                      </span>
                     )}
                     {a.diffLines && (
                       <span className="shrink-0 font-mono text-[10px] text-fg-faint bg-surface-2 rounded px-1.5 py-0.5">{a.diffLines}</span>
@@ -693,6 +734,18 @@ function RawLogs({
           />
           {t("logs_follow")}
         </label>
+        <button
+          type="button"
+          disabled={visible.length === 0}
+          onClick={() => {
+            const ndjson = visible.map((l) => JSON.stringify(l)).join("\n");
+            downloadText(ndjson, `logs-${selectedDate || "today"}-${stamp()}.ndjson`, "application/x-ndjson");
+          }}
+          aria-label={t("logs_download")}
+          className="rounded border border-line px-2 py-1 text-xs text-fg-muted hover:bg-surface-2 disabled:opacity-40"
+        >
+          {t("logs_download")}
+        </button>
         <Button onClick={clear}>{t("logs_clear")}</Button>
       </div>
 

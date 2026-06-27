@@ -40,6 +40,8 @@ import {
   deleteTask,
   getWip,
   setWip,
+  getTaskRunConfig,
+  setTaskRunConfig,
   pruneArchive,
   autoArchive,
 } from "../core/tasks.js";
@@ -759,7 +761,7 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
       ...t,
       createdByName: t.createdBy ? creatorName(t.createdBy) : undefined,
     }));
-    return { tasks, columns: listColumns(), wip: getWip() };
+    return { tasks, columns: listColumns(), wip: getWip(), config: getTaskRunConfig() };
   });
   // Column config CRUD
   app.get("/api/tasks/columns", async () => ({ columns: listColumns() }));
@@ -789,6 +791,12 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
   app.put("/api/tasks/wip", async (req) => {
     const { column, limit } = (req.body ?? {}) as { column?: string; limit?: number | null };
     return { wip: setWip(column ?? "", limit ?? null) };
+  });
+  // Global delegation timeout + concurrency limit.
+  app.get("/api/tasks/config", async () => ({ config: getTaskRunConfig() }));
+  app.put("/api/tasks/config", async (req) => {
+    const { timeoutMs, maxConcurrent } = (req.body ?? {}) as { timeoutMs?: number; maxConcurrent?: number };
+    return { config: setTaskRunConfig({ timeoutMs, maxConcurrent }) };
   });
   app.post("/api/tasks/:id/delegate", async (req, reply) => {
     const r = taskDelegator.delegate((req.params as { id: string }).id);

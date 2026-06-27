@@ -31,6 +31,7 @@ export const hu: Translations = {
   theme_light: "Világos",
   theme_dark: "Sötét",
   theme_matrix: "Hacker",
+  theme_toggle: "Téma váltása",
   // Általános műveletek
   save: "Mentés",
   cancel: "Mégse",
@@ -139,6 +140,7 @@ export const hu: Translations = {
   crew_council_no_quorum: "Nincs kvórum",
   crew_council_no_quorum_hint: "A szavazás nem ment végbe — legalább egy aktív Lead szükséges az Atlas mellé.",
   crew_council_delete_confirm: "Törlöd?",
+  crew_council_delete: "Szavazás törlése",
   // Postaláda nézet (ügynökök javaslatai)
   inbox_title: "Postaláda",
   inbox_subtitle:
@@ -233,6 +235,10 @@ export const hu: Translations = {
   settings_title: "Beállítások",
   settings_agent: "Főügynök",
   settings_agent_desc: "Atlas modellje, személyisége és autonómiája.",
+  settings_section_model: "Modell és szolgáltató",
+  settings_section_identity: "Ügynök identitása",
+  settings_section_autonomy: "Autonómia",
+  settings_unsaved: "Mentetlen módosításaid vannak.",
   settings_providers: "Modell szolgáltatók",
   settings_providers_desc: "Helyi modell szerverek (LM Studio, Ollama) vagy proxy végpontok.",
   settings_language: "Nyelv",
@@ -288,6 +294,8 @@ export const hu: Translations = {
   memory_tier_warm: "♨️ meleg",
   memory_tier_cold: "❄️ hideg",
   memory_recalled: "előhívva",
+  memory_move_to: "Áthelyezés:",
+  memory_move_to_tier: "Áthelyezés ide: {tier}",
   memory_filter_all: "Mind",
   memory_stat_total: "Összes",
   memory_stat_recalls: "Előhívások",
@@ -360,7 +368,12 @@ export const hu: Translations = {
   tasks_remove_column: "Oszlop eltávolítása (üresnek kell lennie)",
   tasks_priority_label: "{priority} prioritás",
   tasks_running: "⚙ fut",
+  tasks_queued: "⏳ sorban",
   tasks_delegated: "delegálva · {status}",
+  tasks_run_settings: "Futtatási beállítások",
+  tasks_run_settings_hint: "A delegált ügynökfuttatásokra vonatkozik. 0 = nincs korlát.",
+  tasks_run_timeout: "Időkorlát (perc)",
+  tasks_run_concurrency: "Max. egyidejű",
   tasks_delegate: "Delegálás ügynöknek",
   tasks_retry: "Újra",
   tasks_retry_count: "{n} próbálkozás",
@@ -741,6 +754,7 @@ export const hu: Translations = {
   logs_collapse_diffs: "Diffek összecsukása",
   logs_filter_agent: "Ügynök:",
   logs_filter_system: "Rendszer",
+  logs_download: "Letöltés",
 
   // Fő ügynök kártya
   agent_main_title: "Fő ügynök",

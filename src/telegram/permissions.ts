@@ -3,6 +3,7 @@ import { Markup, type Telegram } from "telegraf";
 import { config } from "../config.js";
 import { escapeHtml } from "./formatting.js";
 import { log } from "../logger.js";
+import { parseCallback, isHexId } from "./callback.js";
 
 export type ApprovalChoice = "allow" | "deny" | "always" | "alwayscmd";
 
@@ -210,7 +211,12 @@ export class PermissionManager {
    * string. `chatId` is required to scope bulk Allow-all / Deny-all presses.
    */
   async resolve(data: string, chatId?: number): Promise<string> {
-    const [, id, action] = data.split(":");
+    // Validate structure before dispatch: appr:<id>:<action>, exactly 3 parts.
+    const parts = parseCallback(data, `${CB_PREFIX}:`, 2);
+    if (!parts) return "This request has expired.";
+    const [id, action] = parts;
+    // id is 8-char hex (randomBytes(4)) or the literal "_all" for bulk presses.
+    if (id !== "_all" && !isHexId(id)) return "This request has expired.";
 
     if (action === "allowall" || action === "denyall") {
       if (chatId === undefined) return "This request has expired.";

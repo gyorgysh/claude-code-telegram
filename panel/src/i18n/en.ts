@@ -29,6 +29,7 @@ export const en = {
   theme_light: "Light",
   theme_dark: "Dark",
   theme_matrix: "Hacker",
+  theme_toggle: "Toggle theme",
   // Common actions
   save: "Save",
   cancel: "Cancel",
@@ -137,6 +138,7 @@ export const en = {
   crew_council_no_quorum: "No quorum",
   crew_council_no_quorum_hint: "Vote was not held — at least one enabled Lead is required alongside Atlas.",
   crew_council_delete_confirm: "Delete?",
+  crew_council_delete: "Delete vote",
   // Inbox view (suggestions from agents)
   inbox_title: "Inbox",
   inbox_subtitle:
@@ -231,6 +233,10 @@ export const en = {
   settings_title: "Settings",
   settings_agent: "Main Agent",
   settings_agent_desc: "Model, persona, and autonomy for Atlas, the agent driving your Telegram chats.",
+  settings_section_model: "Model & Provider",
+  settings_section_identity: "Agent Identity",
+  settings_section_autonomy: "Autonomy",
+  settings_unsaved: "You have unsaved changes.",
   settings_providers: "Model Providers",
   settings_providers_desc: "Local model servers (LM Studio, Ollama) or proxy endpoints.",
   settings_language: "Language",
@@ -286,6 +292,8 @@ export const en = {
   memory_tier_warm: "♨️ warm",
   memory_tier_cold: "❄️ cold",
   memory_recalled: "recalled",
+  memory_move_to: "Move to:",
+  memory_move_to_tier: "Move to {tier}",
   memory_filter_all: "All",
   memory_stat_total: "Total",
   memory_stat_recalls: "Recalls",
@@ -358,7 +366,12 @@ export const en = {
   tasks_remove_column: "Remove column (must be empty)",
   tasks_priority_label: "{priority} priority",
   tasks_running: "⚙ running",
+  tasks_queued: "⏳ queued",
   tasks_delegated: "delegated · {status}",
+  tasks_run_settings: "Run settings",
+  tasks_run_settings_hint: "Applies to delegated agent runs. 0 = no limit.",
+  tasks_run_timeout: "Timeout (minutes)",
+  tasks_run_concurrency: "Max concurrent",
   tasks_delegate: "Delegate to agent",
   tasks_retry: "Retry",
   tasks_retry_count: "Retried {n} time(s)",
@@ -739,6 +752,7 @@ export const en = {
   logs_collapse_diffs: "Collapse diffs",
   logs_filter_agent: "Agent:",
   logs_filter_system: "System",
+  logs_download: "Download",
 
   // Main Agent card
   agent_main_title: "Main Agent",

@@ -2,6 +2,7 @@ import type { Telegram } from "telegraf";
 import { taskDelegator } from "../core/taskRunner.js";
 import { getTask } from "../core/tasks.js";
 import { log } from "../logger.js";
+import { parseCallback, isHexId } from "./callback.js";
 
 /**
  * Telegram inline-button flow for failed delegated tasks. When a delegation
@@ -35,9 +36,10 @@ export async function resolveTaskCallback(
   data: string,
   messageId?: number,
 ): Promise<string> {
-  const rest = data.slice(NS.length);
-  const [action, taskId] = rest.split(":");
-  if (action !== "retry" || !taskId) return "Unknown action";
+  const parts = parseCallback(data, NS, 2);
+  if (!parts) return "Unknown action";
+  const [action, taskId] = parts;
+  if (action !== "retry" || !isHexId(taskId)) return "Unknown action";
 
   const task = getTask(taskId);
   if (!task) return "Task no longer exists";

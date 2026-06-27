@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { api, AuthError, type MainAgent, type Autonomy, type Provider, type PlanView, type PlanType, type ProbeResult, type EmbeddingConfig, type OllamaStatus, type LmStudioStatus, type PreferredBackend } from "../api.ts";
-import { Badge, Button, Card, Input, Label, Select, TextArea } from "./ui.tsx";
+import { Accordion, Badge, Button, Card, Input, Label, Select, TextArea } from "./ui.tsx";
 import { useI18n, INTERFACE_LANGUAGES } from "../lib/useI18n.ts";
 import type { TranslationKey } from "../i18n/en.ts";
 import { AGENT_LANGUAGES } from "../i18n/languages.ts";
@@ -120,13 +120,25 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!agent) return null;
-
   const dirty =
-    model !== agent.model ||
-    providerId !== agent.providerId ||
-    persona !== (agent.persona ?? "") ||
-    autonomy !== (agent.autonomy ?? "standard");
+    agent != null &&
+    (model !== agent.model ||
+      providerId !== agent.providerId ||
+      persona !== (agent.persona ?? "") ||
+      autonomy !== (agent.autonomy ?? "standard"));
+
+  // Warn before leaving (tab close / reload) while there are unsaved edits.
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  if (!agent) return null;
 
   const flash = (m: string) => {
     setStatus(m);
@@ -183,6 +195,14 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
     }
   };
 
+  const dirtyDot = dirty ? (
+    <span
+      className="h-1.5 w-1.5 rounded-full bg-amber-400"
+      title={t("settings_unsaved")}
+      aria-label={t("settings_unsaved")}
+    />
+  ) : undefined;
+
   return (
     <Card
       title={t("settings_agent")}
@@ -190,41 +210,43 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
     >
       <p className="mb-4 text-sm text-fg-dim">{t("settings_agent_desc")}</p>
 
-      <div className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <Label>{t("provider")}</Label>
-            <Select value={providerId} onChange={(e) => setProviderId(e.target.value)}>
-              <option value="">{t("settings_anthropic_default")}</option>
-              {agent.providers.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </Select>
-          </div>
-          <div>
-            <Label>{t("model")}</Label>
-            <div className="flex gap-2">
-              <Input
-                list={listId}
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder={providerId ? t("settings_model_local") : t("settings_model_default")}
-              />
-              {providerId && (
-                <Button onClick={fetchModels} disabled={busy === "fetch"} className="shrink-0">
-                  {busy === "fetch" ? "…" : t("fetch")}
-                </Button>
-              )}
+      <div className="space-y-2">
+        <Accordion id="agent-model" title={t("settings_section_model")} defaultOpen badge={dirtyDot}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label>{t("provider")}</Label>
+              <Select value={providerId} onChange={(e) => setProviderId(e.target.value)}>
+                <option value="">{t("settings_anthropic_default")}</option>
+                {agent.providers.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </Select>
             </div>
-            <datalist id={listId}>
-              {[...new Set([...(providerId ? fetched : MODEL_SUGGESTIONS), ...fetched])].map((m) => (
-                <option key={m} value={m} />
-              ))}
-            </datalist>
+            <div>
+              <Label>{t("model")}</Label>
+              <div className="flex gap-2">
+                <Input
+                  list={listId}
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  placeholder={providerId ? t("settings_model_local") : t("settings_model_default")}
+                />
+                {providerId && (
+                  <Button onClick={fetchModels} disabled={busy === "fetch"} className="shrink-0">
+                    {busy === "fetch" ? "…" : t("fetch")}
+                  </Button>
+                )}
+              </div>
+              <datalist id={listId}>
+                {[...new Set([...(providerId ? fetched : MODEL_SUGGESTIONS), ...fetched])].map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
+            </div>
           </div>
-        </div>
+        </Accordion>
 
-        <div>
+        <Accordion id="agent-identity" title={t("settings_section_identity")}>
           <Label>{t("persona")}</Label>
           <div className="flex flex-wrap gap-1 mb-1.5">
             {PERSONA_PRESETS.map((p) => (
@@ -262,9 +284,9 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
             onChange={(e) => setPersona(e.target.value)}
             placeholder={t("settings_persona_placeholder")}
           />
-        </div>
+        </Accordion>
 
-        <div>
+        <Accordion id="agent-autonomy" title={t("settings_section_autonomy")}>
           <Label>{t("autonomy")}</Label>
           <div className="mt-1 flex gap-2 flex-wrap">
             {AUTONOMY_OPTIONS.map((opt) => (
@@ -282,25 +304,26 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
               </button>
             ))}
           </div>
-        </div>
+        </Accordion>
+      </div>
 
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          <Button variant="primary" onClick={save} disabled={!dirty || busy === "save"}>
-            {busy === "save" ? t("saving") : t("save")}
-          </Button>
-          <Button onClick={reset} disabled={busy === "reset"}>
-            {t("settings_new_context")}
-          </Button>
-          <Button
-            variant="danger"
-            onClick={restart}
-            disabled={!agent.serviceInstalled || busy === "restart"}
-            title={agent.serviceInstalled ? "" : t("settings_no_service")}
-          >
-            {t("settings_restart_service")}
-          </Button>
-          {status && <span className="text-xs text-fg-dim">{status}</span>}
-        </div>
+      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-4">
+        <Button variant="primary" onClick={save} disabled={!dirty || busy === "save"}>
+          {busy === "save" ? t("saving") : t("save")}
+        </Button>
+        <Button onClick={reset} disabled={busy === "reset"}>
+          {t("settings_new_context")}
+        </Button>
+        <Button
+          variant="danger"
+          onClick={restart}
+          disabled={!agent.serviceInstalled || busy === "restart"}
+          title={agent.serviceInstalled ? "" : t("settings_no_service")}
+        >
+          {t("settings_restart_service")}
+        </Button>
+        {dirty && <span className="text-xs text-amber-400">{t("settings_unsaved")}</span>}
+        {status && <span className="text-xs text-fg-dim">{status}</span>}
       </div>
     </Card>
   );

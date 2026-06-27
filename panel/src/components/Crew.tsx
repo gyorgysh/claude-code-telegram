@@ -374,6 +374,8 @@ function CouncilCard({
             type="button"
             onClick={() => (confirmDel ? onDelete(session.id) : setConfirmDel(true))}
             onBlur={() => setConfirmDel(false)}
+            aria-label={t("crew_council_delete")}
+            title={t("crew_council_delete")}
             className="text-xs text-fg-faint hover:text-red-400"
           >
             {confirmDel ? t("crew_council_delete_confirm") : "✕"}
@@ -416,6 +418,8 @@ function CouncilCard({
           type="button"
           onClick={() => (confirmDel ? onDelete(session.id) : setConfirmDel(true))}
           onBlur={() => setConfirmDel(false)}
+          aria-label={t("crew_council_delete")}
+          title={t("crew_council_delete")}
           className="shrink-0 text-xs text-fg-faint hover:text-red-400 transition-colors px-1"
         >
           {confirmDel ? t("crew_council_delete_confirm") : "✕"}

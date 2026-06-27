@@ -1,5 +1,5 @@
 import { log } from "../logger.js";
-import { assertSafeUrl, BlockedUrlError } from "./safeUrl.js";
+import { safeFetch, BlockedUrlError } from "./safeUrl.js";
 
 const TIMEOUT_MS = 6000;
 
@@ -32,9 +32,9 @@ async function getJson(url: string, headers: Record<string, string>): Promise<un
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
-    // SSRF guard: reject cloud-metadata / link-local targets before fetching.
-    await assertSafeUrl(url);
-    const res = await fetch(url, { headers, signal: ctrl.signal });
+    // SSRF guard: re-resolves + re-validates and pins the IP at fetch time to
+    // defeat DNS rebinding (cloud-metadata / link-local targets).
+    const res = await safeFetch(url, { headers, signal: ctrl.signal });
     if (!res.ok) return undefined;
     return await res.json();
   } catch (err) {

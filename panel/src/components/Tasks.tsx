@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, AuthError, type Column, type ColumnDef, type Priority, type Task, type Wip } from "../api.ts";
+import { api, AuthError, type Column, type ColumnDef, type Priority, type Task, type TaskRunConfig, type Wip } from "../api.ts";
 import { useTaskEvents, type LiveTask } from "../lib/useTaskEvents.ts";
 import { useI18n } from "../lib/useI18n.ts";
 import { Button, Callout, Empty, InfoCard, Input, TextArea } from "./ui.tsx";
@@ -42,7 +42,11 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [columns, setColumns] = useState<ColumnDef[]>([]);
   const [wip, setWip] = useState<Wip>({});
+  const [runConfig, setRunConfig] = useState<TaskRunConfig | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
+  // Column currently under the dragged card, for drop-target highlighting.
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [renamingCol, setRenamingCol] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -62,6 +66,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
         setTasks(r.tasks);
         setColumns(r.columns);
         setWip(r.wip);
+        setRunConfig(r.config);
       })
       .catch((e) => (e instanceof AuthError ? onAuthError() : setError(String(e))));
 
@@ -111,6 +116,11 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
     if (limit !== null && Number.isNaN(limit)) return;
     const r = await api.setWip(col.id, limit);
     setWip(r.wip);
+  };
+
+  const saveConfig = async (patch: Partial<TaskRunConfig>) => {
+    const r = await api.saveTasksConfig(patch).catch(() => null);
+    if (r) setRunConfig(r.config);
   };
 
   const addColumn = async () => {
@@ -239,6 +249,16 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
         </ul>
       </InfoCard>
 
+      {/* Delegated-run settings: timeout + concurrency */}
+      {runConfig && (
+        <RunSettings
+          config={runConfig}
+          open={configOpen}
+          onToggle={() => setConfigOpen((o) => !o)}
+          onSave={saveConfig}
+        />
+      )}
+
       {/* Bulk action toolbar */}
       {selectMode ? (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-accent/30 bg-accent/5 px-3 py-2">
@@ -317,11 +337,24 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
           return (
             <div
               key={col.id}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => drop(col.id, null)}
-              className={`flex-col rounded-xl border border-line bg-surface p-3 md:flex ${
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (dragId && dragOverCol !== col.id) setDragOverCol(col.id);
+              }}
+              onDragLeave={(e) => {
+                // Only clear when the pointer actually leaves the column box, not
+                // when it crosses onto a child card inside the same column.
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  setDragOverCol((c) => (c === col.id ? null : c));
+                }
+              }}
+              onDrop={() => {
+                setDragOverCol(null);
+                void drop(col.id, null);
+              }}
+              className={`flex-col rounded-xl border bg-surface p-3 transition-colors md:flex ${
                 hiddenOnMobile ? "hidden" : "flex"
-              }`}
+              } ${dragId && dragOverCol === col.id ? "border-dashed border-accent ring-2 ring-accent/40" : "border-line"}`}
             >
               <div className="mb-3 flex items-center justify-between gap-1">
                 {renamingCol === col.id ? (
@@ -361,6 +394,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
                     <button
                       onClick={() => editWip(col)}
                       title={t("tasks_set_wip")}
+                      aria-label={t("tasks_set_wip")}
                       className={`tabular shrink-0 rounded px-1.5 text-xs ${over ? "bg-red-500/15 text-red-400" : "text-fg-faint hover:text-fg-dim"}`}
                     >
                       {cards.length}
@@ -369,6 +403,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
                     <button
                       onClick={() => removeColumn(col)}
                       title={t("tasks_remove_column")}
+                      aria-label={t("tasks_remove_column")}
                       className="shrink-0 text-xs text-fg-faint hover:text-red-400 transition-colors"
                     >
                       ✕
@@ -386,7 +421,12 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
                     key={tk.id}
                     task={tk}
                     live={live[tk.id]}
+                    isDragging={dragId === tk.id}
                     onDragStart={() => setDragId(tk.id)}
+                    onDragEnd={() => {
+                      setDragId(null);
+                      setDragOverCol(null);
+                    }}
                     onDropBefore={() => drop(col.id, tk.id)}
                     onChange={load}
                     onAuthError={onAuthError}
@@ -486,7 +526,9 @@ function ageBorder(task: Task): string {
 function Card({
   task,
   live,
+  isDragging,
   onDragStart,
+  onDragEnd,
   onDropBefore,
   onChange,
   onAuthError,
@@ -496,7 +538,9 @@ function Card({
 }: {
   task: Task;
   live?: LiveTask;
+  isDragging: boolean;
   onDragStart: () => void;
+  onDragEnd: () => void;
   onDropBefore: () => void;
   onChange: () => void;
   onAuthError: () => void;
@@ -591,12 +635,15 @@ function Card({
     <div
       draggable={!running && !selectMode}
       onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.stopPropagation();
         onDropBefore();
       }}
-      className={`rounded-lg border bg-input p-2.5 ${ageBorder(task)} ${selected ? "ring-1 ring-accent/60" : ""}`}
+      className={`rounded-lg border bg-input p-2.5 transition-opacity ${ageBorder(task)} ${selected ? "ring-1 ring-accent/60" : ""} ${
+        isDragging ? "opacity-40" : ""
+      } ${!running && !selectMode ? "cursor-grab active:cursor-grabbing" : ""}`}
     >
       <div className="flex items-start gap-2">
         {selectMode ? (
@@ -652,10 +699,16 @@ function Card({
                     ? "text-red-400"
                     : dstatus === "stopped"
                       ? "text-fg-dim"
-                      : "text-accent"
+                      : dstatus === "queued"
+                        ? "text-amber-400"
+                        : "text-accent"
               }`}
             >
-              {running ? t("tasks_running") : t("tasks_delegated").replace("{status}", String(dstatus))}
+              {running
+                ? t("tasks_running")
+                : dstatus === "queued"
+                  ? t("tasks_queued")
+                  : t("tasks_delegated").replace("{status}", String(dstatus))}
               {!running && <span className="ml-1 opacity-50">{delegateOpen ? "▲" : "▼"}</span>}
             </button>
             {running && (
@@ -775,6 +828,79 @@ function AddCard({
         onBlur={add}
         placeholder={t("tasks_card_title_placeholder")}
       />
+    </div>
+  );
+}
+
+/** Collapsible config row for delegated-run timeout + max concurrency. */
+function RunSettings({
+  config,
+  open,
+  onToggle,
+  onSave,
+}: {
+  config: TaskRunConfig;
+  open: boolean;
+  onToggle: () => void;
+  onSave: (patch: Partial<TaskRunConfig>) => void;
+}) {
+  const { t } = useI18n();
+  // Local draft (timeout shown in minutes for readability).
+  const [mins, setMins] = useState(String(Math.round(config.timeoutMs / 60000)));
+  const [conc, setConc] = useState(String(config.maxConcurrent));
+
+  useEffect(() => {
+    setMins(String(Math.round(config.timeoutMs / 60000)));
+    setConc(String(config.maxConcurrent));
+  }, [config.timeoutMs, config.maxConcurrent]);
+
+  const dirty =
+    Math.round(config.timeoutMs / 60000) !== Number(mins) || config.maxConcurrent !== Number(conc);
+
+  const save = () => {
+    const m = Math.max(0, Math.floor(Number(mins) || 0));
+    const c = Math.max(0, Math.floor(Number(conc) || 0));
+    onSave({ timeoutMs: m * 60000, maxConcurrent: c });
+  };
+
+  return (
+    <div className="rounded-xl border border-line bg-surface px-3 py-2">
+      <button
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wider text-fg-faint hover:text-fg-dim transition-colors"
+      >
+        <span>{t("tasks_run_settings")}</span>
+        <span className="opacity-50">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="mt-3 flex flex-wrap items-end gap-4">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-fg-dim">{t("tasks_run_timeout")}</span>
+            <input
+              type="number"
+              min={0}
+              value={mins}
+              onChange={(e) => setMins(e.target.value)}
+              className="w-24 rounded bg-input px-2 py-1 text-sm text-fg outline-none focus:ring-1 focus:ring-accent/50"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-fg-dim">{t("tasks_run_concurrency")}</span>
+            <input
+              type="number"
+              min={0}
+              value={conc}
+              onChange={(e) => setConc(e.target.value)}
+              className="w-24 rounded bg-input px-2 py-1 text-sm text-fg outline-none focus:ring-1 focus:ring-accent/50"
+            />
+          </label>
+          <Button variant="primary" onClick={save} disabled={!dirty}>
+            {t("save")}
+          </Button>
+          <span className="text-xs text-fg-faint">{t("tasks_run_settings_hint")}</span>
+        </div>
+      )}
     </div>
   );
 }

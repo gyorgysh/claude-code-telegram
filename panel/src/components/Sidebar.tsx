@@ -202,6 +202,8 @@ export function Sidebar({
                   key={it.id}
                   onClick={() => onSelect(it.id)}
                   title={t(it.labelKey)}
+                  aria-label={t(it.labelKey)}
+                  aria-current={active ? "page" : undefined}
                   className={`flex w-full items-center gap-3 rounded-lg border-l-2 px-2.5 py-2 text-sm transition-colors ${
                     active
                       ? "border-accent bg-accent/10 text-accent"
@@ -231,7 +233,8 @@ export function Sidebar({
       <div className="border-t border-line p-2 space-y-0.5">
         <button
           onClick={onToggleTheme}
-          title="Toggle theme"
+          title={t("theme_toggle")}
+          aria-label={t("theme_toggle")}
           className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-fg-dim transition-colors hover:bg-surface-2 hover:text-fg"
         >
           <span className="w-4 shrink-0 text-center">{THEME_ICON[theme]}</span>
@@ -242,6 +245,8 @@ export function Sidebar({
         <button
           onClick={() => onSelect("settings")}
           title={t("nav_settings")}
+          aria-label={t("nav_settings")}
+          aria-current={tab === "settings" ? "page" : undefined}
           className={`flex w-full items-center gap-3 rounded-lg border-l-2 px-2.5 py-2 text-sm transition-colors ${
             tab === "settings"
               ? "border-accent bg-accent/10 text-accent"
@@ -254,6 +259,7 @@ export function Sidebar({
         <button
           onClick={onSignOut}
           title={t("sign_out")}
+          aria-label={t("sign_out")}
           className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-fg-dim transition-colors hover:bg-surface-2 hover:text-fg"
         >
           <span className="w-4 shrink-0 text-center">⏻</span>

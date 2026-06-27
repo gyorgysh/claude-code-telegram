@@ -16,7 +16,7 @@ export type Priority = (typeof PRIORITIES)[number];
 
 /** Live state of a card delegated to an autonomous agent run. */
 export interface TaskDelegation {
-  status: "running" | "ok" | "error" | "stopped";
+  status: "queued" | "running" | "ok" | "error" | "stopped";
   runId: string;
   startedAt: number;
   endedAt?: number;
@@ -49,11 +49,23 @@ export interface Task {
   updatedAt: number;
 }
 
+/** Global delegation controls for autonomous task runs. */
+export interface TaskRunConfig {
+  /** Abort a delegated run after this many ms (0 = no timeout). Default 600000 (10 min). */
+  timeoutMs: number;
+  /** Max delegated runs allowed to execute at once; the rest queue (0 = unlimited). Default 3. */
+  maxConcurrent: number;
+}
+
+export const DEFAULT_TASK_CONFIG: TaskRunConfig = { timeoutMs: 600_000, maxConcurrent: 3 };
+
 interface TaskFile {
   version: 1;
   tasks: Task[];
   /** Optional WIP limit per column (advisory; surfaced in the panel). */
   wip?: Record<string, number>;
+  /** Delegation timeout + concurrency settings. */
+  runConfig?: TaskRunConfig;
 }
 
 function loadFile(): TaskFile {
@@ -69,7 +81,25 @@ function load(): Task[] {
 
 function persist(tasks: Task[], wip?: Record<string, number>): void {
   const current = loadFile();
-  saveJson<TaskFile>(FILE, { version: 1, tasks, wip: wip ?? current.wip });
+  saveJson<TaskFile>(FILE, { version: 1, tasks, wip: wip ?? current.wip, runConfig: current.runConfig });
+}
+
+/** Global delegation timeout + concurrency config (with defaults filled in). */
+export function getTaskRunConfig(): TaskRunConfig {
+  return { ...DEFAULT_TASK_CONFIG, ...(loadFile().runConfig ?? {}) };
+}
+
+/** Update the delegation timeout + concurrency config. Clamps to sane bounds. */
+export function setTaskRunConfig(patch: Partial<TaskRunConfig>): TaskRunConfig {
+  const cur = getTaskRunConfig();
+  const next: TaskRunConfig = {
+    timeoutMs: patch.timeoutMs != null ? Math.max(0, Math.floor(patch.timeoutMs)) : cur.timeoutMs,
+    maxConcurrent: patch.maxConcurrent != null ? Math.max(0, Math.floor(patch.maxConcurrent)) : cur.maxConcurrent,
+  };
+  const f = loadFile();
+  saveJson<TaskFile>(FILE, { version: 1, tasks: f.tasks, wip: f.wip, runConfig: next });
+  audit("task.runConfig", { ...next });
+  return next;
 }
 
 function isColumn(v: unknown): v is Column {

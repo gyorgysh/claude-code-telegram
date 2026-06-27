@@ -125,8 +125,14 @@ export interface ClaudeRoot {
 export type Column = string;
 export interface ColumnDef { id: string; name: string; order: number; collapsed?: boolean; }
 export type Priority = "low" | "normal" | "high";
+export interface TaskRunConfig {
+  /** Per-run wall-clock timeout in ms (0 = no timeout). */
+  timeoutMs: number;
+  /** Max concurrent delegated runs (0 = unlimited); the rest queue. */
+  maxConcurrent: number;
+}
 export interface TaskDelegation {
-  status: "running" | "ok" | "error" | "stopped";
+  status: "queued" | "running" | "ok" | "error" | "stopped";
   runId: string;
   startedAt: number;
   endedAt?: number;
@@ -664,7 +670,9 @@ export const api = {
   saveClaudeFile: (path: string, content: string) =>
     req<{ ok: boolean }>("PUT", "/api/claude-files/content", { path, content }),
 
-  tasks: () => get<{ tasks: Task[]; columns: ColumnDef[]; wip: Wip }>("/api/tasks"),
+  tasks: () => get<{ tasks: Task[]; columns: ColumnDef[]; wip: Wip; config: TaskRunConfig }>("/api/tasks"),
+  saveTasksConfig: (c: Partial<TaskRunConfig>) =>
+    req<{ config: TaskRunConfig }>("PUT", "/api/tasks/config", c),
   createTask: (t: { title: string; notes?: string; column?: Column; priority?: Priority }) =>
     req<Task>("POST", "/api/tasks", t),
   updateTask: (id: string, t: Partial<Task>) => req<Task>("PATCH", `/api/tasks/${id}`, t),

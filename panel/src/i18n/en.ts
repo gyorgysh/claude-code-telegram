@@ -182,9 +182,9 @@ export const en = {
   // Memory (additional)
   memory_fact_placeholder: "One concise, self-contained fact…",
   memory_tags_placeholder: "deploy, preferences",
-  memory_tier_hot: "🔥 hot",
-  memory_tier_warm: "warm",
-  memory_tier_cold: "❄️ cold",
+  memory_tier_hot: "🔴 hot",
+  memory_tier_warm: "🟡 warm",
+  memory_tier_cold: "🔵 cold",
   memory_recalled: "recalled",
   memory_filter_all: "All",
   memory_stat_total: "Total",

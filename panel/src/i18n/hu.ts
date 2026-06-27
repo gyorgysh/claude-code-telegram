@@ -184,9 +184,9 @@ export const hu: Translations = {
   // Memória (további)
   memory_fact_placeholder: "Egy tömör, önmagában érthető tény…",
   memory_tags_placeholder: "telepítés, beállítások",
-  memory_tier_hot: "🔥 forró",
-  memory_tier_warm: "meleg",
-  memory_tier_cold: "❄️ hideg",
+  memory_tier_hot: "🔴 forró",
+  memory_tier_warm: "🟡 meleg",
+  memory_tier_cold: "🔵 hideg",
   memory_recalled: "előhívva",
   memory_filter_all: "Mind",
   memory_stat_total: "Összes",

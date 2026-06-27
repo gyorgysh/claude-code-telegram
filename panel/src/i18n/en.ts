@@ -325,6 +325,8 @@ export const en = {
   tasks_archive_empty: "No archived cards.",
   tasks_archive_show: "Show archive ({n})",
   tasks_archive_hide: "Hide archive",
+  tasks_archive_restore: "Restore",
+  tasks_archive_restore_to: "Restore to {col}",
   tasks_created: "Created {date}",
   tasks_created_by: "by {name}",
   tasks_did_you_know_title: "Did you know?",

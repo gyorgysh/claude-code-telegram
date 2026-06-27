@@ -327,6 +327,8 @@ export const hu: Translations = {
   tasks_archive_empty: "Nincs archivált kártya.",
   tasks_archive_show: "Archívum mutatása ({n})",
   tasks_archive_hide: "Archívum elrejtése",
+  tasks_archive_restore: "Visszaállítás",
+  tasks_archive_restore_to: "Visszaállítás: {col}",
   tasks_created: "Létrehozva: {date}",
   tasks_created_by: "{name} által",
   tasks_did_you_know_title: "Tudtad?",

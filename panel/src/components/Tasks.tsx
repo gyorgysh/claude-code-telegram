@@ -265,15 +265,35 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
                 <p className="text-xs text-fg-faint">{t("tasks_archive_empty")}</p>
               ) : (
                 <div className="grid gap-1.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                  {archivedCards.map((tk) => (
+                  {archivedCards.map((tk) => {
+                    const restoreCol = normalCols[0];
+                    const restoreLabel = restoreCol
+                      ? t("tasks_archive_restore_to").replace("{col}", columnName(restoreCol, t))
+                      : t("tasks_archive_restore");
+                    return (
                     <div
                       key={tk.id}
                       className="flex items-center justify-between gap-2 rounded border border-line bg-input px-2.5 py-1.5"
                     >
                       <span className="min-w-0 truncate text-xs text-fg-dim">{tk.title}</span>
-                      <span className="shrink-0 text-xs text-fg-faint">{formatDate(tk.updatedAt)}</span>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <span className="text-xs text-fg-faint">{formatDate(tk.updatedAt)}</span>
+                        {restoreCol && (
+                          <button
+                            title={restoreLabel}
+                            onClick={async () => {
+                              await api.updateTask(tk.id, { column: restoreCol.id as Column }).catch(() => {});
+                              void load();
+                            }}
+                            className="rounded px-1.5 py-0.5 text-xs text-accent hover:bg-accent/10 transition-colors"
+                          >
+                            {t("tasks_archive_restore")}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

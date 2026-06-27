@@ -4,13 +4,14 @@ import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { runTurn, AUTO_ALLOWED_TOOLS } from "../claude/runner.js";
 import { memoryMcp } from "./memory.js";
-import { tasksMcp } from "./tasks.js";
+import { createTasksMcp } from "./tasks.js";
 import { skillsMcp } from "./skills.js";
 import { workers } from "../core/workers.js";
 import { suggestions } from "../core/suggestions.js";
 import { getSkill } from "../core/skills.js";
 import { getProvider } from "../core/providers.js";
 import { resolveSecret } from "../core/vault.js";
+import { getLeadProtocol } from "../prompt.js";
 import { config } from "../config.js";
 import { log } from "../logger.js";
 import { registerAsk } from "../core/crewAsk.js";
@@ -62,7 +63,8 @@ export function createCrewMcp(opts: CrewMcpOptions) {
             return { content: [{ type: "text", text: `No worker found with id ${args.leadId}.` }] };
           }
           const skill = lead.skillId ? getSkill(lead.skillId) : undefined;
-          const append = [skill?.prompt, lead.systemPrompt].filter(Boolean).join("\n\n") || undefined;
+          const protocol = lead.role === "lead" ? getLeadProtocol(lead.name, lead.portfolio) : undefined;
+          const append = [protocol, skill?.prompt, lead.systemPrompt].filter(Boolean).join("\n\n") || undefined;
           const provider = lead.providerId ? getProvider(lead.providerId) : undefined;
           const env = provider
             ? {
@@ -87,7 +89,7 @@ export function createCrewMcp(opts: CrewMcpOptions) {
               persona: lead.persona,
               permissionMode: "bypassPermissions",
               abortController: abort,
-              mcpServers: { memory: memoryMcp, tasks: tasksMcp, skills: skillsMcp },
+              mcpServers: { memory: memoryMcp, tasks: createTasksMcp({ createdBy: lead.id }), skills: skillsMcp },
               canUseTool: async (name, input) => {
                 if (AUTO_ALLOWED_TOOLS.has(name)) return { behavior: "allow", updatedInput: input };
                 return { behavior: "deny", message: "Tool not permitted for delegated lead." };

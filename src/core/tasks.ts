@@ -37,6 +37,12 @@ export interface Task {
   delegate?: TaskDelegation;
   /** Sort position within its column (ascending). */
   order: number;
+  /**
+   * Who created the card: an agent id ("atlas", a worker/lead id) when made via
+   * the MCP task_create tool, or "panel" for the panel/REST. Undefined on cards
+   * created before this field existed.
+   */
+  createdBy?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -109,6 +115,7 @@ export function createTask(input: {
   column?: string;
   priority?: string;
   parentId?: string;
+  createdBy?: string;
 }): Task {
   const now = Date.now();
   const validCols = getColumnIds();
@@ -124,6 +131,7 @@ export function createTask(input: {
     priority: isPriority(input.priority) ? input.priority : "normal",
     parentId: input.parentId,
     order: maxOrder + 1,
+    createdBy: input.createdBy?.trim() || undefined,
     createdAt: now,
     updatedAt: now,
   };

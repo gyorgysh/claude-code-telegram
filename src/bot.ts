@@ -6,7 +6,7 @@ import { registerCommands } from "./commands.js";
 import { AUTO_ALLOWED_TOOLS, runTurn, type PermissionResult } from "./claude/runner.js";
 import { createTelegramMcp } from "./mcp/sendFile.js";
 import { memoryMcp } from "./mcp/memory.js";
-import { tasksMcp } from "./mcp/tasks.js";
+import { createTasksMcp } from "./mcp/tasks.js";
 import { skillsMcp } from "./mcp/skills.js";
 import { selfUpdateMcp } from "./mcp/selfUpdate.js";
 import { selfUpdate } from "./core/selfUpdate.js";
@@ -36,7 +36,12 @@ import { taskDelegator } from "./core/taskRunner.js";
 import { resolveMainRun } from "./core/mainSettings.js";
 import { workers } from "./core/workers.js";
 import { suggestions } from "./core/suggestions.js";
-import { escapeHtml, normalizeAgentText } from "./telegram/formatting.js";
+import {
+  escapeHtml,
+  normalizeAgentText,
+  summarizeArg,
+  summarizeInput,
+} from "./telegram/formatting.js";
 import { resolveAsk, hasPendingAsk } from "./core/crewAsk.js";
 import { reflectOnTurn } from "./core/reflect.js";
 import { chatBridge, mainChatId } from "./core/chatBridge.js";
@@ -402,9 +407,10 @@ async function handleUserPrompt(
 
   await tg.sendChatAction(chatId, "typing").catch(() => {});
   const typing = setInterval(() => {
-    // While the turn is parked inside crew_ask_president waiting on the user,
-    // suppress the "typing…" indicator so their input area isn't stuck spinning.
-    if (hasPendingAsk(chatId)) return;
+    // While the turn is parked waiting on the user — either crew_ask_president or
+    // an AskUserQuestion prompt — suppress the "typing…" indicator so their input
+    // area isn't stuck spinning (and so a typed "Other" reply isn't masked).
+    if (hasPendingAsk(chatId) || asks.hasPending(chatId)) return;
     void tg.sendChatAction(chatId, "typing").catch(() => {});
   }, 4000);
 
@@ -517,7 +523,7 @@ async function handleUserPrompt(
       ? leads
           .map(
             (w) =>
-              `- ${w.name}${w.portfolio ? ` (${w.portfolio} Lead)` : ""}${w.systemPrompt ? `: ${w.systemPrompt.split("\n")[0]}` : ""}`,
+              `- ${w.name}${w.portfolio ? ` (${w.portfolio} Lead)` : ""}${w.botUsername ? ` — reachable at t.me/${w.botUsername}` : ""}${w.systemPrompt ? `: ${w.systemPrompt.split("\n")[0]}` : ""}`,
           )
           .join("\n")
       : undefined;
@@ -577,7 +583,7 @@ async function handleUserPrompt(
       mcpServers: {
         telegram: createTelegramMcp(tg, chatId, cwd),
         memory: memoryMcp,
-        tasks: tasksMcp,
+        tasks: createTasksMcp({ createdBy: "atlas" }),
         skills: skillsMcp,
         self_update: selfUpdateMcp,
         crew: crewMcp,
@@ -759,16 +765,6 @@ function fmtDuration(ms: number): string {
   if (s < 60) return `${s.toFixed(1)}s`;
   const m = Math.floor(s / 60);
   return `${m}m ${Math.round(s % 60)}s`;
-}
-
-function summarizeArg(input: unknown): string {
-  const obj = (input ?? {}) as Record<string, unknown>;
-  return String(obj.command ?? obj.file_path ?? obj.pattern ?? obj.path ?? "");
-}
-
-function summarizeInput(input: unknown): string {
-  const s = summarizeArg(input);
-  return s ? `<code>${escapeHtml(s.slice(0, 80))}</code>` : "";
 }
 
 /** Plain-text summary of a tool call for the loop-detection prompt. */

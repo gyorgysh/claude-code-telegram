@@ -3,7 +3,7 @@ import type { Worker } from "../core/workers.js";
 import { workers } from "../core/workers.js";
 import { runTurn } from "../claude/runner.js";
 import { memoryMcp } from "../mcp/memory.js";
-import { tasksMcp } from "../mcp/tasks.js";
+import { createTasksMcp } from "../mcp/tasks.js";
 import { skillsMcp } from "../mcp/skills.js";
 import { createCrewMcp } from "../mcp/crew.js";
 import { hasPendingAsk, resolveAsk } from "../core/crewAsk.js";
@@ -14,6 +14,7 @@ import { getProvider } from "../core/providers.js";
 import { TelegramStreamer } from "./streamer.js";
 import { sendExpandableQuote, sendFormattedMarkdown } from "./send.js";
 import { normalizeAgentText, summarizeInput } from "./formatting.js";
+import { getLeadProtocol } from "../prompt.js";
 import { log } from "../logger.js";
 
 /**
@@ -137,10 +138,8 @@ export class LeadBot {
         void ctx.telegram.sendChatAction(ctx.chat.id, "typing").catch(() => {});
       }, 4000);
       try {
-        const portfolioPrompt = lead.portfolio
-          ? `You are ${lead.name}, the ${lead.portfolio} Lead in MyHQ. Portfolio: ${lead.portfolio}.`
-          : `You are ${lead.name}, a Lead in MyHQ.`;
-        const append = [portfolioPrompt, lead.systemPrompt].filter(Boolean).join("\n\n");
+        const protocol = getLeadProtocol(lead.name, lead.portfolio);
+        const append = [protocol, lead.systemPrompt].filter(Boolean).join("\n\n");
 
         // Point the run at a local model / proxy if a provider is set.
         const provider = lead.providerId ? getProvider(lead.providerId) : undefined;
@@ -172,7 +171,7 @@ export class LeadBot {
           systemPromptAppend: append,
           permissionMode: s.autonomy === "full" ? "bypassPermissions" : "default",
           abortController: s.abort,
-          mcpServers: { memory: memoryMcp, tasks: tasksMcp, skills: skillsMcp, crew: crewMcp },
+          mcpServers: { memory: memoryMcp, tasks: createTasksMcp({ createdBy: lead.id }), skills: skillsMcp, crew: crewMcp },
           canUseTool: async (_name, input) => ({ behavior: "allow", updatedInput: input }),
           onText: (delta) => {
             streamer.appendText(normalizeAgentText(delta));

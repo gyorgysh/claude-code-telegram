@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, AuthError, type ScheduleView } from "../api.ts";
-import { Badge, Button, Card, Empty, Input, Label } from "./ui.tsx";
+import { Badge, Button, Card, Empty, InfoCard, Input, Label } from "./ui.tsx";
 import { relTime } from "../lib/format.ts";
 import { useI18n } from "../lib/useI18n.ts";
 
@@ -99,6 +99,11 @@ export function SchedulesView({ onAuthError }: { onAuthError: () => void }) {
       <p className="mb-3 text-sm text-fg-dim">
         {t("sched_desc_pre")}<code>/schedule</code>{t("sched_desc_post")}
       </p>
+      <div className="mb-3">
+        <InfoCard id="schedules" title={t("info_schedules_title")} body={t("info_schedules_body")}>
+          <p>{t("info_schedules_pause")}</p>
+        </InfoCard>
+      </div>
       {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
 
       {adding && (

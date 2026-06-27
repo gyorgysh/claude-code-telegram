@@ -58,7 +58,6 @@ export const en = {
   auto_until_error: "Auto until error",
   // Memory view
   memory_title: "Memory",
-  memory_desc: "Durable facts the agent recalls across conversations. Hot entries are injected every turn; warm entries are keyword-recalled; cold entries are panel-only.",
   memory_new: "+ New memory",
   memory_fact: "Fact",
   memory_tags: "Tags (comma-separated)",
@@ -118,11 +117,12 @@ export const en = {
   crew_how_runs:
     "Each run is an autonomous Claude session in the agent's own working directory, persona, and model. A Lead with its own Telegram bot is 'Available on Telegram' and you can message it directly. Scheduled agents fire on their interval or daily time; the rest run on demand (Run now or when delegated).",
   crew_how_show: "How the crew works",
-  crew_how_hide: "Hide",
   crew_specialists: "Specialists",
   crew_delegations: "Delegation log",
   crew_delegations_desc: "Recent inter-agent tasks and reports.",
   crew_delegations_empty: "No delegations yet.",
+  crew_unknown_agent: "unknown",
+  crew_removed_agent: "removed agent ({id})",
   crew_council: "Council",
   crew_council_desc: "Recent council votes.",
   crew_council_empty: "No council votes yet.",
@@ -156,6 +156,34 @@ export const en = {
   inbox_info_delegate:
     "Delegate: do it now. Creates the task and starts a run, routed to the agent that suggested it (or the best-fit Lead). You get a Telegram report when it's done.",
   inbox_info_dismiss: "Dismiss: archive it. No task, no action.",
+  // Shared "how it works" explainer cards
+  info_tasks_title: "How the board works",
+  info_tasks_body:
+    "A Kanban board for work you or your agents track. Drag cards between columns, set a priority, and add notes. Columns and WIP limits are yours to rename and configure.",
+  info_tasks_delegate: "Delegate: hand a card to an autonomous run. It moves backlog → doing, the agent works it (splitting into subtasks if needed), then lands in done.",
+  info_tasks_agent: "Agents too: ask Atlas in chat to add or update cards, and accepted Inbox suggestions land here as tasks.",
+  info_tasks_archive: "Cleanup: Done cards auto-archive after a day, and the archive clears itself after a week.",
+  info_memory_title: "How memory works",
+  info_memory_body:
+    "Durable facts the agent recalls across conversations, so you don't repeat yourself. It learns on its own and you can add or edit facts here.",
+  info_memory_hot: "🔥 Hot: injected into every turn. Reserve for a few always-relevant facts (it costs context permanently).",
+  info_memory_warm: "♨️ Warm: recalled only when relevant to the message. The default, good for most facts.",
+  info_memory_cold: "❄️ Cold: archival, shown in the panel only, never auto-recalled.",
+  info_memory_salience: "Salience weights how strongly a fact competes for recall. Maintenance periodically merges duplicates and trims verbose entries.",
+  info_workers_title: "What are workers?",
+  info_workers_body:
+    "Autonomous agents that run a standing task on their own. Use the Wizard to describe a goal and let it draft ready-to-run agents, or New worker to set one up by hand.",
+  info_workers_run: "Each runs in its own working directory, persona, and model. They fire on a schedule, on demand (Run now), or when you delegate a task.",
+  info_workers_lead: "Give a Lead its own Telegram bot token and it becomes 'Available on Telegram' so you can message it directly.",
+  info_schedules_title: "How schedules work",
+  info_schedules_body:
+    "Recurring prompts that run as autonomous turns at a set time. Use an interval like 30m / 2h / 1d, or a daily HH:MM (server local time). A due job is skipped and retried if the chat is busy.",
+  info_schedules_pause: "Pause keeps a schedule in the list without firing; resume to re-enable it. You can also add or remove them from chat with /schedule.",
+  info_heartbeat_title: "How the heartbeat works",
+  info_heartbeat_body:
+    "Proactive background monitoring, off by default. It checks the host on an interval and only speaks up when something needs you.",
+  info_heartbeat_alert: "Alert: deterministic checks (CPU, memory, swap, disk thresholds, stalled cards) message you on breach, with a cooldown so it won't nag.",
+  info_heartbeat_active: "Active: hands detected signals to an autonomous agent turn so it can investigate, act, and message you only if it's noteworthy.",
   // Health view
   health_cpu: "CPU",
   health_memory: "Memory",
@@ -298,6 +326,7 @@ export const en = {
   tasks_archive_show: "Show archive ({n})",
   tasks_archive_hide: "Hide archive",
   tasks_created: "Created {date}",
+  tasks_created_by: "by {name}",
   tasks_did_you_know_title: "Did you know?",
   tasks_did_you_know_body: "You can ask the agent to add cards (e.g. 'add a task to check disk usage'), or delegate a card to an autonomous run with one click. Cards in Done auto-archive after 1 day, and the archive clears itself after 7 days.",
   col_archive: "Archive",
@@ -338,8 +367,6 @@ export const en = {
   workers_no_cwd: "(no cwd)",
   workers_next: "next {time}",
   workers_wizard: "Wizard",
-  workers_hint:
-    "Workers are autonomous agents. Use the Wizard to describe a goal and let it draft ready-to-run agents, or New worker to set one up by hand. Each runs on its schedule or on demand (Run now / when delegated a task).",
   wizard_title: "Agent Setup Wizard",
   wizard_subtitle: "Answer a few questions and I'll generate a ready-to-run agent configuration for you.",
   wizard_q_goal: "What do you want this agent to do?",

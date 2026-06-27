@@ -4,7 +4,7 @@ import { useI18n } from "../lib/useI18n.ts";
 import type { TranslationKey } from "../i18n/en.ts";
 import { relTime } from "../lib/format.ts";
 import { useSuggestionEvents } from "../lib/useSuggestionEvents.ts";
-import { Badge, Button, Card, Empty } from "./ui.tsx";
+import { Badge, Button, Card, Empty, InfoCard } from "./ui.tsx";
 
 type Filter = "pending" | "accepted" | "dismissed";
 
@@ -95,7 +95,16 @@ export function InboxView({ onAuthError }: { onAuthError: () => void }) {
         <p className="mt-1 text-sm text-fg-dim">{t("inbox_subtitle")}</p>
       </div>
 
-      <InboxInfo t={t} />
+      <InfoCard
+        id="inbox"
+        title={t("inbox_info_title")}
+        body={t("inbox_info_body")}
+        items={[
+          { label: t("inbox_delegate"), text: t("inbox_info_delegate") },
+          { label: t("inbox_accept"), text: t("inbox_info_park") },
+          { label: t("inbox_dismiss"), text: t("inbox_info_dismiss") },
+        ]}
+      />
 
       {notice && (
         <div className="rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-sm text-accent">
@@ -214,39 +223,6 @@ function SuggestionCard({
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-/** Collapsible "what is this / what do the buttons mean" explainer. */
-function InboxInfo({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="rounded-lg border border-line bg-surface overflow-hidden">
-      <button
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-fg hover:bg-surface-2 transition-colors"
-        onClick={() => setOpen((o) => !o)}
-      >
-        <span className="text-accent">ⓘ</span>
-        <span className="flex-1">{t("inbox_info_title")}</span>
-        <span className="text-fg-dim">{open ? "▴" : "▾"}</span>
-      </button>
-      {open && (
-        <div className="space-y-2 border-t border-line px-3 py-3 text-sm text-fg-dim">
-          <p>{t("inbox_info_body")}</p>
-          <ul className="space-y-1.5">
-            <li>
-              <span className="font-medium text-fg">{t("inbox_delegate")}</span> — {t("inbox_info_delegate")}
-            </li>
-            <li>
-              <span className="font-medium text-fg">{t("inbox_accept")}</span> — {t("inbox_info_park")}
-            </li>
-            <li>
-              <span className="font-medium text-fg">{t("inbox_dismiss")}</span> — {t("inbox_info_dismiss")}
-            </li>
-          </ul>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, AuthError, type HeartbeatConfig, type HeartbeatMode, type HeartbeatView } from "../api.ts";
-import { Badge, Button, Card, Empty, Label } from "./ui.tsx";
+import { Badge, Button, Card, Empty, InfoCard, Label } from "./ui.tsx";
 import { relTime } from "../lib/format.ts";
 import { useI18n } from "../lib/useI18n.ts";
 import type { TranslationKey } from "../i18n/en.ts";
@@ -66,6 +66,14 @@ export function HeartbeatView_({ onAuthError }: { onAuthError: () => void }) {
         }
       >
         <p className="mb-3 text-sm text-fg-dim">{t("hb_desc")}</p>
+        <div className="mb-3">
+          <InfoCard id="heartbeat" title={t("info_heartbeat_title")} body={t("info_heartbeat_body")}>
+            <ul className="space-y-1.5">
+              <li>{t("info_heartbeat_alert")}</li>
+              <li>{t("info_heartbeat_active")}</li>
+            </ul>
+          </InfoCard>
+        </div>
         {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
         {status && <p className="mb-2 text-sm text-emerald-400">{status}</p>}
 

@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { runTurn, AUTO_ALLOWED_TOOLS } from "../claude/runner.js";
 import { memoryMcp } from "../mcp/memory.js";
-import { tasksMcp } from "../mcp/tasks.js";
+import { createTasksMcp } from "../mcp/tasks.js";
 import { skillsMcp } from "../mcp/skills.js";
 import { selfUpdateMcp } from "../mcp/selfUpdate.js";
 import { createCrewMcp } from "../mcp/crew.js";
@@ -14,6 +14,7 @@ import { resolveSecret } from "./vault.js";
 import { audit } from "./audit.js";
 import { log } from "../logger.js";
 import type { Autonomy } from "../session/manager.js";
+import { getLeadProtocol } from "../prompt.js";
 
 const FILE = "workers.json";
 const RUNS_FILE = "workerRuns.json";
@@ -54,6 +55,8 @@ export interface Worker {
   portfolio?: string; // e.g. "Finance", "DevOps", "Research"
   parentId?: string; // assistant → id of its Lead
   telegramToken?: string; // vault:<id> reference for the lead's own bot
+  /** The Lead bot's resolved @username (from getMe), for a t.me link. */
+  botUsername?: string;
   /**
    * Character and tone. Injected into the system prompt after the base personality.
    * Separate from systemPrompt (domain knowledge / task instructions).
@@ -233,6 +236,17 @@ export class WorkerManager {
     return true;
   }
 
+  /** Record a Lead bot's resolved @username (captured at bot start). Persists
+   *  only when it actually changed, and skips the onChange/audit churn since
+   *  this is incidental metadata, not a user edit. */
+  setBotUsername(id: string, username: string): void {
+    const w = this.workers.find((x) => x.id === id);
+    if (w && w.botUsername !== username) {
+      w.botUsername = username;
+      this.persist();
+    }
+  }
+
   // --- runs ---
 
   /** Recent runs, newest first, optionally filtered to one worker. */
@@ -280,7 +294,10 @@ export class WorkerManager {
   private async execute(w: Worker, run: WorkerRun, abort: AbortController): Promise<void> {
     const skill = w.skillId ? getSkill(w.skillId) : undefined;
     if (skill && w.skillId) recordSkillUse(w.skillId);
-    const append = [skill?.prompt, w.systemPrompt].filter(Boolean).join("\n\n") || undefined;
+    // Lead workers get the crew-protocol block prepended so they know to use
+    // crew_report / crew_suggest / crew_delegate after every meaningful turn.
+    const protocol = w.role === "lead" ? getLeadProtocol(w.name, w.portfolio) : undefined;
+    const append = [protocol, skill?.prompt, w.systemPrompt].filter(Boolean).join("\n\n") || undefined;
     // Point the run at a local model server / proxy if a provider is set.
     // Clear ANTHROPIC_API_KEY so the auth token (not a stale key) is used.
     const provider = w.providerId ? getProvider(w.providerId) : undefined;
@@ -318,7 +335,7 @@ export class WorkerManager {
         language: w.language,
         permissionMode,
         abortController: abort,
-        mcpServers: { memory: memoryMcp, tasks: tasksMcp, skills: skillsMcp, self_update: selfUpdateMcp, crew: crewMcp },
+        mcpServers: { memory: memoryMcp, tasks: createTasksMcp({ createdBy: w.id }), skills: skillsMcp, self_update: selfUpdateMcp, crew: crewMcp },
         canUseTool: async (toolName, input) => {
           // supervised/standard: only AUTO_ALLOWED_TOOLS pass for unattended workers.
           if (AUTO_ALLOWED_TOOLS.has(toolName)) return { behavior: "allow", updatedInput: input };

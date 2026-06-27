@@ -141,6 +141,10 @@ export interface Task {
   parentId?: string;
   delegate?: TaskDelegation;
   order: number;
+  /** Creator id stamped at create-time: "atlas", a worker/lead id, or "panel". */
+  createdBy?: string;
+  /** Friendly creator name resolved by the server (e.g. "Atlas", "Iris", "Panel"). */
+  createdByName?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -166,6 +170,8 @@ export interface Worker {
   portfolio?: string;
   parentId?: string;
   telegramToken?: string;
+  /** The Lead bot's @username (from getMe), for a t.me link. */
+  botUsername?: string;
   persona?: string;
   autonomy?: Autonomy;
   language?: string;
@@ -503,6 +509,8 @@ export interface MainAgent {
   persona: string;
   autonomy: Autonomy;
   defaultLanguage: string;
+  /** The main bot's @username (from getMe), for a t.me link. */
+  botUsername?: string;
   embeddings: EmbeddingConfig;
   /** User-preferred local backend when both are running (null = none). */
   preferredBackend: PreferredBackend | null;

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api, AuthError, type MemoryEntry, type MemoryStats, type MemoryTier } from "../api.ts";
 import { useI18n } from "../lib/useI18n.ts";
 import { relTime } from "../lib/format.ts";
-import { Badge, Button, Callout, Card, Empty, Input, Label, TextArea } from "./ui.tsx";
+import { Badge, Button, Callout, Card, Empty, InfoCard, Input, Label, TextArea } from "./ui.tsx";
 
 const blank = { text: "", tags: "", salience: 0.5, tier: "warm" as MemoryTier };
 
@@ -114,9 +114,15 @@ export function MemoryView({ onAuthError }: { onAuthError: () => void }) {
         )
       }
     >
-      <p className="mb-3 text-sm text-fg-dim">{t("memory_desc")}</p>
-
-      <div className="mb-4">
+      <div className="mb-4 space-y-3">
+        <InfoCard id="memory" title={t("info_memory_title")} body={t("info_memory_body")}>
+          <ul className="space-y-1.5">
+            <li>{t("info_memory_hot")}</li>
+            <li>{t("info_memory_warm")}</li>
+            <li>{t("info_memory_cold")}</li>
+            <li>{t("info_memory_salience")}</li>
+          </ul>
+        </InfoCard>
         <Callout title={t("memory_tip_title")} dismissId="memory-recall">
           {t("memory_tip_body")}
         </Callout>

@@ -3,7 +3,7 @@ import { api, AuthError, type Worker, type WorkerRun, type Autonomy } from "../a
 import { useWorkerEvents, type LiveRun } from "../lib/useWorkerEvents.ts";
 import { useI18n } from "../lib/useI18n.ts";
 import type { TranslationKey } from "../i18n/en.ts";
-import { Badge, Button, Card, Empty, Input, Label, Select, TextArea } from "./ui.tsx";
+import { Badge, Button, Card, Empty, InfoCard, Input, Label, Select, TextArea } from "./ui.tsx";
 import { ms, relTime, usd } from "../lib/format.ts";
 import { AGENT_LANGUAGES } from "../i18n/languages.ts";
 
@@ -103,7 +103,12 @@ export function WorkersView({ onAuthError }: { onAuthError: () => void }) {
       </div>
 
       {!creating && !wizarding && (
-        <p className="text-xs text-fg-dim">{t("workers_hint")}</p>
+        <InfoCard id="workers" title={t("info_workers_title")} body={t("info_workers_body")}>
+          <ul className="space-y-1.5">
+            <li>{t("info_workers_run")}</li>
+            <li>{t("info_workers_lead")}</li>
+          </ul>
+        </InfoCard>
       )}
 
       {wizarding && (
@@ -240,7 +245,19 @@ function WorkerRow({
         {worker.model && <Badge>{shortModel(worker.model)}</Badge>}
         {providerName && <Badge tone="blue">⌂ {providerName}</Badge>}
         {!worker.enabled && <Badge tone="amber">{t("disabled")}</Badge>}
-        {worker.listening && <Badge tone="green">{t("crew_listening")}</Badge>}
+        {worker.listening &&
+          (worker.botUsername ? (
+            <a
+              href={`https://t.me/${worker.botUsername}`}
+              target="_blank"
+              rel="noreferrer"
+              className="hover:underline"
+            >
+              <Badge tone="green">{t("crew_listening")}</Badge>
+            </a>
+          ) : (
+            <Badge tone="green">{t("crew_listening")}</Badge>
+          ))}
         {worker.role === "lead" && worker.enabled && !worker.telegramToken && (
           <Badge tone="amber">⚠ {t("crew_no_token")}</Badge>
         )}

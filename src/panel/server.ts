@@ -266,6 +266,17 @@ function noteAuthSuccess(ip: string): void {
   authFailures.delete(ip);
 }
 
+/**
+ * Map a task's stored creator id to a friendly display name: the main agent's
+ * configured name for "atlas", a worker/lead's name when the id matches one,
+ * "Panel" for panel/REST-created cards, else the raw id.
+ */
+function creatorName(id: string): string {
+  if (id === "atlas") return config.ATLAS_NAME;
+  if (id === "panel") return "Panel";
+  return workers.get(id)?.name ?? id;
+}
+
 /** Panel view of a worker: registry fields + derived run state. */
 function workerView(w: Worker) {
   return {
@@ -292,6 +303,7 @@ function workerView(w: Worker) {
     portfolio: w.portfolio ?? "",
     parentId: w.parentId ?? "",
     telegramToken: w.telegramToken ?? "",
+    botUsername: w.botUsername ?? "",
     persona: w.persona ?? "",
     autonomy: w.autonomy ?? "full",
     language: w.language ?? "",
@@ -648,7 +660,12 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
   app.get("/api/tasks", async () => {
     pruneArchive();
     autoArchive();
-    return { tasks: listTasks(), columns: listColumns(), wip: getWip() };
+    // Resolve each card's creator id to a friendly display name for the board.
+    const tasks = listTasks().map((t) => ({
+      ...t,
+      createdByName: t.createdBy ? creatorName(t.createdBy) : undefined,
+    }));
+    return { tasks, columns: listColumns(), wip: getWip() };
   });
   // Column config CRUD
   app.get("/api/tasks/columns", async () => ({ columns: listColumns() }));
@@ -687,7 +704,12 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
   app.post("/api/tasks/:id/stop", async (req) => ({
     ok: taskDelegator.stop((req.params as { id: string }).id),
   }));
-  app.post("/api/tasks", async (req) => createTask(req.body as never));
+  app.post("/api/tasks", async (req) => {
+    const body = (req.body ?? {}) as Parameters<typeof createTask>[0];
+    // Cards made through the panel/REST are attributed to "panel" unless the
+    // caller explicitly passes a creator id.
+    return createTask({ ...body, createdBy: body.createdBy || "panel" });
+  });
   app.patch("/api/tasks/:id", async (req, reply) => {
     const updated = updateTask((req.params as { id: string }).id, req.body as never);
     if (!updated) return reply.code(404).send({ error: "not found" });

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Worker, type MainAgent, type DelegationRecord } from "../api.ts";
-import { Card, Empty, Badge } from "./ui.tsx";
+import { Card, Empty, Badge, InfoCard } from "./ui.tsx";
 import { relTime } from "../lib/format.ts";
 import { useI18n } from "../lib/useI18n.ts";
 
@@ -60,6 +60,19 @@ export function CrewView({ onAuthError }: { onAuthError: () => void }) {
     (w) => !w.role || (w.role !== "lead" && w.role !== "assistant"),
   );
 
+  // Resolve a delegation-log agent id to a display name. "president"/"atlas" are
+  // literals; a worker id resolves to its name; a since-deleted worker falls back
+  // to a short id so the historical record still reads sensibly.
+  const resolveAgent = (id: string | undefined): string => {
+    if (!id) return t("crew_unknown_agent");
+    const low = id.toLowerCase();
+    if (low === "president" || low === "user") return t("crew_president");
+    if (low === "atlas") return "Atlas";
+    const w = workers.find((x) => x.id === id);
+    if (w) return w.name;
+    return t("crew_removed_agent").replace("{id}", id.slice(0, 8));
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -67,7 +80,23 @@ export function CrewView({ onAuthError }: { onAuthError: () => void }) {
         <p className="mt-1 text-sm text-fg-dim">{t("crew_subtitle")}</p>
       </div>
 
-      <CrewHowItWorks t={t} />
+      <InfoCard
+        id="crew"
+        title={t("crew_how_show")}
+        openTitle={t("crew_how_title")}
+      >
+        <p>{t("crew_how_intro")}</p>
+        {([
+          [t("crew_how_wizard_title"), t("crew_how_wizard")],
+          [t("crew_how_tasks_title"), t("crew_how_tasks")],
+          [t("crew_how_runs_title"), t("crew_how_runs")],
+        ] as Array<[string, string]>).map(([title, body]) => (
+          <div key={title}>
+            <div className="font-medium text-fg">{title}</div>
+            <p className="mt-0.5">{body}</p>
+          </div>
+        ))}
+      </InfoCard>
 
       {/* President */}
       <CrewNode
@@ -78,13 +107,15 @@ export function CrewView({ onAuthError }: { onAuthError: () => void }) {
         depth={0}
       />
 
-      {/* Atlas */}
+      {/* Atlas — the main bot is always reachable on Telegram */}
       <CrewNode
         icon="◈"
         title="Atlas"
         subtitle={`${t("crew_atlas_sub")} · ${atlas?.effectiveModel ?? "…"}`}
         tone="accent"
         depth={1}
+        extra={t("crew_listening")}
+        extraHref={atlas?.botUsername ? `https://t.me/${atlas.botUsername}` : undefined}
       />
 
       {/* Leads and their Assistants */}
@@ -99,6 +130,9 @@ export function CrewView({ onAuthError }: { onAuthError: () => void }) {
             tone="blue"
             depth={2}
             extra={lead.listening ? t("crew_listening") : undefined}
+            extraHref={
+              lead.listening && lead.botUsername ? `https://t.me/${lead.botUsername}` : undefined
+            }
             warn={lead.enabled && !lead.telegramToken ? t("crew_no_token") : undefined}
           />
           {assistants
@@ -171,34 +205,77 @@ export function CrewView({ onAuthError }: { onAuthError: () => void }) {
         ) : (
           <div className="space-y-2">
             {delegations.map((d, i) => (
-              <div key={i} className="rounded-lg border border-line p-2.5 text-xs">
-                <div className="flex items-center gap-2 text-fg-dim">
-                  <span className="tabular">{relTime(d.ts)}</span>
-                  {d.fromAgentId && (
-                    <span className="text-fg-faint">
-                      {d.fromAgentId} → {d.toAgentId ?? "president"}
-                    </span>
-                  )}
-                  {d.leadName && <span className="font-medium text-fg">{d.leadName}</span>}
-                  {d.durationMs != null && (
-                    <span className="tabular text-fg-faint ml-auto">
-                      {(d.durationMs / 1000).toFixed(1)}s
-                    </span>
-                  )}
-                  {d.costUsd != null && (
-                    <span className="tabular text-fg-faint">${d.costUsd.toFixed(4)}</span>
-                  )}
-                </div>
-                {d.task && <p className="mt-1 text-fg-muted truncate">{d.task}</p>}
-                {d.summary && <p className="mt-1 text-fg-muted truncate">{d.summary}</p>}
-                {d.outputTail && (
-                  <p className="mt-1 font-mono text-fg-faint truncate">{d.outputTail.slice(0, 120)}</p>
-                )}
-              </div>
+              <DelegationCard key={i} d={d} resolveAgent={resolveAgent} />
             ))}
           </div>
         )}
       </Card>
+    </div>
+  );
+}
+
+function DelegationCard({
+  d,
+  resolveAgent,
+}: {
+  d: DelegationRecord;
+  resolveAgent: (id: string | undefined) => string;
+}) {
+  const [open, setOpen] = useState(false);
+  // Expandable when any field carries more than fits on a single truncated line.
+  const expandable =
+    (d.task?.length ?? 0) > 80 ||
+    (d.summary?.length ?? 0) > 80 ||
+    (d.outputTail?.length ?? 0) > 120;
+
+  return (
+    <div
+      className={`rounded-lg border border-line p-2.5 text-xs ${
+        expandable ? "cursor-pointer hover:bg-surface-2 transition-colors" : ""
+      }`}
+      onClick={expandable ? () => setOpen((o) => !o) : undefined}
+    >
+      <div className="flex items-center gap-2 text-fg-dim">
+        <span className="tabular">{relTime(d.ts)}</span>
+        {(d.fromAgentId || d.toAgentId) && (
+          <span className="text-fg-faint">
+            {resolveAgent(d.fromAgentId)} → {resolveAgent(d.toAgentId ?? "president")}
+          </span>
+        )}
+        {d.leadName && <span className="font-medium text-fg">{d.leadName}</span>}
+        {d.durationMs != null && (
+          <span className="tabular text-fg-faint ml-auto">
+            {(d.durationMs / 1000).toFixed(1)}s
+          </span>
+        )}
+        {d.costUsd != null && (
+          <span className="tabular text-fg-faint">${d.costUsd.toFixed(4)}</span>
+        )}
+        {expandable && (
+          <span className={`shrink-0 text-fg-dim ${d.durationMs == null && d.costUsd == null ? "ml-auto" : ""}`}>
+            {open ? "▴" : "▾"}
+          </span>
+        )}
+      </div>
+      {d.task && (
+        <p className={`mt-1 text-fg-muted ${open ? "whitespace-pre-wrap break-words" : "truncate"}`}>
+          {d.task}
+        </p>
+      )}
+      {d.summary && (
+        <p className={`mt-1 text-fg-muted ${open ? "whitespace-pre-wrap break-words" : "truncate"}`}>
+          {d.summary}
+        </p>
+      )}
+      {d.outputTail && (
+        <p
+          className={`mt-1 font-mono text-fg-faint ${
+            open ? "whitespace-pre-wrap break-words" : "truncate"
+          }`}
+        >
+          {open ? d.outputTail : d.outputTail.slice(0, 120)}
+        </p>
+      )}
     </div>
   );
 }
@@ -273,39 +350,6 @@ function CouncilCard({ session, t }: { session: CouncilSession; t: ReturnType<ty
   );
 }
 
-/** Collapsible explainer of how the crew, wizard, tasks and runs work. */
-function CrewHowItWorks({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
-  const [open, setOpen] = useState(false);
-  const sections: Array<[string, string]> = [
-    [t("crew_how_wizard_title"), t("crew_how_wizard")],
-    [t("crew_how_tasks_title"), t("crew_how_tasks")],
-    [t("crew_how_runs_title"), t("crew_how_runs")],
-  ];
-  return (
-    <div className="rounded-lg border border-line bg-surface overflow-hidden">
-      <button
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-fg hover:bg-surface-2 transition-colors"
-        onClick={() => setOpen((o) => !o)}
-      >
-        <span className="text-accent">ⓘ</span>
-        <span className="flex-1">{open ? t("crew_how_title") : t("crew_how_show")}</span>
-        <span className="text-fg-dim">{open ? "▴" : "▾"}</span>
-      </button>
-      {open && (
-        <div className="space-y-3 border-t border-line px-3 py-3 text-sm text-fg-dim">
-          <p>{t("crew_how_intro")}</p>
-          {sections.map(([title, body]) => (
-            <div key={title}>
-              <div className="font-medium text-fg">{title}</div>
-              <p className="mt-0.5">{body}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 type Tone = "amber" | "accent" | "blue" | "zinc";
 
 function CrewNode({
@@ -315,6 +359,7 @@ function CrewNode({
   tone,
   depth,
   extra,
+  extraHref,
   warn,
 }: {
   icon: string;
@@ -323,6 +368,8 @@ function CrewNode({
   tone: Tone;
   depth: number;
   extra?: string;
+  /** When set, the `extra` badge becomes a link (e.g. a t.me handle). */
+  extraHref?: string;
   warn?: string;
 }) {
   const indent = depth * 24;
@@ -344,7 +391,14 @@ function CrewNode({
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-medium text-fg">{title}</span>
-          {extra && <Badge tone="green">{extra}</Badge>}
+          {extra &&
+            (extraHref ? (
+              <a href={extraHref} target="_blank" rel="noreferrer" className="hover:underline">
+                <Badge tone="green">{extra}</Badge>
+              </a>
+            ) : (
+              <Badge tone="green">{extra}</Badge>
+            ))}
           {warn && <Badge tone="amber">⚠ {warn}</Badge>}
         </div>
         <div className="text-xs text-fg-dim">{subtitle}</div>

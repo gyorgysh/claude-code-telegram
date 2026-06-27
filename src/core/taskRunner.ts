@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { config } from "../config.js";
 import { runTurn, type RunResult } from "../claude/runner.js";
 import { memoryMcp } from "../mcp/memory.js";
-import { tasksMcp } from "../mcp/tasks.js";
+import { createTasksMcp } from "../mcp/tasks.js";
 import { skillsMcp } from "../mcp/skills.js";
 import { selfUpdateMcp } from "../mcp/selfUpdate.js";
 import { getTask, setDelegate, updateTask } from "./tasks.js";
@@ -141,7 +141,7 @@ export class TaskDelegator {
         persona: lead?.persona,
         permissionMode: "bypassPermissions",
         abortController: abort,
-        mcpServers: { memory: memoryMcp, tasks: tasksMcp, skills: skillsMcp, self_update: selfUpdateMcp },
+        mcpServers: { memory: memoryMcp, tasks: createTasksMcp({ createdBy: lead?.id ?? "atlas" }), skills: skillsMcp, self_update: selfUpdateMcp },
         canUseTool: async (_n, input) => ({ behavior: "allow", updatedInput: input }),
         onText: (d) => {
           output += d;

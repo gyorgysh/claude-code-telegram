@@ -146,6 +146,61 @@ export function Label({ children }: { children: ReactNode }) {
   return <label className="mb-1 block text-xs font-medium text-fg-dim">{children}</label>;
 }
 
+/** A collapsible "how this works" explainer. Starts collapsed so it never
+ *  dominates a page; the open state is remembered in localStorage per `id`.
+ *  `body` can be a string or any node; pass `items` for a labelled bullet list. */
+export function InfoCard({
+  id,
+  title,
+  openTitle,
+  body,
+  items,
+  children,
+}: {
+  id: string;
+  title: ReactNode;
+  openTitle?: ReactNode;
+  body?: ReactNode;
+  items?: Array<{ label: ReactNode; text: ReactNode }>;
+  children?: ReactNode;
+}) {
+  const key = `cct.info.${id}`;
+  const [open, setOpen] = useState(() => localStorage.getItem(key) === "1");
+  const toggle = () =>
+    setOpen((o) => {
+      const next = !o;
+      localStorage.setItem(key, next ? "1" : "0");
+      return next;
+    });
+  return (
+    <div className="overflow-hidden rounded-lg border border-line bg-surface">
+      <button
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-fg transition-colors hover:bg-surface-2"
+        onClick={toggle}
+      >
+        <span className="text-accent">ⓘ</span>
+        <span className="flex-1">{open ? openTitle ?? title : title}</span>
+        <span className="text-fg-dim">{open ? "▴" : "▾"}</span>
+      </button>
+      {open && (
+        <div className="space-y-2 border-t border-line px-3 py-3 text-sm text-fg-dim">
+          {body && <p>{body}</p>}
+          {items && (
+            <ul className="space-y-1.5">
+              {items.map((it, i) => (
+                <li key={i}>
+                  <span className="font-medium text-fg">{it.label}</span> — {it.text}
+                </li>
+              ))}
+            </ul>
+          )}
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** An info callout. Pass `dismissId` to make it dismissible (remembered in
  *  localStorage) — for "good to keep in mind" style tips. */
 export function Callout({

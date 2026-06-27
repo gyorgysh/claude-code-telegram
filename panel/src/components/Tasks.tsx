@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api, AuthError, type Column, type ColumnDef, type Priority, type Task, type Wip } from "../api.ts";
 import { useTaskEvents, type LiveTask } from "../lib/useTaskEvents.ts";
 import { useI18n } from "../lib/useI18n.ts";
-import { Button, Callout, Empty, Input, TextArea } from "./ui.tsx";
+import { Button, Callout, Empty, InfoCard, Input, TextArea } from "./ui.tsx";
 import type { TranslationKey } from "../i18n/en.ts";
 
 /** Translate a default column name when it hasn't been renamed by the user. */
@@ -151,6 +151,14 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
       <Callout title={t("tasks_did_you_know_title")} dismissId="tasks-did-you-know">
         {t("tasks_did_you_know_body")}
       </Callout>
+
+      <InfoCard id="tasks" title={t("info_tasks_title")} body={t("info_tasks_body")}>
+        <ul className="space-y-1.5">
+          <li>{t("info_tasks_delegate")}</li>
+          <li>{t("info_tasks_agent")}</li>
+          <li>{t("info_tasks_archive")}</li>
+        </ul>
+      </InfoCard>
 
       {/* Main board */}
       <div className={`grid gap-4 ${gridCols}`}>
@@ -406,8 +414,13 @@ function Card({
             <div className="mt-1 line-clamp-3 text-xs text-fg-dim">{task.notes}</div>
           )}
           {task.parentId && <div className="mt-1 text-xs text-fg-faint">{t("tasks_subtask")}</div>}
-          <div className="mt-1 text-xs text-fg-faint">
-            {t("tasks_created").replace("{date}", formatDate(task.createdAt))}
+          <div className="mt-1 flex items-center gap-1.5 text-xs text-fg-faint">
+            <span>{t("tasks_created").replace("{date}", formatDate(task.createdAt))}</span>
+            {(task.createdByName || task.createdBy) && (
+              <span className="rounded bg-accent/10 px-1.5 py-0.5 text-accent">
+                {t("tasks_created_by").replace("{name}", task.createdByName || task.createdBy || "")}
+              </span>
+            )}
           </div>
         </div>
       </div>

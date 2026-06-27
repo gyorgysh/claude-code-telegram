@@ -197,6 +197,14 @@ export class AskQuestionManager {
     return false;
   }
 
+  /** Whether any question for this chat is awaiting the user (button or text). */
+  hasPending(chatId: number): boolean {
+    for (const e of this.pending.values()) {
+      if (e.chatId === chatId) return true;
+    }
+    return false;
+  }
+
   /**
    * Consume a typed free-text answer for the oldest text-armed question in a
    * chat. Returns true if one was found and resolved.

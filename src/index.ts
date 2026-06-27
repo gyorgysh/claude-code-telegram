@@ -6,6 +6,7 @@ import { heartbeat } from "./core/heartbeat.js";
 import { maintenance } from "./core/maintenance.js";
 import { startProbeScheduler, stopProbeScheduler } from "./core/usageProbe.js";
 import { getPlanSettings } from "./core/planSettings.js";
+import { setMainBotUsername } from "./core/mainSettings.js";
 import { startPanel } from "./panel/server.js";
 import { tunnelManager } from "./core/tunnelManager.js";
 import { workers } from "./core/workers.js";
@@ -14,11 +15,19 @@ import { embeddingsEnabled, autoProbeEmbeddings } from "./core/embeddings.js";
 import { leadBots } from "./telegram/leadBotManager.js";
 import { log } from "./logger.js";
 import { registerIdleGate, whenSettled } from "./core/activity.js";
+import { acquireInstanceLock } from "./core/singleton.js";
 
 async function main(): Promise<void> {
   if (config.ANTHROPIC_API_KEY) {
     process.env.ANTHROPIC_API_KEY = config.ANTHROPIC_API_KEY;
   }
+
+  // Single-instance guard. On a restart (launchctl kickstart / systemd) the new
+  // process can launch while the old one is still draining; without this lock
+  // both run at once, so schedulers/heartbeat/lead bots/tunnel all start twice
+  // (the "everything runs 3-4x" storm). This waits for the previous instance to
+  // exit, then takes over — or refuses to start if it won't yield.
+  const releaseLock = await acquireInstanceLock();
 
   const bot = buildBot();
 
@@ -67,6 +76,9 @@ async function main(): Promise<void> {
   }
 
   const me = await bot.telegram.getMe();
+  // Record the main bot's @username so the panel Crew view can show Atlas's
+  // t.me link (mirrors how Lead bots capture theirs via setBotUsername).
+  if (me.username) setMainBotUsername(me.username);
   log.info("Configuration loaded", {
     bot: `@${me.username}`,
     allowedUsers: allowedUserIds.size,
@@ -113,6 +125,10 @@ async function main(): Promise<void> {
     void stopPanel?.();
     bot.stop(signal);
     leadBots.stopAll(signal);
+    // Kill the tunnel relay child (cloudflared/ngrok). Without this it outlives
+    // the process; on the next restart a fresh relay spawns with a new public URL
+    // while the orphan keeps running — a major contributor to the restart storm.
+    tunnelManager.kill();
 
     // Give in-flight turns up to 30 s to finish naturally before we abort them.
     // whenSettled() waits for the *whole* turn, not just the SDK stream: the
@@ -126,9 +142,13 @@ async function main(): Promise<void> {
       if (done) return;
       done = true;
       clearTimeout(deadline);
+      releaseLock();
       log.info("All turns finished — exiting");
-      // Give the panel server a moment to finish closing, then exit.
-      setTimeout(() => { process.exit(0); }, 500).unref();
+      // Give the panel server a moment to finish closing, then exit. This timer
+      // is deliberately NOT unref'd: a lingering open handle (an orphaned relay,
+      // a half-closed socket) must not be able to keep the old process alive past
+      // a clean shutdown, or it overlaps with the restart-spawned new instance.
+      setTimeout(() => { process.exit(0); }, 500);
     };
 
     const deadline = setTimeout(() => {
@@ -151,6 +171,10 @@ async function main(): Promise<void> {
 
   process.once("SIGINT", () => shutdown("SIGINT"));
   process.once("SIGTERM", () => shutdown("SIGTERM"));
+  // Final safety net: release the single-instance lock on any exit path (a fatal
+  // error, an unexpected process.exit), so a crashed instance never leaves a live
+  // lock that blocks the next launch. No-op if the normal shutdown already ran.
+  process.once("exit", () => releaseLock());
 
   // If the panel token was auto-healed at startup (missing or shorter than the
   // 16-char minimum), DM the new secret to every allowed user so they can log

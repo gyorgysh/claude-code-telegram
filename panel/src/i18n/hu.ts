@@ -60,7 +60,6 @@ export const hu: Translations = {
   auto_until_error: "Auto hibáig",
   // Memória nézet
   memory_title: "Memória",
-  memory_desc: "Az ügynök által tárolt tartós tények. A 'forró' bejegyzések minden fordulóban szerepelnek; a 'meleg' bejegyzések kulcsszó alapján kerülnek elő; a 'hideg' bejegyzések csak a panelen láthatók.",
   memory_new: "+ Új memória",
   memory_fact: "Tény",
   memory_tags: "Címkék (vesszővel elválasztva)",
@@ -120,11 +119,12 @@ export const hu: Translations = {
   crew_how_runs:
     "Minden futás egy önálló Claude-munkamenet az ügynök saját munkakönyvtárában, personájával és modelljével. Egy saját Telegram-bottal rendelkező Lead 'Elérhető Telegramon', és közvetlenül üzenhetsz neki. Az ütemezett ügynökök az intervallumukon vagy napi időpontjukon futnak; a többi igény szerint (Futtatás most vagy delegáláskor).",
   crew_how_show: "Hogyan működik a csapat",
-  crew_how_hide: "Elrejt",
   crew_specialists: "Specialisták",
   crew_delegations: "Delegálási napló",
   crew_delegations_desc: "Legutóbbi ügynökök közötti feladatok és jelentések.",
   crew_delegations_empty: "Még nincs delegálás.",
+  crew_unknown_agent: "ismeretlen",
+  crew_removed_agent: "törölt ügynök ({id})",
   crew_council: "Tanács",
   crew_council_desc: "Legutóbbi tanácsi szavazatok.",
   crew_council_empty: "Még nincs tanácsi szavazat.",
@@ -158,6 +158,34 @@ export const hu: Translations = {
   inbox_info_delegate:
     "Delegál: csináld meg most. Létrehozza a feladatot és elindít egy futást, a javasló ügynökhöz (vagy a legjobban illő Leadhez) irányítva. A végén Telegram-jelentést kapsz.",
   inbox_info_dismiss: "Elvet: archiváld. Nincs feladat, nincs művelet.",
+  // Megosztott "hogyan működik" magyarázó kártyák
+  info_tasks_title: "Hogyan működik a tábla",
+  info_tasks_body:
+    "Kanban tábla a munkához, amit te vagy az ügynökeid követtek. Húzd a kártyákat oszlopok között, állíts prioritást és írj jegyzeteket. Az oszlopok és a WIP-korlátok átnevezhetők és beállíthatók.",
+  info_tasks_delegate: "Delegál: add át egy kártyát önálló futásnak. A kártya backlog → folyamatban lesz, az ügynök elvégzi (szükség esetén részfeladatokra bontva), majd a kész oszlopba kerül.",
+  info_tasks_agent: "Az ügynökök is: kérd meg Atlast a csevegésben, hogy adjon hozzá vagy frissítsen kártyákat, az elfogadott Inbox-javaslatok pedig feladatként ide kerülnek.",
+  info_tasks_archive: "Takarítás: a kész kártyák egy nap után automatikusan archiválódnak, az archívum pedig egy hét után kiürül.",
+  info_memory_title: "Hogyan működik a memória",
+  info_memory_body:
+    "Tartós tények, amelyeket az ügynök beszélgetéseken át felidéz, hogy ne kelljen ismételned magad. Magától tanul, és itt te is hozzáadhatsz vagy szerkeszthetsz tényeket.",
+  info_memory_hot: "🔥 Forró: minden fordulóban beépül. Csak néhány mindig releváns tényre tartsd fenn (állandóan kontextust fogyaszt).",
+  info_memory_warm: "♨️ Meleg: csak akkor idéződik fel, ha releváns az üzenethez. Ez az alapértelmezett, a legtöbb ténynek jó.",
+  info_memory_cold: "❄️ Hideg: archív, csak a panelen látszik, sosem idéződik fel automatikusan.",
+  info_memory_salience: "A fontosság (salience) súlyozza, mennyire erősen versenyez egy tény a felidézésért. A karbantartás időnként összevonja a duplikátumokat és lerövidíti a terjengős bejegyzéseket.",
+  info_workers_title: "Mik a munkások?",
+  info_workers_body:
+    "Önálló ügynökök, amelyek maguktól futtatnak egy állandó feladatot. A Varázslóval írj le egy célt, és elkészíti a futtatásra kész ügynököket, vagy az Új munkással állítsd be kézzel.",
+  info_workers_run: "Mindegyik a saját munkamappájában, személyiségével és modelljével fut. Ütemezés szerint, igény szerint (Futtatás most), vagy ha feladatot delegálsz nekik.",
+  info_workers_lead: "Adj egy Leadnek saját Telegram bot tokent, és 'Elérhető Telegramon' lesz, így közvetlenül üzenhetsz neki.",
+  info_schedules_title: "Hogyan működnek az ütemezések",
+  info_schedules_body:
+    "Ismétlődő utasítások, amelyek megadott időben önálló fordulóként futnak. Használj intervallumot (30m / 2h / 1d), vagy napi HH:MM-et (szerver helyi ideje). Egy esedékes feladat kihagyásra és újrapróbálásra kerül, ha a csevegés foglalt.",
+  info_schedules_pause: "A Szünet a listában tartja az ütemezést anélkül, hogy futna; a folytatással újra engedélyezed. Csevegésből is hozzáadhatod vagy törölheted a /schedule paranccsal.",
+  info_heartbeat_title: "Hogyan működik a szívverés",
+  info_heartbeat_body:
+    "Proaktív háttér-megfigyelés, alapból kikapcsolva. Adott időközönként ellenőrzi a gépet, és csak akkor szól, ha valami a figyelmedet igényli.",
+  info_heartbeat_alert: "Riasztás: determinisztikus ellenőrzések (CPU, memória, swap, lemez küszöbök, beragadt kártyák) üzennek küszöbátlépéskor, türelmi idővel, hogy ne nyaggasson.",
+  info_heartbeat_active: "Aktív: átadja az észlelt jeleket egy önálló ügynök-fordulónak, hogy kivizsgálja, cselekedjen, és csak akkor üzenjen, ha érdemleges.",
   // Egészség nézet
   health_cpu: "CPU",
   health_memory: "Memória",
@@ -300,6 +328,7 @@ export const hu: Translations = {
   tasks_archive_show: "Archívum mutatása ({n})",
   tasks_archive_hide: "Archívum elrejtése",
   tasks_created: "Létrehozva: {date}",
+  tasks_created_by: "{name} által",
   tasks_did_you_know_title: "Tudtad?",
   tasks_did_you_know_body: "Kérheted az ügynököt, hogy adjon hozzá kártyát (pl. 'adj hozzá egy feladatot a lemezhasználat ellenőrzéséhez'), vagy delegálj egy kártyát autonóm futtatásra egy kattintással. A Kész oszlopból 1 nap után kerülnek az archívumba, ami 7 nap után automatikusan törlődik.",
   col_archive: "Archívum",
@@ -340,8 +369,6 @@ export const hu: Translations = {
   workers_no_cwd: "(nincs munkamappa)",
   workers_next: "következő {time}",
   workers_wizard: "Varázsló",
-  workers_hint:
-    "A munkások önálló ügynökök. A Varázslóval írj le egy célt, és elkészíti a futtatásra kész ügynököket, vagy az Új munkással állítsd be kézzel. Mindegyik az ütemezése szerint vagy igény szerint fut (Futtatás most / ha feladatot delegálsz).",
   wizard_title: "Ügynök beállító varázsló",
   wizard_subtitle: "Válaszolj néhány kérdésre, és elkészítek egy futtatásra kész ügynök-konfigurációt.",
   wizard_q_goal: "Mit szeretnél, hogy ez az ügynök csináljon?",

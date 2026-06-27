@@ -7,6 +7,14 @@ import type { Autonomy } from "../session/manager.js";
 
 const FILE = "mainAgent.json";
 
+/** The main bot's resolved @username (from getMe), captured at startup. Transient
+ *  runtime state, not persisted: it's an identity of the running process, not a
+ *  user setting. Exposed in the panel view so Crew can show Atlas's t.me link. */
+let botUsername: string | undefined;
+export function setMainBotUsername(username: string): void {
+  botUsername = username || undefined;
+}
+
 /** Runtime overrides for the *main* bot agent (the one driving chats). Empty
  *  fields fall back to CLAUDE_MODEL / the process env (.env) respectively. */
 interface MainSettings {
@@ -57,6 +65,7 @@ export function mainSettingsView() {
     persona: s.persona ?? "",
     autonomy: s.autonomy ?? "standard",
     defaultLanguage: s.defaultLanguage ?? config.DEFAULT_LANGUAGE,
+    botUsername: botUsername ?? "",
   };
 }
 

@@ -134,8 +134,10 @@ export const hu: Translations = {
   crew_council_placeholder: "Írd le a javaslatot, amiről a tanács szavazzon…",
   crew_council_call: "Tanács összehívása",
   crew_council_voting: "Szavazás…",
-  crew_council_lead_count: "{n} aktív Lead fog szavazni",
-  crew_council_no_leads: "A szavazáshoz engedélyezz legalább egy Leadet",
+  crew_council_lead_count: "{n} tag szavaz (Atlas + Leadek)",
+  crew_council_no_leads: "Engedélyezz legalább egy Leadet — Atlas + 1 Lead = minimális kvórum",
+  crew_council_no_quorum: "Nincs kvórum",
+  crew_council_no_quorum_hint: "A szavazás nem ment végbe — legalább egy aktív Lead szükséges az Atlas mellé.",
   // Postaláda nézet (ügynökök javaslatai)
   inbox_title: "Postaláda",
   inbox_subtitle:
@@ -304,6 +306,7 @@ export const hu: Translations = {
   vault_delete_confirm: "Törlöd ezt a titkot? Minden rá hivatkozó elem elromlik.",
   vault_empty: "Nincs tárolt titok.",
   vault_reveal: "Megjelenítés",
+  vault_unused: "nem használt",
 
   // Feladatok
   tasks_add_column: "Oszlop hozzáadása",
@@ -371,6 +374,9 @@ export const hu: Translations = {
   workers_enabled: "Engedélyezve",
   workers_lang_label: "Válasz nyelve (opcionális)",
   workers_lang_default: "Alapértelmezett (szerver beállítás)",
+  workers_webhook: "Webhook URL (opcionális)",
+  workers_webhook_placeholder: "https://hooks.example.com/...",
+  workers_webhook_hint: "A futás végén JSON eredményt (név, összegzés, költség, állapot) POST-ol erre az URL-re.",
   workers_name: "Név",
   workers_run_now: "Futtatás most",
   workers_no_cwd: "(nincs munkamappa)",
@@ -699,6 +705,9 @@ export const hu: Translations = {
   hb_stale_card: "Elavult kártya ennyi után",
   hb_spend_alert: "API számlázási költségriasztás",
   hb_spend_alert_note: "(csak API-kulcsos csomagoknál, Pro/Max előfizetéseknél nem értelmezhető)",
+  hb_signal_alerts: "Jelriasztások",
+  hb_signal_alerts_hint: "Pipáld ki egy jel típust, hogy elnémítsd az egész szívverés kikapcsolása nélkül.",
+  hb_muted: "elnémítva",
   hb_last_checked: "Utoljára ellenőrizve: {time}",
   hb_never: "soha",
   hb_found_signals: "{n} jel található.",
@@ -738,6 +747,9 @@ export const hu: Translations = {
   sched_cwd: "Munkakönyvtár (opcionális)",
   sched_cwd_edit: "Munkakönyvtár",
   sched_cwd_placeholder: "alapértelmezett WORKDIR",
+  sched_webhook: "Webhook URL (opcionális)",
+  sched_webhook_placeholder: "https://hooks.example.com/...",
+  sched_webhook_hint: "A futás végén JSON eredményt (cím, összegzés, költség, állapot) POST-ol erre az URL-re.",
   sched_create: "Létrehozás",
   sched_delete_confirm: "Törlöd ezt az ütemezést?",
   sched_empty: "Még nincs ütemezés.",
@@ -871,6 +883,21 @@ export const hu: Translations = {
   ra_status_tip_title: "URL lekérése Telegramból",
   ra_status_tip_body:
     "Ha a tunnel él, bármikor lekérheted a /status paranccsal a Telegram botban az aktuális publikus URL-t (és a belépést), így nem kell nyitva tartanod ezt az oldalt.",
+  ra_info_title: "Hogyan működik a távoli hozzáférés",
+  ra_info_body:
+    "Egy relay program (ngrok vagy cloudflared) fut a gépeden, és biztonságos alagutat hoz létre az internetről erre a panelre. A panel bejelentkezés (token) aktív marad, és egy opcionális Basic Auth belépés egy extra védelmi réteget ad.",
+  ra_info_providers: "Két szolgáltató",
+  ra_info_providers_text:
+    "A Cloudflare gyors tunnel ingyenes, nem kell hozzá fiók. Az ngrok támogatja a fenntartott domaineket és fizetős terveket.",
+  ra_info_basic_auth: "Belépési képernyő",
+  ra_info_basic_auth_text:
+    "Ha be van kapcsolva, a publikus URL megnyitásakor felhasználónevet és jelszót kell megadni, mielőtt a panel betölt.",
+  ra_info_autostart: "Automatikus indítás",
+  ra_info_autostart_text:
+    "Ha be van jelölve, a relay újraindítás vagy szoftverfrissítés után automatikusan újraindítja magát.",
+  ra_cloudflare_free_title: "Nem kell fiók",
+  ra_cloudflare_free_subtitle:
+    "A Cloudflare gyors tunnel ingyenes. Csak telepítsd a cloudflared-et és nyomd meg az Indítást.",
 
   // Kanban alapértelmezett oszlopnevek (csak átnevezetlen állapotban fordítva)
   col_planned: "Tervezett",

@@ -21,6 +21,7 @@ interface CouncilSession {
   opposeCount: number;
   abstainCount: number;
   createdAt: number;
+  noQuorum?: boolean;
 }
 
 export function CrewView({ onAuthError }: { onAuthError: () => void }) {
@@ -222,7 +223,7 @@ export function CrewView({ onAuthError }: { onAuthError: () => void }) {
             <span className="text-xs text-fg-dim">
               {enabledLeads === 0
                 ? t("crew_council_no_leads")
-                : t("crew_council_lead_count").replace("{n}", String(enabledLeads))}
+                : t("crew_council_lead_count").replace("{n}", String(enabledLeads + 1))}
             </span>
             <button
               onClick={runVote}
@@ -340,6 +341,19 @@ function CouncilCard({ session, t }: { session: CouncilSession; t: ReturnType<ty
       : session.opposeCount > session.supportCount
       ? "oppose"
       : null;
+
+  if (session.noQuorum) {
+    return (
+      <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-fg">{session.proposal.slice(0, 100)}</span>
+          <Badge tone="amber">{t("crew_council_no_quorum")}</Badge>
+          <span className="ml-auto text-xs text-fg-faint">{relTime(session.createdAt)}</span>
+        </div>
+        <p className="mt-1 text-xs text-fg-dim">{t("crew_council_no_quorum_hint")}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-lg border border-line overflow-hidden">

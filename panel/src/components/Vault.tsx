@@ -5,9 +5,12 @@ import { Badge, Button, Callout, Card, Empty, Input, Label } from "./ui.tsx";
 
 const blank = { name: "", value: "", description: "" };
 
+type UsageMap = Record<string, Array<{ kind: string; name: string }>>;
+
 export function VaultView({ onAuthError }: { onAuthError: () => void }) {
   const { t } = useI18n();
   const [secrets, setSecrets] = useState<SecretView[]>([]);
+  const [usages, setUsages] = useState<UsageMap>({});
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [form, setForm] = useState<typeof blank>(blank);
   const [revealed, setRevealed] = useState<Record<string, string>>({});
@@ -17,7 +20,7 @@ export function VaultView({ onAuthError }: { onAuthError: () => void }) {
   const load = () =>
     api
       .vault()
-      .then((r) => setSecrets(r.secrets))
+      .then((r) => { setSecrets(r.secrets); setUsages(r.usages ?? {}); })
       .catch((e) => (e instanceof AuthError ? onAuthError() : setError(String(e))));
 
   useEffect(() => {
@@ -140,32 +143,42 @@ export function VaultView({ onAuthError }: { onAuthError: () => void }) {
         <Empty>{t("vault_empty")}</Empty>
       ) : (
         <div className="mt-3 space-y-2">
-          {secrets.map((s) => (
-            <div
-              key={s.id}
-              className="flex items-start justify-between gap-3 rounded-lg border border-line p-3"
-            >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-fg">{s.name}</span>
-                  <Badge>vault:{s.id}</Badge>
+          {secrets.map((s) => {
+            const uses = usages[s.id] ?? [];
+            return (
+              <div
+                key={s.id}
+                className="flex items-start justify-between gap-3 rounded-lg border border-line p-3"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-fg">{s.name}</span>
+                    <Badge>vault:{s.id}</Badge>
+                    {uses.length === 0 ? (
+                      <Badge tone="zinc">{t("vault_unused")}</Badge>
+                    ) : (
+                      uses.map((u, i) => (
+                        <Badge key={i} tone="blue">{u.kind}: {u.name}</Badge>
+                      ))
+                    )}
+                  </div>
+                  {s.description && <p className="text-sm text-fg-dim">{s.description}</p>}
+                  <p className="mono mt-1 text-xs text-fg-faint">
+                    {revealed[s.id] !== undefined ? revealed[s.id] : s.hint}
+                  </p>
                 </div>
-                {s.description && <p className="text-sm text-fg-dim">{s.description}</p>}
-                <p className="mono mt-1 text-xs text-fg-faint">
-                  {revealed[s.id] !== undefined ? revealed[s.id] : s.hint}
-                </p>
+                <div className="flex shrink-0 gap-1.5">
+                  <Button onClick={() => reveal(s.id)}>
+                    {revealed[s.id] !== undefined ? t("hide") : t("vault_reveal")}
+                  </Button>
+                  <Button onClick={() => startEdit(s)}>{t("edit")}</Button>
+                  <Button variant="danger" onClick={() => del(s.id)}>
+                    {t("delete")}
+                  </Button>
+                </div>
               </div>
-              <div className="flex shrink-0 gap-1.5">
-                <Button onClick={() => reveal(s.id)}>
-                  {revealed[s.id] !== undefined ? t("hide") : t("vault_reveal")}
-                </Button>
-                <Button onClick={() => startEdit(s)}>{t("edit")}</Button>
-                <Button variant="danger" onClick={() => del(s.id)}>
-                  {t("delete")}
-                </Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </Card>

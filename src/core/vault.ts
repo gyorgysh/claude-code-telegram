@@ -222,6 +222,71 @@ export function secretRef(id: string): string {
   return `vault:${id}`;
 }
 
+/** Describes one place where a vault secret is referenced. */
+export interface VaultUsage {
+  /** Human-readable category (e.g. "Lead bot", "Provider", "Tunnel", "Connector"). */
+  kind: string;
+  /** Display name of the referencing entity. */
+  name: string;
+}
+
+/**
+ * Scan all data stores that carry vault:<id> references and return a map of
+ * vault id → list of usages. Read-only; never modifies any store.
+ */
+export function vaultUsages(): Record<string, VaultUsage[]> {
+  const usages: Record<string, VaultUsage[]> = {};
+  const add = (id: string, usage: VaultUsage) => {
+    (usages[id] ??= []).push(usage);
+  };
+  const extractId = (ref: string | undefined): string | undefined => {
+    if (!ref) return undefined;
+    const m = REF.exec(ref);
+    return m?.[1];
+  };
+
+  // Providers
+  for (const p of listProviders()) {
+    const id = extractId(p.authToken);
+    if (id) add(id, { kind: "Provider", name: p.name });
+  }
+
+  // Workers (Lead bot tokens + provider tokens via providerId)
+  try {
+    const workerData = loadJson<{ workers?: Array<{ name?: string; telegramToken?: string; role?: string }> }>(
+      "workers.json", { workers: [] },
+    );
+    for (const w of workerData.workers ?? []) {
+      const id = extractId(w.telegramToken);
+      if (id) add(id, { kind: "Lead bot token", name: w.name ?? "unknown" });
+    }
+  } catch { /* non-fatal */ }
+
+  // Tunnel (authToken + passwordRef)
+  try {
+    const tunnelData = loadJson<{ authToken?: string; passwordRef?: string; provider?: string }>(
+      "tunnel.json", {},
+    );
+    const tId = extractId(tunnelData.authToken);
+    if (tId) add(tId, { kind: "Tunnel auth token", name: tunnelData.provider ?? "relay" });
+    const pId = extractId(tunnelData.passwordRef);
+    if (pId) add(pId, { kind: "Tunnel password", name: "Basic Auth" });
+  } catch { /* non-fatal */ }
+
+  // Connectors
+  try {
+    const connData = loadJson<{ connectors?: Array<{ id?: string; name?: string; secretId?: string }> }>(
+      "connectors.json", { connectors: [] },
+    );
+    for (const c of connData.connectors ?? []) {
+      const id = extractId(c.secretId);
+      if (id) add(id, { kind: "Connector", name: c.name ?? c.id ?? "unknown" });
+    }
+  } catch { /* non-fatal */ }
+
+  return usages;
+}
+
 /**
  * Scan & import: move every provider's plaintext auth token into the vault and
  * rewrite the provider to reference it (`vault:<id>`). Already-referenced tokens

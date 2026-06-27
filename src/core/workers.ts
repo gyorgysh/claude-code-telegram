@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { config } from "../config.js";
 import { runTurn, AUTO_ALLOWED_TOOLS } from "../claude/runner.js";
 import { memoryMcp } from "../mcp/memory.js";
 import { createTasksMcp } from "../mcp/tasks.js";
@@ -12,7 +13,8 @@ import { getSkill, recordSkillUse } from "./skills.js";
 import { getProvider } from "./providers.js";
 import { resolveSecret } from "./vault.js";
 import { audit } from "./audit.js";
-import { log } from "../logger.js";
+import { fireWebhook } from "./webhook.js";
+import { log, preview } from "../logger.js";
 import type { Autonomy } from "../session/manager.js";
 import { getLeadProtocol } from "../prompt.js";
 
@@ -71,6 +73,8 @@ export interface Worker {
   autonomy?: Autonomy;
   /** BCP 47 language tag for this worker's preferred response language. */
   language?: string;
+  /** Optional URL POSTed a JSON outcome payload when a run completes. */
+  webhookUrl?: string;
 }
 
 export interface WorkerRun {
@@ -190,6 +194,7 @@ export class WorkerManager {
       persona: input.persona?.trim() || undefined,
       autonomy: input.autonomy || undefined,
       language: input.language?.trim() || undefined,
+      webhookUrl: input.webhookUrl?.trim() || undefined,
       createdAt: now,
       updatedAt: now,
     };
@@ -219,6 +224,7 @@ export class WorkerManager {
     if (input.persona !== undefined) w.persona = input.persona.trim() || undefined;
     if (input.autonomy !== undefined) w.autonomy = input.autonomy || undefined;
     if (input.language !== undefined) w.language = input.language.trim() || undefined;
+    if (input.webhookUrl !== undefined) w.webhookUrl = input.webhookUrl.trim() || undefined;
     w.updatedAt = Date.now();
     this.persist();
     audit("worker.update", { id });
@@ -286,6 +292,7 @@ export class WorkerManager {
     this.persist();
     this.broadcast({ type: "worker", event: "start", run });
     audit("worker.run", { id: workerId, runId: run.id });
+    log.info("Worker run starting", { worker: w.name, workerId: w.id, runId: run.id, model: w.model ?? config.CLAUDE_MODEL });
 
     void this.execute(w, run, abort);
     return run;
@@ -346,6 +353,7 @@ export class WorkerManager {
           this.broadcast({ type: "worker", event: "delta", runId: run.id, workerId: w.id, delta });
         },
         onToolUse: (name, input) => {
+          log.info("Tool use", { chatId: 0, tool: name, arg: preview(summarize(input), 80), worker: w.name, workerId: w.id, runId: run.id });
           this.broadcast({
             type: "worker",
             event: "tool",
@@ -372,6 +380,20 @@ export class WorkerManager {
       this.active.delete(w.id);
       this.persist();
       this.broadcast({ type: "worker", event: "end", run });
+      // Outbound webhook: push this run's outcome to the worker's configured URL.
+      if (w.webhookUrl) {
+        fireWebhook(w.webhookUrl, {
+          source: "worker",
+          title: w.name,
+          id: w.id,
+          status: run.status === "running" ? "ok" : run.status,
+          summary: run.output?.slice(-2_000) || undefined,
+          costUsd: run.costUsd,
+          durationMs: run.durationMs,
+          error: run.error,
+          completedAt: new Date(run.endedAt).toISOString(),
+        });
+      }
     }
   }
 
@@ -417,6 +439,7 @@ export interface WorkerInput {
   persona?: string;
   autonomy?: Autonomy;
   language?: string;
+  webhookUrl?: string;
 }
 
 function parseSchedule(when?: string): WorkerSchedule | undefined {

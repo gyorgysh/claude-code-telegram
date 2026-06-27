@@ -94,6 +94,7 @@ export interface ScheduleView {
   lastRunAt?: number;
   createdAt: number;
   enabled: boolean;
+  webhookUrl?: string;
 }
 
 export interface UsageSummary {
@@ -175,6 +176,7 @@ export interface Worker {
   persona?: string;
   autonomy?: Autonomy;
   language?: string;
+  webhookUrl?: string;
   /** True when this Lead has a live Telegram bot listening (role+token+enabled). */
   listening?: boolean;
 }
@@ -357,6 +359,7 @@ export interface Connector {
 }
 
 export type HeartbeatMode = "off" | "alert" | "active";
+export type HeartbeatSignalKey = "cpu" | "mem" | "swap" | "disk" | "stale" | "spend";
 export interface HeartbeatConfig {
   mode: HeartbeatMode;
   intervalMs: number;
@@ -366,6 +369,7 @@ export interface HeartbeatConfig {
   diskPct: number;
   staleCardHours: number;
   spendAlertEnabled: boolean;
+  mutedSignals: HeartbeatSignalKey[];
 }
 export interface HeartbeatView {
   config: HeartbeatConfig;
@@ -620,9 +624,9 @@ export const api = {
   logsSummary: (hours?: number) =>
     get<LogUsageSummary>(`/api/logs/summary${hours ? `?hours=${hours}` : ""}`),
   schedules: () => get<{ schedules: ScheduleView[] }>("/api/schedules"),
-  createSchedule: (s: { prompt: string; when: string; cwd?: string }) =>
+  createSchedule: (s: { prompt: string; when: string; cwd?: string; webhookUrl?: string }) =>
     req<{ schedules: ScheduleView[] }>("POST", "/api/schedules", s),
-  updateSchedule: (id: string, patch: { prompt?: string; when?: string; cwd?: string }) =>
+  updateSchedule: (id: string, patch: { prompt?: string; when?: string; cwd?: string; webhookUrl?: string }) =>
     req<{ schedules: ScheduleView[] }>("PUT", `/api/schedules/${id}`, patch),
   setScheduleEnabled: (id: string, enabled: boolean) =>
     req<{ schedules: ScheduleView[] }>("PUT", `/api/schedules/${id}/enabled`, { enabled }),
@@ -715,7 +719,7 @@ export const api = {
   saveHeartbeat: (c: Partial<HeartbeatConfig>) => req<HeartbeatView>("PUT", "/api/heartbeat", c),
   runHeartbeat: () => req<{ signals: number }>("POST", "/api/heartbeat/run"),
 
-  vault: () => get<{ secrets: SecretView[] }>("/api/vault"),
+  vault: () => get<{ secrets: SecretView[]; usages: Record<string, Array<{ kind: string; name: string }>> }>("/api/vault"),
   createSecret: (s: { name: string; value: string; description?: string }) =>
     req<SecretView>("POST", "/api/vault", s),
   updateSecret: (id: string, s: { name?: string; value?: string; description?: string }) =>

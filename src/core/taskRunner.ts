@@ -12,7 +12,7 @@ import { getSkill } from "./skills.js";
 import { getProvider } from "./providers.js";
 import { resolveSecret } from "./vault.js";
 import { audit } from "./audit.js";
-import { log } from "../logger.js";
+import { log, preview } from "../logger.js";
 
 const OUTPUT_HEAD = 3_000;
 const OUTPUT_TAIL = 5_000;
@@ -99,6 +99,7 @@ export class TaskDelegator {
     if (task.column === "backlog") updateTask(id, { column: "doing" });
     this.broadcast({ type: "task", event: "start", taskId: id, runId, column: movedTo });
     audit("task.delegate", { id, runId, leadId: lead?.id });
+    log.info("Task delegate starting", { taskId: id, title: task.title, runId, lead: lead?.name, model: lead?.model ?? config.CLAUDE_MODEL });
     void this.execute(id, task.title, task.notes, runId, startedAt, abort, lead);
     return { ok: true };
   }
@@ -147,7 +148,10 @@ export class TaskDelegator {
           output += d;
           this.broadcast({ type: "task", event: "delta", taskId: id, runId, delta: d });
         },
-        onToolUse: (name) => this.broadcast({ type: "task", event: "tool", taskId: id, runId, tool: name }),
+        onToolUse: (name, input) => {
+          log.info("Tool use", { chatId: 0, tool: name, arg: preview(typeof input === "string" ? input : JSON.stringify(input), 80), task: title, taskId: id, lead: lead?.name, runId });
+          this.broadcast({ type: "task", event: "tool", taskId: id, runId, tool: name });
+        },
         onSessionId: () => {},
       });
       setDelegate(id, {

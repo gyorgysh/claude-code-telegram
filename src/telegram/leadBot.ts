@@ -17,6 +17,7 @@ import { sendExpandableQuote, sendFormattedMarkdown } from "./send.js";
 import { normalizeAgentText, summarizeInput } from "./formatting.js";
 import { getLeadProtocol } from "../prompt.js";
 import { log } from "../logger.js";
+import { config } from "../config.js";
 
 /**
  * A standalone Telegram bot for a single Lead worker. It reuses the same
@@ -191,6 +192,7 @@ export class LeadBot {
           fromAgentId: lead.id,
         });
 
+        log.info("Lead turn starting", { lead: lead.name, leadId: lead.id, chatId: ctx.chat.id, model: lead.model ?? config.CLAUDE_MODEL });
         const res = await runTurn({
           prompt: ctx.message.text,
           cwd: s.cwd,
@@ -218,6 +220,7 @@ export class LeadBot {
             streamer.appendText(normalizeAgentText(delta));
           },
           onToolUse: (name, input) => {
+            log.info("Tool use", { chatId: ctx.chat.id, tool: name, arg: summarizeInput(input).slice(0, 80), lead: lead.name, leadId: lead.id });
             streamer.setStatus(`🔧 <i>${name}</i> ${summarizeInput(input)}`);
           },
           onSessionId: (id) => {

@@ -132,8 +132,10 @@ export const en = {
   crew_council_placeholder: "Describe a proposal to put to the council vote…",
   crew_council_call: "Call the council",
   crew_council_voting: "Voting…",
-  crew_council_lead_count: "{n} enabled Lead(s) will vote",
-  crew_council_no_leads: "Enable at least one Lead to hold a vote",
+  crew_council_lead_count: "{n} member(s) will vote (Atlas + Leads)",
+  crew_council_no_leads: "Enable at least one Lead — Atlas + 1 Lead = minimum quorum",
+  crew_council_no_quorum: "No quorum",
+  crew_council_no_quorum_hint: "Vote was not held — at least one enabled Lead is required alongside Atlas.",
   // Inbox view (suggestions from agents)
   inbox_title: "Inbox",
   inbox_subtitle:
@@ -302,6 +304,7 @@ export const en = {
   vault_delete_confirm: "Delete this secret? Anything referencing it will break.",
   vault_empty: "No secrets stored.",
   vault_reveal: "Reveal",
+  vault_unused: "unused",
 
   // Tasks
   tasks_add_column: "Add column",
@@ -369,6 +372,9 @@ export const en = {
   workers_enabled: "Enabled",
   workers_lang_label: "Response language (optional)",
   workers_lang_default: "Default (server setting)",
+  workers_webhook: "Webhook URL (optional)",
+  workers_webhook_placeholder: "https://hooks.example.com/...",
+  workers_webhook_hint: "POSTed a JSON outcome (name, summary, cost, status) when a run completes.",
   workers_name: "Name",
   workers_run_now: "Run now",
   workers_no_cwd: "(no cwd)",
@@ -697,6 +703,9 @@ export const en = {
   hb_stale_card: "Stale card after",
   hb_spend_alert: "API billing spend alert",
   hb_spend_alert_note: "(API-key plans only, not meaningful for Pro/Max subscriptions)",
+  hb_signal_alerts: "Signal alerts",
+  hb_signal_alerts_hint: "Uncheck a signal type to silence it without turning off the whole heartbeat.",
+  hb_muted: "muted",
   hb_last_checked: "Last checked: {time}",
   hb_never: "never",
   hb_found_signals: "Found {n} signal(s).",
@@ -736,6 +745,9 @@ export const en = {
   sched_cwd: "Working directory (optional)",
   sched_cwd_edit: "Working directory",
   sched_cwd_placeholder: "default WORKDIR",
+  sched_webhook: "Webhook URL (optional)",
+  sched_webhook_placeholder: "https://hooks.example.com/...",
+  sched_webhook_hint: "POSTed a JSON outcome (title, summary, cost, status) when the run completes.",
   sched_create: "Create",
   sched_delete_confirm: "Delete this schedule?",
   sched_empty: "No schedules yet.",
@@ -869,6 +881,21 @@ export const en = {
   ra_status_tip_title: "Get the URL from Telegram",
   ra_status_tip_body:
     "Once the tunnel is live you can ask the bot /status from Telegram anytime to get the current public URL (and login), so you don't need to keep this page open.",
+  ra_info_title: "How remote access works",
+  ra_info_body:
+    "A relay binary (ngrok or cloudflared) runs on your machine and creates a secure tunnel from the internet to this panel. The panel login (token) stays active, and an optional Basic Auth login adds a second layer of protection.",
+  ra_info_providers: "Two providers",
+  ra_info_providers_text:
+    "Cloudflare quick tunnels are free and need no account. ngrok supports reserved domains and paid plans.",
+  ra_info_basic_auth: "Login screen",
+  ra_info_basic_auth_text:
+    "When enabled, anyone opening the public URL must enter a username and password before the panel loads.",
+  ra_info_autostart: "Auto-start",
+  ra_info_autostart_text:
+    "When checked, the relay relaunches itself after a reboot or software update with no action needed.",
+  ra_cloudflare_free_title: "No account needed",
+  ra_cloudflare_free_subtitle:
+    "Cloudflare quick tunnels are free. Just install cloudflared and hit Start.",
 
   // Kanban default column names (translated only when not renamed)
   col_planned: "Planned",

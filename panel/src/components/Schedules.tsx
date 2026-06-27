@@ -4,7 +4,7 @@ import { Badge, Button, Card, Empty, InfoCard, Input, Label } from "./ui.tsx";
 import { relTime } from "../lib/format.ts";
 import { useI18n } from "../lib/useI18n.ts";
 
-const blank = { prompt: "", when: "", cwd: "" };
+const blank = { prompt: "", when: "", cwd: "", webhookUrl: "" };
 
 export function SchedulesView({ onAuthError }: { onAuthError: () => void }) {
   const { t } = useI18n();
@@ -41,7 +41,7 @@ export function SchedulesView({ onAuthError }: { onAuthError: () => void }) {
 
   const startEdit = (s: ScheduleView) => {
     setEditingId(s.id);
-    setEditForm({ prompt: s.prompt, when: s.specRaw, cwd: s.cwd });
+    setEditForm({ prompt: s.prompt, when: s.specRaw, cwd: s.cwd, webhookUrl: s.webhookUrl ?? "" });
   };
 
   const saveEdit = async (id: string) => {
@@ -134,6 +134,15 @@ export function SchedulesView({ onAuthError }: { onAuthError: () => void }) {
               />
             </div>
           </div>
+          <div>
+            <Label>{t("sched_webhook")}</Label>
+            <Input
+              value={form.webhookUrl}
+              onChange={(e) => setForm({ ...form, webhookUrl: e.target.value })}
+              placeholder={t("sched_webhook_placeholder")}
+            />
+            <p className="mt-1 text-xs text-fg-faint">{t("sched_webhook_hint")}</p>
+          </div>
           <div className="flex gap-2">
             <Button variant="primary" onClick={create} disabled={!form.prompt.trim() || !form.when.trim()}>
               {t("sched_create")}
@@ -174,6 +183,14 @@ export function SchedulesView({ onAuthError }: { onAuthError: () => void }) {
                     />
                   </div>
                 </div>
+                <div>
+                  <Label>{t("sched_webhook")}</Label>
+                  <Input
+                    value={editForm.webhookUrl}
+                    onChange={(e) => setEditForm({ ...editForm, webhookUrl: e.target.value })}
+                    placeholder={t("sched_webhook_placeholder")}
+                  />
+                </div>
                 <div className="flex gap-2">
                   <Button variant="primary" onClick={() => saveEdit(s.id)} disabled={!editForm.prompt.trim() || !editForm.when.trim()}>
                     {t("save")}
@@ -208,6 +225,11 @@ export function SchedulesView({ onAuthError }: { onAuthError: () => void }) {
                 <div className="mono mt-1 truncate text-xs text-fg-faint" title={s.cwd}>
                   {s.cwd}
                 </div>
+                {s.webhookUrl && (
+                  <div className="mono mt-1 truncate text-xs text-fg-faint" title={s.webhookUrl}>
+                    {t("sched_webhook")}: {s.webhookUrl}
+                  </div>
+                )}
               </div>
             ),
           )}

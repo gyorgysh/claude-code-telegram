@@ -23,6 +23,7 @@ const emptyForm = {
   persona: "",
   autonomy: "full" as Autonomy,
   language: "",
+  webhookUrl: "",
 };
 type Form = typeof emptyForm;
 
@@ -307,6 +308,7 @@ function WorkerRow({
               persona: worker.persona ?? "",
               autonomy: worker.autonomy ?? "full",
               language: worker.language ?? "",
+              webhookUrl: worker.webhookUrl ?? "",
             }}
             enabled={worker.enabled}
             onCancel={() => setEditing(false)}
@@ -418,6 +420,7 @@ function WorkerWizard({
         persona: String(c.persona ?? ""),
         autonomy: (c.autonomy ?? "full") as Autonomy,
         language: String(c.language ?? ""),
+        webhookUrl: "",
       }));
       setConfigs(forms);
       setCreated(new Set());
@@ -1053,6 +1056,15 @@ function WorkerForm({
             ))}
           </Select>
         </div>
+      </div>
+      <div>
+        <Label>{t("workers_webhook")}</Label>
+        <Input
+          value={form.webhookUrl}
+          onChange={(e) => setForm({ ...form, webhookUrl: e.target.value })}
+          placeholder={t("workers_webhook_placeholder")}
+        />
+        <p className="mt-1 text-xs text-fg-faint">{t("workers_webhook_hint")}</p>
       </div>
       <div className="flex gap-2">
         <Button

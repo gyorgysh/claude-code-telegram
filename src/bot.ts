@@ -33,6 +33,7 @@ import { transcribeAudio, voiceEnabled, voiceSetupHint } from "./telegram/voice.
 import { schedules, type ScheduleRunner } from "./schedule/manager.js";
 import { heartbeat } from "./core/heartbeat.js";
 import { taskDelegator } from "./core/taskRunner.js";
+import { fireWebhook, type WebhookSource } from "./core/webhook.js";
 import { resolveMainRun } from "./core/mainSettings.js";
 import { workers } from "./core/workers.js";
 import { suggestions } from "./core/suggestions.js";
@@ -41,6 +42,7 @@ import {
   normalizeAgentText,
   summarizeArg,
   summarizeInput,
+  toolDiffMeta,
 } from "./telegram/formatting.js";
 import { resolveAsk, hasPendingAsk } from "./core/crewAsk.js";
 import { reflectOnTurn } from "./core/reflect.js";
@@ -246,6 +248,9 @@ export function buildBot(): Telegraf {
     runUserPrompt(permissions, loops, asks, s.chatId, s.prompt, bot.telegram, {
       autonomous: true,
       cwd: s.cwd,
+      webhook: s.webhookUrl
+        ? { url: s.webhookUrl, source: "schedule", title: s.prompt.slice(0, 120), id: s.id }
+        : undefined,
     });
     return true;
   };
@@ -322,6 +327,8 @@ interface TurnOptions {
   autonomous?: boolean;
   /** Run in this directory for this turn only (does not change session cwd). */
   cwd?: string;
+  /** When set, POST a JSON outcome to this webhook once the turn completes. */
+  webhook?: { url: string; source: WebhookSource; title: string; id?: string };
 }
 
 function runUserPrompt(
@@ -352,7 +359,7 @@ async function handleUserPrompt(
   tg: Telegraf["telegram"],
   opts: TurnOptions = {},
 ): Promise<void> {
-  const { images, autonomous = false } = opts;
+  const { images, autonomous = false, webhook } = opts;
   const session = sessions.get(chatId);
   // An autonomous turn (scheduled/heartbeat) that resumes the persisted context
   // counts as "using" it, so the user's next message shouldn't re-offer a resume.
@@ -597,7 +604,8 @@ async function handleUserPrompt(
         }
       },
       onToolUse: (name, input) => {
-        log.info("Tool use", { chatId, tool: name, arg: preview(summarizeArg(input), 80) });
+        const diff = toolDiffMeta(name, input);
+        log.info("Tool use", { chatId, tool: name, arg: preview(summarizeArg(input), 80), ...(diff ?? {}) });
         streamer.setStatus(`🔧 <i>${name}</i> ${summarizeInput(input)}`);
         if (mirror) chatBridge.mirrorTool(mirrorMsgId, name, preview(summarizeArg(input), 120));
 
@@ -691,6 +699,21 @@ async function handleUserPrompt(
     if (!res.isError && res.toolCalls?.length) {
       void reflectOnTurn(prompt, res.toolCalls, res, chatId);
     }
+
+    // Outbound webhook: push the outcome to the schedule's configured URL.
+    if (webhook) {
+      fireWebhook(webhook.url, {
+        source: webhook.source,
+        title: webhook.title,
+        id: webhook.id,
+        status: res.isError ? "error" : "ok",
+        summary: res.text?.trim() || undefined,
+        costUsd: res.costUsd,
+        durationMs: res.durationMs,
+        error: res.isError ? res.text?.trim() : undefined,
+        completedAt: new Date().toISOString(),
+      });
+    }
   } catch (err) {
     await streamer.finalize().catch(() => {});
     const stopped = session.abort?.signal.aborted;
@@ -708,6 +731,17 @@ async function handleUserPrompt(
     if (mirror) {
       chatBridge.mirrorEnd(mirrorMsgId, mirrorText || (stopped ? "Stopped." : friendlyError(err)), {
         error: true,
+      });
+    }
+    // Outbound webhook: report the failed/stopped outcome too.
+    if (webhook) {
+      fireWebhook(webhook.url, {
+        source: webhook.source,
+        title: webhook.title,
+        id: webhook.id,
+        status: stopped ? "stopped" : "error",
+        error: stopped ? undefined : errText(err),
+        completedAt: new Date().toISOString(),
       });
     }
   } finally {

@@ -33,7 +33,41 @@ export function SettingsView({ onAuthError }: { onAuthError: () => void }) {
       <MainAgentSettings onAuthError={onAuthError} />
       <ProvidersSettings onAuthError={onAuthError} />
       <PlanBudgetSettings onAuthError={onAuthError} />
+      <WhitelabelSettings />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Whitelabel (coming soon placeholder)
+// ---------------------------------------------------------------------------
+
+function WhitelabelSettings() {
+  const { t } = useI18n();
+  return (
+    <Card
+      title={t("settings_whitelabel")}
+      right={<Badge tone="zinc">{t("settings_coming_soon")}</Badge>}
+    >
+      <p className="mb-4 text-sm text-fg-dim">{t("settings_whitelabel_desc")}</p>
+      <div className="space-y-3 opacity-50 pointer-events-none select-none" aria-hidden="true">
+        <div>
+          <Label>{t("settings_whitelabel_brand")}</Label>
+          <Input disabled placeholder="MyHQ" value="" onChange={() => {}} />
+        </div>
+        <div>
+          <Label>{t("settings_whitelabel_agent_name")}</Label>
+          <Input disabled placeholder="Atlas" value="" onChange={() => {}} />
+        </div>
+        <div>
+          <Label>{t("settings_whitelabel_panel_title")}</Label>
+          <Input disabled placeholder="Command Center" value="" onChange={() => {}} />
+        </div>
+        <div className="pt-1">
+          <Button disabled>{t("settings_coming_soon")}</Button>
+        </div>
+      </div>
+    </Card>
   );
 }
 

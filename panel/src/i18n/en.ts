@@ -136,6 +136,7 @@ export const en = {
   crew_council_no_leads: "Enable at least one Lead — Atlas + 1 Lead = minimum quorum",
   crew_council_no_quorum: "No quorum",
   crew_council_no_quorum_hint: "Vote was not held — at least one enabled Lead is required alongside Atlas.",
+  crew_council_delete_confirm: "Delete?",
   // Inbox view (suggestions from agents)
   inbox_title: "Inbox",
   inbox_subtitle:
@@ -221,6 +222,12 @@ export const en = {
   settings_providers_desc: "Local model servers (LM Studio, Ollama) or proxy endpoints.",
   settings_language: "Language",
   settings_language_desc: "Set the panel interface language and the default language agents use when responding.",
+  settings_whitelabel: "Whitelabel",
+  settings_whitelabel_desc: "Rename the product for your own deployment — custom brand name, agent name, and panel title. These settings will be editable here once the feature is ready.",
+  settings_whitelabel_brand: "Brand name",
+  settings_whitelabel_agent_name: "Default agent name",
+  settings_whitelabel_panel_title: "Panel title",
+  settings_coming_soon: "Coming soon",
 
   // Common shared
   saved: "Saved ✓",
@@ -672,6 +679,8 @@ export const en = {
   logs_act_maintenance: "Maintenance run",
   logs_act_bot_ready: "Bot online",
   logs_act_panel_ready: "Panel online",
+  logs_act_diff_expand: "▸ diff",
+  logs_act_diff_collapse: "▾ diff",
 
   // Main Agent card
   agent_main_title: "Main Agent",

@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { runTurn, AUTO_ALLOWED_TOOLS } from "../claude/runner.js";
@@ -185,6 +185,26 @@ function persistSession(session: CouncilSession): void {
     appendFileSync(COUNCIL_FILE, JSON.stringify(session) + "\n");
   } catch (err) {
     log.warn("Failed to persist council session", { error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+/** Remove a single council session by id from the JSONL file. Returns true if
+ *  a matching entry was found and deleted, false if not found or file missing. */
+export function deleteCouncilSession(id: string): boolean {
+  if (!existsSync(COUNCIL_FILE)) return false;
+  try {
+    const raw = readFileSync(COUNCIL_FILE, "utf8");
+    const lines = raw.trim().split("\n").filter(Boolean);
+    const next = lines.filter((l) => {
+      try { return (JSON.parse(l) as CouncilSession).id !== id; }
+      catch { return true; }
+    });
+    if (next.length === lines.length) return false;
+    writeFileSync(COUNCIL_FILE, next.length ? next.join("\n") + "\n" : "");
+    return true;
+  } catch (err) {
+    log.warn("Failed to delete council session", { id, error: err instanceof Error ? err.message : String(err) });
+    return false;
   }
 }
 

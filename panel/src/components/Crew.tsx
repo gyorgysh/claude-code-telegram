@@ -243,7 +243,16 @@ export function CrewView({ onAuthError }: { onAuthError: () => void }) {
         ) : (
           <div className="space-y-4">
             {council.map((session) => (
-              <CouncilCard key={session.id} session={session} t={t} />
+              <CouncilCard
+                key={session.id}
+                session={session}
+                t={t}
+                onDelete={(id) => {
+                  void api.deleteCouncilSession(id).then(() =>
+                    setCouncil((prev) => prev.filter((s) => s.id !== id))
+                  ).catch(() => {});
+                }}
+              />
             ))}
           </div>
         )}
@@ -332,8 +341,17 @@ function DelegationCard({
   );
 }
 
-function CouncilCard({ session, t }: { session: CouncilSession; t: ReturnType<typeof useI18n>["t"] }) {
+function CouncilCard({
+  session,
+  t,
+  onDelete,
+}: {
+  session: CouncilSession;
+  t: ReturnType<typeof useI18n>["t"];
+  onDelete: (id: string) => void;
+}) {
   const [open, setOpen] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
   const total = session.votes.length;
   const winner =
     session.supportCount > session.opposeCount
@@ -349,6 +367,14 @@ function CouncilCard({ session, t }: { session: CouncilSession; t: ReturnType<ty
           <span className="font-medium text-fg">{session.proposal.slice(0, 100)}</span>
           <Badge tone="amber">{t("crew_council_no_quorum")}</Badge>
           <span className="ml-auto text-xs text-fg-faint">{relTime(session.createdAt)}</span>
+          <button
+            type="button"
+            onClick={() => (confirmDel ? onDelete(session.id) : setConfirmDel(true))}
+            onBlur={() => setConfirmDel(false)}
+            className="text-xs text-fg-faint hover:text-red-400"
+          >
+            {confirmDel ? t("crew_council_delete_confirm") : "✕"}
+          </button>
         </div>
         <p className="mt-1 text-xs text-fg-dim">{t("crew_council_no_quorum_hint")}</p>
       </div>
@@ -358,30 +384,40 @@ function CouncilCard({ session, t }: { session: CouncilSession; t: ReturnType<ty
   return (
     <div className="rounded-lg border border-line overflow-hidden">
       {/* Header / summary */}
-      <button
-        className="w-full flex flex-wrap items-center gap-2 p-3 text-left hover:bg-surface-2 transition-colors"
-        onClick={() => setOpen((o) => !o)}
-      >
-        <span className="text-sm font-medium text-fg truncate flex-1">
-          {session.proposal.slice(0, 100)}
-        </span>
-        <span className="shrink-0 flex items-center gap-1.5 text-xs">
-          <Badge tone="green">✅ {session.supportCount}</Badge>
-          <Badge tone="amber">❌ {session.opposeCount}</Badge>
-          {session.abstainCount > 0 && <Badge tone="zinc">⬜ {session.abstainCount}</Badge>}
-          {total > 0 && (
-            <Badge tone={winner === "support" ? "green" : winner === "oppose" ? "amber" : "zinc"}>
-              {winner === "support"
-                ? t("crew_council_support")
-                : winner === "oppose"
-                ? t("crew_council_oppose")
-                : "Tied"}
-            </Badge>
-          )}
-        </span>
-        <span className="shrink-0 text-xs text-fg-faint">{relTime(session.createdAt)}</span>
-        <span className="shrink-0 text-fg-dim">{open ? "▴" : "▾"}</span>
-      </button>
+      <div className="w-full flex flex-wrap items-center gap-2 p-3">
+        <button
+          className="flex flex-wrap items-center gap-2 text-left flex-1 min-w-0 hover:opacity-80 transition-opacity"
+          onClick={() => setOpen((o) => !o)}
+        >
+          <span className="text-sm font-medium text-fg truncate flex-1">
+            {session.proposal.slice(0, 100)}
+          </span>
+          <span className="shrink-0 flex items-center gap-1.5 text-xs">
+            <Badge tone="green">✅ {session.supportCount}</Badge>
+            <Badge tone="amber">❌ {session.opposeCount}</Badge>
+            {session.abstainCount > 0 && <Badge tone="zinc">⬜ {session.abstainCount}</Badge>}
+            {total > 0 && (
+              <Badge tone={winner === "support" ? "green" : winner === "oppose" ? "amber" : "zinc"}>
+                {winner === "support"
+                  ? t("crew_council_support")
+                  : winner === "oppose"
+                  ? t("crew_council_oppose")
+                  : "Tied"}
+              </Badge>
+            )}
+          </span>
+          <span className="shrink-0 text-xs text-fg-faint">{relTime(session.createdAt)}</span>
+          <span className="shrink-0 text-fg-dim">{open ? "▴" : "▾"}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => (confirmDel ? onDelete(session.id) : setConfirmDel(true))}
+          onBlur={() => setConfirmDel(false)}
+          className="shrink-0 text-xs text-fg-faint hover:text-red-400 transition-colors px-1"
+        >
+          {confirmDel ? t("crew_council_delete_confirm") : "✕"}
+        </button>
+      </div>
 
       {/* Expanded votes */}
       {open && (

@@ -42,6 +42,11 @@ const schema = z.object({
   // many times in one turn, pause and ask Skip / Approve once / Continue, so a
   // runaway retry can't burn tokens unattended. Set to 0 to disable.
   LOOP_THRESHOLD: z.coerce.number().int().nonnegative().default(3),
+  // Outbound webhooks: when a schedule or worker/task run with a webhookUrl
+  // completes, POST a JSON outcome payload to that URL. This is the per-request
+  // timeout (ms) for that POST. Every webhook URL is run through assertSafeUrl()
+  // (SSRF guard) before the call.
+  WEBHOOK_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
   // Branding overrides (allows white-labelling / self-hosting with a different name).
   ATLAS_NAME: z.string().min(1).default("Atlas"),
   BRAND_NAME: z.string().min(1).default("MyHQ"),

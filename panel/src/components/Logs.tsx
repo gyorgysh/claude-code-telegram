@@ -242,6 +242,9 @@ interface Activity {
   verb: string;
   target: string;
   tone: "normal" | "error";
+  agentLabel?: string;
+  diffLines?: string;
+  diffSnippet?: string;
 }
 
 /** Map a tool name to a friendly icon and verb. */
@@ -332,6 +335,16 @@ function describeLifecycle(
   }
 }
 
+/** Derive a human-readable agent label from tool-use log meta. */
+function agentLabelFromMeta(meta: Record<string, unknown>): string | undefined {
+  if (typeof meta.worker === "string" && meta.worker) return meta.worker;
+  if (typeof meta.lead === "string" && meta.lead) return meta.lead;
+  if (typeof meta.task === "string" && meta.task) return meta.task;
+  const chatId = meta.chatId;
+  if (typeof chatId === "number" && chatId > 0) return "Atlas";
+  return undefined;
+}
+
 /** Derive the activity feed from log entries: "Tool use" rows (which carry
  *  meta.tool + meta.arg) plus high-level lifecycle events (scheduler/heartbeat/
  *  update checks, incoming messages, etc.) so it reads like a live, friendly
@@ -344,6 +357,9 @@ function toActivities(source: LogEntry[], t: TFn): Activity[] {
       if (!tool) continue;
       const arg = typeof l.meta.arg === "string" ? l.meta.arg : "";
       const { icon, verb } = describeTool(tool, t);
+      const agentLabel = agentLabelFromMeta(l.meta);
+      const diffLines = typeof l.meta.diffLines === "string" ? l.meta.diffLines : undefined;
+      const diffSnippet = typeof l.meta.diffSnippet === "string" ? l.meta.diffSnippet : undefined;
       out.push({
         key: `${l.seq}-${l.ts}`,
         ts: l.ts,
@@ -351,6 +367,9 @@ function toActivities(source: LogEntry[], t: TFn): Activity[] {
         verb,
         target: arg,
         tone: l.level === "error" ? "error" : "normal",
+        agentLabel,
+        diffLines,
+        diffSnippet,
       });
       continue;
     }
@@ -382,6 +401,14 @@ function ActivityFeed({
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const activities = toActivities(source, t);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggleDiff = (key: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
 
   useEffect(() => {
     if (follow && boxRef.current) boxRef.current.scrollTop = boxRef.current.scrollHeight;
@@ -414,26 +441,58 @@ function ActivityFeed({
         ) : (
           <div className="flex flex-col">
             {activities.map((a) => (
-              <div
-                key={a.key}
-                className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-surface-2"
-              >
-                <span className="shrink-0 text-base leading-none">{a.icon}</span>
-                <div className="min-w-0 flex-1">
-                  <span
-                    className={`text-sm font-medium ${
-                      a.tone === "error" ? "text-red-400" : "text-fg"
-                    }`}
-                  >
-                    {a.verb}
+              <div key={a.key} className="rounded-lg px-2 py-1 hover:bg-surface-2">
+                <div className="flex items-center gap-3 py-0.5">
+                  <span className="shrink-0 text-base leading-none">{a.icon}</span>
+                  <div className="min-w-0 flex-1 flex flex-wrap items-center gap-1.5">
+                    {a.agentLabel && (
+                      <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-accent/10 text-accent border border-accent/20">
+                        {a.agentLabel}
+                      </span>
+                    )}
+                    <span
+                      className={`text-sm font-medium ${
+                        a.tone === "error" ? "text-red-400" : "text-fg"
+                      }`}
+                    >
+                      {a.verb}
+                    </span>
+                    {a.target && (
+                      <span className="truncate font-mono text-xs text-fg-dim max-w-[200px]">{a.target}</span>
+                    )}
+                    {a.diffLines && (
+                      <span className="shrink-0 font-mono text-[10px] text-fg-faint">{a.diffLines}</span>
+                    )}
+                    {a.diffSnippet && (
+                      <button
+                        type="button"
+                        onClick={() => toggleDiff(a.key)}
+                        className="shrink-0 text-[10px] text-accent hover:underline"
+                      >
+                        {expanded.has(a.key) ? t("logs_act_diff_collapse") : t("logs_act_diff_expand")}
+                      </button>
+                    )}
+                  </div>
+                  <span className="tabular shrink-0 text-xs text-fg-faint">
+                    {new Date(a.ts).toLocaleTimeString()}
                   </span>
-                  {a.target && (
-                    <span className="ml-2 truncate font-mono text-xs text-fg-dim">{a.target}</span>
-                  )}
                 </div>
-                <span className="tabular shrink-0 text-xs text-fg-faint">
-                  {new Date(a.ts).toLocaleTimeString()}
-                </span>
+                {a.diffSnippet && expanded.has(a.key) && (
+                  <pre className="mt-1 ml-8 overflow-x-auto rounded bg-surface-2 p-2 text-[10px] leading-[1.5]">
+                    {a.diffSnippet.split("\n").map((line, i) => (
+                      <div
+                        key={i}
+                        className={
+                          line.startsWith("+ ") ? "text-green-400" :
+                          line.startsWith("- ") ? "text-red-400" :
+                          "text-fg-dim"
+                        }
+                      >
+                        {line}
+                      </div>
+                    ))}
+                  </pre>
+                )}
               </div>
             ))}
           </div>

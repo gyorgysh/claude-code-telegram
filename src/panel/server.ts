@@ -28,6 +28,7 @@ import {
 } from "../logger.js";
 import { getHealth } from "../core/health.js";
 import { listSessions, listSchedules, usageSummary } from "../core/snapshot.js";
+import { isValidWebhookUrl } from "../core/webhook.js";
 import { getPrompt, savePlaybook } from "../core/playbook.js";
 import { listSkills, createSkill, updateSkill, deleteSkill } from "../core/skills.js";
 import { listClaudeFiles, readClaudeFile, writeClaudeFile } from "../core/claudeFiles.js";
@@ -57,7 +58,7 @@ import { suggestions } from "../core/suggestions.js";
 import { getStatus } from "../core/status.js";
 import { heartbeat } from "../core/heartbeat.js";
 import { listConnectors, setConnector } from "../core/connectors.js";
-import { vault, importProviderSecrets, resolveSecret } from "../core/vault.js";
+import { vault, importProviderSecrets, resolveSecret, vaultUsages } from "../core/vault.js";
 import {
   listProviders,
   listProviderViews,
@@ -82,7 +83,7 @@ import { ptyManager } from "../core/ptyManager.js";
 import { tunnelManager, BASIC_AUTH_USER } from "../core/tunnelManager.js";
 import { PanelHub } from "./hub.js";
 import { runTurn } from "../claude/runner.js";
-import { runCouncil } from "../core/council.js";
+import { runCouncil, deleteCouncilSession } from "../core/council.js";
 
 const STATIC_DIR = join(repoRoot, "panel", "dist");
 
@@ -308,6 +309,7 @@ function workerView(w: Worker) {
     persona: w.persona ?? "",
     autonomy: w.autonomy ?? "full",
     language: w.language ?? "",
+    webhookUrl: w.webhookUrl ?? "",
     // True when this Lead has a live Telegram bot listening (role lead + token
     // + enabled). The panel warns when a Lead is enabled but has no token.
     listening: w.role === "lead" && !!w.telegramToken && w.enabled,
@@ -392,23 +394,34 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
   app.get("/api/sessions", async () => ({ sessions: listSessions() }));
   app.get("/api/schedules", async () => ({ schedules: listSchedules() }));
   app.post("/api/schedules", async (req, reply) => {
-    const { prompt, when, cwd, chatId } = (req.body ?? {}) as {
+    const { prompt, when, cwd, chatId, webhookUrl } = (req.body ?? {}) as {
       prompt?: string;
       when?: string;
       cwd?: string;
       chatId?: number;
+      webhookUrl?: string;
     };
     if (!prompt?.trim()) return reply.code(400).send({ error: "prompt required" });
     const spec = parseWhen(when ?? "");
     if (!spec) return reply.code(400).send({ error: "invalid schedule (use 30m, 2h, 1d, or HH:MM)" });
+    if (webhookUrl?.trim() && !(await isValidWebhookUrl(webhookUrl)))
+      return reply.code(400).send({ error: "invalid or blocked webhook URL" });
     const target = chatId ?? [...allowedUserIds][0];
     if (target === undefined) return reply.code(400).send({ error: "no allowed user to own the schedule" });
-    schedules.add(target, cwd?.trim() || config.WORKDIR, prompt.trim(), spec);
+    schedules.add(target, cwd?.trim() || config.WORKDIR, prompt.trim(), spec, webhookUrl);
     return { schedules: listSchedules() };
   });
   app.put("/api/schedules/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
-    const patch = (req.body ?? {}) as { prompt?: string; when?: string; cwd?: string; chatId?: number };
+    const patch = (req.body ?? {}) as {
+      prompt?: string;
+      when?: string;
+      cwd?: string;
+      chatId?: number;
+      webhookUrl?: string;
+    };
+    if (patch.webhookUrl?.trim() && !(await isValidWebhookUrl(patch.webhookUrl)))
+      return reply.code(400).send({ error: "invalid or blocked webhook URL" });
     const updated = schedules.updateById(id, patch);
     if (!updated) return reply.code(404).send({ error: "not found" });
     return { schedules: listSchedules() };
@@ -621,7 +634,7 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
   });
 
   // --- secret vault ---
-  app.get("/api/vault", async () => ({ secrets: vault.list() }));
+  app.get("/api/vault", async () => ({ secrets: vault.list(), usages: vaultUsages() }));
   app.post("/api/vault", async (req) => vault.create(req.body as never));
   app.put("/api/vault/:id", async (req, reply) => {
     const updated = vault.update((req.params as { id: string }).id, req.body as never);
@@ -732,8 +745,16 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
     skills: listSkills().map((s) => ({ id: s.id, name: s.name })),
     providers: listProviders().map((p) => ({ id: p.id, name: p.name })),
   }));
-  app.post("/api/workers", async (req) => workerView(workers.create(req.body as never)));
+  app.post("/api/workers", async (req, reply) => {
+    const hook = (req.body as { webhookUrl?: string })?.webhookUrl;
+    if (hook?.trim() && !(await isValidWebhookUrl(hook)))
+      return reply.code(400).send({ error: "invalid or blocked webhook URL" });
+    return workerView(workers.create(req.body as never));
+  });
   app.put("/api/workers/:id", async (req, reply) => {
+    const hook = (req.body as { webhookUrl?: string })?.webhookUrl;
+    if (hook?.trim() && !(await isValidWebhookUrl(hook)))
+      return reply.code(400).send({ error: "invalid or blocked webhook URL" });
     const updated = workers.update((req.params as { id: string }).id, req.body as never);
     if (!updated) return reply.code(404).send({ error: "not found" });
     return workerView(updated);
@@ -943,6 +964,14 @@ Respond with ONLY a JSON array, no markdown fences, no explanation. Example form
       log.error("Panel council vote failed", { error: message });
       return reply.code(500).send({ error: message });
     }
+  });
+
+  // Delete a single council session from the history
+  app.delete("/api/council/:id", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ok = deleteCouncilSession(id);
+    if (!ok) return reply.code(404).send({ error: "Session not found" });
+    return { ok: true };
   });
 
   // --- delegation log (inter-agent crew communication) ---

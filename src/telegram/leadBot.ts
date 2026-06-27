@@ -14,7 +14,7 @@ import { getProvider } from "../core/providers.js";
 import { TelegramStreamer } from "./streamer.js";
 import { AskQuestionManager } from "./askQuestion.js";
 import { sendExpandableQuote, sendFormattedMarkdown } from "./send.js";
-import { normalizeAgentText, summarizeInput } from "./formatting.js";
+import { normalizeAgentText, summarizeInput, toolDiffMeta } from "./formatting.js";
 import { getLeadProtocol } from "../prompt.js";
 import { log } from "../logger.js";
 import { config } from "../config.js";
@@ -220,7 +220,8 @@ export class LeadBot {
             streamer.appendText(normalizeAgentText(delta));
           },
           onToolUse: (name, input) => {
-            log.info("Tool use", { chatId: ctx.chat.id, tool: name, arg: summarizeInput(input).slice(0, 80), lead: lead.name, leadId: lead.id });
+            const diff = toolDiffMeta(name, input);
+            log.info("Tool use", { chatId: ctx.chat.id, tool: name, arg: summarizeInput(input).slice(0, 80), lead: lead.name, leadId: lead.id, ...(diff ?? {}) });
             streamer.setStatus(`🔧 <i>${name}</i> ${summarizeInput(input)}`);
           },
           onSessionId: (id) => {

@@ -13,6 +13,7 @@ import { getProvider } from "./providers.js";
 import { resolveSecret } from "./vault.js";
 import { audit } from "./audit.js";
 import { log, preview } from "../logger.js";
+import { toolDiffMeta } from "../telegram/formatting.js";
 
 const OUTPUT_HEAD = 3_000;
 const OUTPUT_TAIL = 5_000;
@@ -149,7 +150,8 @@ export class TaskDelegator {
           this.broadcast({ type: "task", event: "delta", taskId: id, runId, delta: d });
         },
         onToolUse: (name, input) => {
-          log.info("Tool use", { chatId: 0, tool: name, arg: preview(typeof input === "string" ? input : JSON.stringify(input), 80), task: title, taskId: id, lead: lead?.name, runId });
+          const diff = toolDiffMeta(name, input);
+          log.info("Tool use", { chatId: 0, tool: name, arg: preview(typeof input === "string" ? input : JSON.stringify(input), 80), task: title, taskId: id, lead: lead?.name, runId, ...(diff ?? {}) });
           this.broadcast({ type: "task", event: "tool", taskId: id, runId, tool: name });
         },
         onSessionId: () => {},
@@ -173,7 +175,7 @@ export class TaskDelegator {
           text: `Task completed${by}: ${title}${summary ? `. ${summary}` : ""}`,
           tags: ["task", "completed"],
           salience: 0.8,
-          tier: "hot",
+          tier: "warm",
         });
       }
       await Promise.resolve(

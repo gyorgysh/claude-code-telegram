@@ -768,6 +768,8 @@ export const api = {
   runCouncil: (proposal: string) =>
     req<{ session: Record<string, unknown> }>("POST", "/api/council", { proposal }),
 
+  deleteCouncilSession: (id: string) => req<{ ok: boolean }>("DELETE", `/api/council/${id}`),
+
   languages: () => get<{ languages: Record<string, string> }>("/api/languages"),
 
   chat: () => get<ChatView>("/api/chat"),

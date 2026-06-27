@@ -138,6 +138,7 @@ export const hu: Translations = {
   crew_council_no_leads: "Engedélyezz legalább egy Leadet — Atlas + 1 Lead = minimális kvórum",
   crew_council_no_quorum: "Nincs kvórum",
   crew_council_no_quorum_hint: "A szavazás nem ment végbe — legalább egy aktív Lead szükséges az Atlas mellé.",
+  crew_council_delete_confirm: "Törlöd?",
   // Postaláda nézet (ügynökök javaslatai)
   inbox_title: "Postaláda",
   inbox_subtitle:
@@ -223,6 +224,12 @@ export const hu: Translations = {
   settings_providers_desc: "Helyi modell szerverek (LM Studio, Ollama) vagy proxy végpontok.",
   settings_language: "Nyelv",
   settings_language_desc: "A panel felület nyelve és az ügynökök alapértelmezett válasz-nyelve.",
+  settings_whitelabel: "Fehércímkézés",
+  settings_whitelabel_desc: "Átnevezheted a terméket saját telepítésedhez — egyedi márkanév, ügynöknév és panel cím. Ezek a beállítások itt lesznek szerkeszthetők, amint a funkció elkészül.",
+  settings_whitelabel_brand: "Márkanév",
+  settings_whitelabel_agent_name: "Alapértelmezett ügynöknév",
+  settings_whitelabel_panel_title: "Panel cím",
+  settings_coming_soon: "Hamarosan",
 
   // Közös
   saved: "Mentve ✓",
@@ -674,6 +681,8 @@ export const hu: Translations = {
   logs_act_maintenance: "Karbantartási futás",
   logs_act_bot_ready: "Bot online",
   logs_act_panel_ready: "Panel online",
+  logs_act_diff_expand: "▸ diff",
+  logs_act_diff_collapse: "▾ diff",
 
   // Fő ügynök kártya
   agent_main_title: "Fő ügynök",

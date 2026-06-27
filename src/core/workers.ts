@@ -15,6 +15,7 @@ import { resolveSecret } from "./vault.js";
 import { audit } from "./audit.js";
 import { fireWebhook } from "./webhook.js";
 import { log, preview } from "../logger.js";
+import { toolDiffMeta } from "../telegram/formatting.js";
 import type { Autonomy } from "../session/manager.js";
 import { getLeadProtocol } from "../prompt.js";
 
@@ -353,7 +354,8 @@ export class WorkerManager {
           this.broadcast({ type: "worker", event: "delta", runId: run.id, workerId: w.id, delta });
         },
         onToolUse: (name, input) => {
-          log.info("Tool use", { chatId: 0, tool: name, arg: preview(summarize(input), 80), worker: w.name, workerId: w.id, runId: run.id });
+          const diff = toolDiffMeta(name, input);
+          log.info("Tool use", { chatId: 0, tool: name, arg: preview(summarize(input), 80), worker: w.name, workerId: w.id, runId: run.id, ...(diff ?? {}) });
           this.broadcast({
             type: "worker",
             event: "tool",

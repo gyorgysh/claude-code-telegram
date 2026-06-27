@@ -194,8 +194,8 @@ export function deleteTask(id: string): boolean {
 }
 
 /**
- * Move a card to the archive column, stripping notes/delegation data so the
- * archive stays lightweight (title + metadata only).
+ * Move a card to the archive column. Notes and delegation history are kept
+ * intact so a restored card arrives with its full context.
  */
 export function archiveTask(id: string): Task | undefined {
   const tasks = load();
@@ -203,8 +203,6 @@ export function archiveTask(id: string): Task | undefined {
   if (!task || task.column === "archive") return task;
   const maxOrder = Math.max(0, ...tasks.filter((t) => t.column === "archive").map((t) => t.order));
   task.column = "archive";
-  task.notes = "";
-  task.delegate = undefined;
   task.order = maxOrder + 1;
   task.updatedAt = Date.now();
   persist(tasks);

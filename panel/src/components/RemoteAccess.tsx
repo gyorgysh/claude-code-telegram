@@ -12,8 +12,8 @@ import { useI18n } from "../lib/useI18n.ts";
 import type { TranslationKey } from "../i18n/en.ts";
 
 const PROVIDERS: Array<{ id: TunnelProviderId; label: TranslationKey; desc: TranslationKey }> = [
-  { id: "ngrok", label: "ra_provider_ngrok", desc: "ra_provider_ngrok_desc" },
   { id: "cloudflare", label: "ra_provider_cloudflare", desc: "ra_provider_cloudflare_desc" },
+  { id: "ngrok", label: "ra_provider_ngrok", desc: "ra_provider_ngrok_desc" },
 ];
 
 export function RemoteAccessView({ onAuthError }: { onAuthError: () => void }) {
@@ -24,7 +24,7 @@ export function RemoteAccessView({ onAuthError }: { onAuthError: () => void }) {
   const [busy, setBusy] = useState(false);
 
   // Draft form state (provider/token/domain) editable before saving.
-  const [provider, setProvider] = useState<TunnelProviderId>("ngrok");
+  const [provider, setProvider] = useState<TunnelProviderId>("cloudflare");
   const [token, setToken] = useState("");
   const [domain, setDomain] = useState("");
   const [autoStart, setAutoStart] = useState(true);
@@ -193,6 +193,11 @@ export function RemoteAccessView({ onAuthError }: { onAuthError: () => void }) {
         right={<StateBadge state={view.state} t={t} />}
       >
         <p className="mb-3 text-sm text-fg-dim">{t("ra_desc")}</p>
+        <div className="mb-4">
+          <Callout title={t("ra_status_tip_title")} dismissId="remote-access-status-tip">
+            {t("ra_status_tip_body")}
+          </Callout>
+        </div>
         {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
 
         {/* Public URL panel (when up) */}
@@ -274,35 +279,40 @@ export function RemoteAccessView({ onAuthError }: { onAuthError: () => void }) {
           ))}
         </div>
 
-        {/* Auth token */}
-        <div className="mb-3">
-          <Label>
-            {provider === "ngrok" ? t("ra_token_required") : t("ra_token_optional")}
-          </Label>
-          {secrets.length > 0 && (
-            <Select
-              className="mb-2"
-              value=""
+        {/* Auth token — only ngrok needs one; cloudflare quick tunnels are free
+            and tokenless, so the field is hidden entirely for cloudflare. */}
+        {provider === "ngrok" ? (
+          <div className="mb-3">
+            <Label>{t("ra_token_required")}</Label>
+            {secrets.length > 0 && (
+              <Select
+                className="mb-2"
+                value=""
+                disabled={live}
+                onChange={(e) => e.target.value && setToken(e.target.value)}
+              >
+                <option value="">{t("ra_token_pick_vault")}</option>
+                {secrets.map((s) => (
+                  <option key={s.id} value={`vault:${s.id}`}>
+                    {s.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+            <Input
+              type="password"
               disabled={live}
-              onChange={(e) => e.target.value && setToken(e.target.value)}
-            >
-              <option value="">{t("ra_token_pick_vault")}</option>
-              {secrets.map((s) => (
-                <option key={s.id} value={`vault:${s.id}`}>
-                  {s.name}
-                </option>
-              ))}
-            </Select>
-          )}
-          <Input
-            type="password"
-            disabled={live}
-            placeholder={view.hasToken ? t("ra_token_saved") : t("ra_token_placeholder")}
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-          />
-          <p className="mt-1 text-xs text-fg-faint">{t("ra_token_hint")}</p>
-        </div>
+              placeholder={view.hasToken ? t("ra_token_saved") : t("ra_token_placeholder")}
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+            />
+            <p className="mt-1 text-xs text-fg-faint">{t("ra_token_hint")}</p>
+          </div>
+        ) : (
+          <div className="mb-3 rounded-lg border border-accent/30 bg-accent/5 p-3 text-xs text-fg-dim">
+            {t("ra_cloudflare_free")}
+          </div>
+        )}
 
         {/* Remote access password — HTTP login in front of the public tunnel.
             On by default; this is the username/password a phone enters first. */}

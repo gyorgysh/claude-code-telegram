@@ -776,6 +776,11 @@ export const en = {
   ra_state_starting: "Starting",
   ra_state_running: "Live",
   ra_state_error: "Error",
+  ra_cloudflare_free:
+    "Cloudflare quick tunnels are free and need no account or token, just start it. The login below is optional but recommended.",
+  ra_status_tip_title: "Get the URL from Telegram",
+  ra_status_tip_body:
+    "Once the tunnel is live you can ask the bot /status from Telegram anytime to get the current public URL (and login), so you don't need to keep this page open.",
 
   // Kanban default column names (translated only when not renamed)
   col_planned: "Planned",

@@ -778,6 +778,11 @@ export const hu: Translations = {
   ra_state_starting: "Indul",
   ra_state_running: "Élő",
   ra_state_error: "Hiba",
+  ra_cloudflare_free:
+    "A Cloudflare gyors tunnel ingyenes, nem kell hozzá fiók vagy token, csak indítsd el. Az alábbi belépés opcionális, de ajánlott.",
+  ra_status_tip_title: "URL lekérése Telegramból",
+  ra_status_tip_body:
+    "Ha a tunnel él, bármikor lekérheted a /status paranccsal a Telegram botban az aktuális publikus URL-t (és a belépést), így nem kell nyitva tartanod ezt az oldalt.",
 
   // Kanban alapértelmezett oszlopnevek (csak átnevezetlen állapotban fordítva)
   col_planned: "Tervezett",

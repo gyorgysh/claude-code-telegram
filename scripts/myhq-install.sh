@@ -514,12 +514,12 @@ configure_remote_access() {
   local choice="${MYHQ_REMOTE:-}"
   if [ -z "$choice" ]; then
     printf '\n%s\n' "${B}Reach the panel from your phone?${R} ${DIM}(secure public tunnel to this panel, still behind your login)${R}" >"${TTY:-/dev/stdout}"
-    printf '%s\n' "  ${B}1)${R} No, local only ${DIM}(default — most secure)${R}" >"${TTY:-/dev/stdout}"
-    printf '%s\n' "  ${B}2)${R} ngrok ${DIM}(needs a free authtoken from ngrok.com)${R}" >"${TTY:-/dev/stdout}"
-    printf '%s\n' "  ${B}3)${R} Cloudflare ${DIM}(free quick tunnel, no account needed)${R}" >"${TTY:-/dev/stdout}"
+    printf '%s\n' "  ${B}1)${R} No, local only ${DIM}(default, most secure)${R}" >"${TTY:-/dev/stdout}"
+    printf '%s\n' "  ${B}2)${R} Cloudflare ${DIM}(free quick tunnel, no account or token needed)${R}" >"${TTY:-/dev/stdout}"
+    printf '%s\n' "  ${B}3)${R} ngrok ${DIM}(needs a free authtoken from ngrok.com)${R}" >"${TTY:-/dev/stdout}"
     printf '%s\n' "  ${B}4)${R} Install both, decide later in the panel" >"${TTY:-/dev/stdout}"
     case "$(ask "Choose 1-4" "1")" in
-      2) choice=ngrok ;; 3) choice=cloudflare ;; 4) choice=both ;; *) choice=none ;;
+      2) choice=cloudflare ;; 3) choice=ngrok ;; 4) choice=both ;; *) choice=none ;;
     esac
   fi
 
@@ -527,15 +527,15 @@ configure_remote_access() {
     none)
       ok "Remote access off. Enable it later in the panel's Remote Access view."
       return ;;
-    ngrok)       install_tunnel_cli ngrok || true ;;
     cloudflare)  install_tunnel_cli cloudflared || true ;;
-    both)        install_tunnel_cli ngrok || true; install_tunnel_cli cloudflared || true ;;
+    ngrok)       install_tunnel_cli ngrok || true ;;
+    both)        install_tunnel_cli cloudflared || true; install_tunnel_cli ngrok || true ;;
   esac
 
   set_env "$env" PANEL_TUNNEL_ENABLED true
-  ok "Remote access unlocked. Open the panel's ${B}Remote Access${R} view to add a token (if needed) and start the tunnel."
+  ok "Remote access unlocked. Open the panel's ${B}Remote Access${R} view to start the tunnel (Cloudflare needs no token). Ask the bot /status from Telegram for the public URL."
   if [ "$choice" = "ngrok" ] || [ "$choice" = "both" ]; then
-    say "  ngrok needs a free authtoken from https://dashboard.ngrok.com/get-started/your-authtoken — paste it in that view."
+    say "  ngrok needs a free authtoken from https://dashboard.ngrok.com/get-started/your-authtoken, paste it in that view."
   fi
 }
 

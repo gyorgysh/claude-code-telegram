@@ -45,7 +45,9 @@ interface TunnelConfig {
 }
 
 const DEFAULTS: TunnelConfig = {
-  provider: "ngrok",
+  // Cloudflare quick tunnels are free and need no account/token, so they're the
+  // friendliest default; ngrok stays available but requires an authtoken.
+  provider: "cloudflare",
   authToken: "",
   domain: "",
   autoStart: true,

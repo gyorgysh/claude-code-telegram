@@ -792,6 +792,30 @@ function fmtCountdown(ms: number): string {
   return `${m}m`;
 }
 
+/**
+ * Build a usage-limit message from the live probe, or null when nothing is
+ * actually exhausted. `strict` only reports a genuine 100%+ limit (used to
+ * explain an otherwise-opaque process exit); the lenient form also surfaces the
+ * soonest non-zero limit (used when the error text already says "limit").
+ */
+function usageLimitMessage(strict: boolean): string | null {
+  const probe = loadProbeResult();
+  const now = Date.now();
+  const exhausted = (probe?.limits ?? []).filter((l) => l.percent >= 100);
+  const nearest = exhausted.sort((a, b) => a.resetsInMs - b.resetsInMs)[0];
+  if (nearest) {
+    const msLeft = Math.max(0, new Date(nearest.resetsAt).getTime() - now);
+    return `📊 ${nearest.label} usage limit reached. Resets in ${fmtCountdown(msLeft)}.`;
+  }
+  if (strict) return null;
+  const soonest = (probe?.limits ?? []).filter((l) => l.percent > 0).sort((a, b) => a.resetsInMs - b.resetsInMs)[0];
+  if (soonest) {
+    const msLeft = Math.max(0, new Date(soonest.resetsAt).getTime() - now);
+    return `📊 Usage limit exhausted. ${soonest.label} resets in ${fmtCountdown(msLeft)}.`;
+  }
+  return "📊 Usage limit exhausted. Wait for the limit to reset, then retry.";
+}
+
 function friendlyError(err: unknown): string {
   const raw = errText(err);
   const low = raw.toLowerCase();
@@ -799,20 +823,7 @@ function friendlyError(err: unknown): string {
     return "⏳ Rate limited by the API. Give it a moment and try again.";
   }
   if (/credit balance|insufficient|out of credit|quota|usage limit|limit reached|too low|daily.*limit|weekly.*limit|limit.*exceeded|reached.*limit/.test(low)) {
-    const probe = loadProbeResult();
-    const now = Date.now();
-    const exhausted = probe?.limits.filter((l) => l.percent >= 100) ?? [];
-    const nearest = exhausted.sort((a, b) => a.resetsInMs - b.resetsInMs)[0];
-    if (nearest) {
-      const msLeft = Math.max(0, new Date(nearest.resetsAt).getTime() - now);
-      return `📊 ${nearest.label} usage limit reached. Resets in ${fmtCountdown(msLeft)}.`;
-    }
-    const soonest = probe?.limits.filter((l) => l.percent > 0).sort((a, b) => a.resetsInMs - b.resetsInMs)[0];
-    if (soonest) {
-      const msLeft = Math.max(0, new Date(soonest.resetsAt).getTime() - now);
-      return `📊 Usage limit exhausted. ${soonest.label} resets in ${fmtCountdown(msLeft)}.`;
-    }
-    return "📊 Usage limit exhausted. Wait for the limit to reset, then retry.";
+    return usageLimitMessage(false)!;
   }
   if (/\b529\b|overloaded/.test(low)) {
     return "🌀 The API is overloaded right now. Try again shortly.";
@@ -821,6 +832,14 @@ function friendlyError(err: unknown): string {
     return "🔑 Authentication failed. Check ANTHROPIC_API_KEY or re-run the `claude` CLI login, then restart.";
   }
   if (/abort/.test(low)) return "⏹ Stopped.";
+  // A non-zero CLI exit ("process exited with code 1") is often an opaque proxy
+  // for a usage limit the SDK didn't spell out. If the live probe shows a limit
+  // sitting at 100%, that's almost certainly the cause — say so instead of the
+  // generic failure, so the user knows to wait for the reset rather than retry.
+  if (/exited with code|exit code|process (?:exited|failed)|non-?zero/.test(low)) {
+    const usage = usageLimitMessage(true);
+    if (usage) return usage;
+  }
   const detail = raw.length > 600 ? raw.slice(0, 600) + "…" : raw;
   return `⚠️ That action failed.\n\n${detail}`;
 }

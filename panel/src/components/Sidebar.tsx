@@ -5,6 +5,7 @@ import type { TranslationKey } from "../i18n/en.ts";
 
 export type Tab =
   | "setup"
+  | "command"
   | "chat"
   | "terminal"
   | "crew"
@@ -31,38 +32,61 @@ export type Tab =
 type Item = { id: Tab; labelKey: TranslationKey; icon: string; hintKey?: TranslationKey };
 type Group = { headingKey: TranslationKey; items: Item[] };
 
+/**
+ * Primary navigation — the 7-8 high-traffic destinations that are always
+ * visible (both on the desktop sidebar and the tablet icon rail). The old
+ * 22-item flat list collapsed into a 3-tier progressive-disclosure model:
+ *
+ *   1. PRIMARY  — always visible (this array).
+ *   2. MORE     — behind the collapsible "More" expander on desktop; the
+ *                 tablet icon rail hides it entirely.
+ *   3. Settings — the unified Configure screen (footer), which now also hosts
+ *                 Vault / Connectors / Prompt / Skills as accordion sections.
+ *
+ * "Command" is the merged Command Hub: a single tab whose sub-tabs are Chat and
+ * Terminal (see App.tsx). Crew / Agents / Inbox keep their own entries so they
+ * stay one click away.
+ */
+export const PRIMARY_NAV: Item[] = [
+  { id: "health", labelKey: "nav_health", icon: "▦", hintKey: "nav_health_hint" },
+  { id: "command", labelKey: "nav_command", icon: "❯", hintKey: "nav_command_hint" },
+  { id: "tasks", labelKey: "nav_tasks", icon: "▤", hintKey: "nav_tasks_hint" },
+  { id: "crew", labelKey: "nav_crew", icon: "⬡", hintKey: "nav_crew_hint" },
+  { id: "inbox", labelKey: "nav_inbox", icon: "✉", hintKey: "nav_inbox_hint" },
+  { id: "memory", labelKey: "nav_memory", icon: "❋", hintKey: "nav_memory_hint" },
+];
+
+/**
+ * Secondary navigation — lower-traffic destinations tucked behind the "More"
+ * expander on the desktop sidebar (and reachable on the tablet rail / mobile
+ * via the command palette and the More drawer).
+ */
+export const MORE_NAV: Item[] = [
+  { id: "workers", labelKey: "nav_workers", icon: "◈", hintKey: "nav_workers_hint" },
+  { id: "schedules", labelKey: "nav_schedules", icon: "◷", hintKey: "nav_schedules_hint" },
+  { id: "heartbeat", labelKey: "nav_heartbeat", icon: "♡", hintKey: "nav_heartbeat_hint" },
+  { id: "sessions", labelKey: "nav_sessions", icon: "◇", hintKey: "nav_sessions_hint" },
+  { id: "usage", labelKey: "nav_usage", icon: "↗", hintKey: "nav_usage_hint" },
+  { id: "logs", labelKey: "nav_logs", icon: "≣", hintKey: "nav_logs_hint" },
+  { id: "setup", labelKey: "nav_setup", icon: "✎", hintKey: "nav_setup_hint" },
+];
+
+/**
+ * Grouped view of every nav destination, for search surfaces (command palette,
+ * mobile More drawer) that want section headings. The Configure group lists the
+ * settings-hosted destinations so they remain discoverable by name even though
+ * they now live as accordion sections inside the unified Settings screen.
+ */
 export const NAV: Group[] = [
-  {
-    headingKey: "nav_monitor",
-    items: [
-      { id: "health", labelKey: "nav_health", icon: "▦", hintKey: "nav_health_hint" },
-      { id: "sessions", labelKey: "nav_sessions", icon: "◇", hintKey: "nav_sessions_hint" },
-      { id: "usage", labelKey: "nav_usage", icon: "↗", hintKey: "nav_usage_hint" },
-      { id: "logs", labelKey: "nav_logs", icon: "≣", hintKey: "nav_logs_hint" },
-    ],
-  },
-  {
-    headingKey: "nav_operate",
-    items: [
-      { id: "chat", labelKey: "nav_chat", icon: "❯", hintKey: "nav_chat_hint" },
-      { id: "terminal", labelKey: "nav_terminal", icon: "▸", hintKey: "nav_terminal_hint" },
-      { id: "crew", labelKey: "nav_crew", icon: "⬡", hintKey: "nav_crew_hint" },
-      { id: "workers", labelKey: "nav_workers", icon: "◈", hintKey: "nav_workers_hint" },
-      { id: "inbox", labelKey: "nav_inbox", icon: "✉", hintKey: "nav_inbox_hint" },
-      { id: "tasks", labelKey: "nav_tasks", icon: "▤", hintKey: "nav_tasks_hint" },
-      { id: "schedules", labelKey: "nav_schedules", icon: "◷", hintKey: "nav_schedules_hint" },
-      { id: "heartbeat", labelKey: "nav_heartbeat", icon: "♡", hintKey: "nav_heartbeat_hint" },
-    ],
-  },
+  { headingKey: "nav_monitor", items: PRIMARY_NAV },
+  { headingKey: "nav_operate", items: MORE_NAV },
   {
     headingKey: "nav_configure",
     items: [
-      { id: "setup", labelKey: "nav_setup", icon: "✎", hintKey: "nav_setup_hint" },
-      { id: "skills", labelKey: "nav_skills", icon: "✦", hintKey: "nav_skills_hint" },
-      { id: "memory", labelKey: "nav_memory", icon: "❋", hintKey: "nav_memory_hint" },
       { id: "vault", labelKey: "nav_vault", icon: "⚷", hintKey: "nav_vault_hint" },
       { id: "connectors", labelKey: "nav_connectors", icon: "⊹", hintKey: "nav_connectors_hint" },
       { id: "prompt", labelKey: "nav_prompt", icon: "❝", hintKey: "nav_prompt_hint" },
+      { id: "skills", labelKey: "nav_skills", icon: "✦", hintKey: "nav_skills_hint" },
     ],
   },
 ];
@@ -84,15 +108,32 @@ export const FOOTER_NAV: Item[] = [
 /** Every group + the footer items, for search/lookup that must span all tabs. */
 export const ALL_GROUPS: Group[] = [...NAV, { headingKey: "nav_others", items: FOOTER_NAV }];
 
+/**
+ * The legacy chat/terminal tabs are folded into the Command Hub. They stay
+ * routable (old bookmarks / deep-links still work) but should resolve to the
+ * unified Command tab in the sidebar's active-state highlighting.
+ */
+const COMMAND_CHILDREN: Tab[] = ["chat", "terminal"];
+export function isCommandChild(tab: Tab | "settings"): boolean {
+  return COMMAND_CHILDREN.includes(tab as Tab);
+}
+/** The four config destinations now hosted as accordion sections in Settings. */
+const SETTINGS_CHILDREN: Tab[] = ["vault", "connectors", "prompt", "skills"];
+export function isSettingsChild(tab: Tab | "settings"): boolean {
+  return SETTINGS_CHILDREN.includes(tab as Tab);
+}
+
 export function tabLabel(tab: Tab): string {
   for (const g of ALL_GROUPS) for (const i of g.items) if (i.id === tab) return i.labelKey;
+  // Legacy command children resolve to the Command Hub label.
+  if (isCommandChild(tab)) return "nav_command";
   return "";
 }
 
 /** A handful of high-traffic tabs surfaced in the mobile bottom nav. */
 const BOTTOM_NAV: Item[] = [
   { id: "health", labelKey: "nav_health", icon: "▦" },
-  { id: "chat", labelKey: "nav_chat", icon: "❯" },
+  { id: "command", labelKey: "nav_command", icon: "❯" },
   { id: "tasks", labelKey: "nav_tasks", icon: "▤" },
   { id: "inbox", labelKey: "nav_inbox", icon: "✉" },
 ];
@@ -102,21 +143,21 @@ export function BottomNav({
   tab,
   onSelect,
   onOpenMenu,
-  chatEnabled = true,
   inboxPending = 0,
 }: {
   tab: Tab | "settings";
   onSelect: (t: Tab) => void;
   onOpenMenu: () => void;
-  chatEnabled?: boolean;
   inboxPending?: number;
 }) {
   const { t } = useI18n();
-  const items = BOTTOM_NAV.filter((i) => i.id !== "chat" || chatEnabled);
+  // The Command Hub stays visible even when chat is disabled (it still hosts
+  // the Terminal sub-tab); the hub itself handles a disabled sub-tab.
+  const items = BOTTOM_NAV;
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-surface md:hidden">
       {items.map((it) => {
-        const active = it.id === tab;
+        const active = it.id === tab || (it.id === "command" && isCommandChild(tab));
         const showBadge = it.id === "inbox" && inboxPending > 0;
         return (
           <button
@@ -195,11 +236,11 @@ export function MoreDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  void chatEnabled; // Command Hub stays listed regardless; the hub handles a disabled sub-tab.
   const q = query.trim().toLowerCase();
   const groups = ALL_GROUPS.map((g) => ({
     headingKey: g.headingKey,
     items: g.items.filter((it) => {
-      if (it.id === "chat" && !chatEnabled) return false;
       if (!q) return true;
       const label = t(it.labelKey).toLowerCase();
       const hint = it.hintKey ? t(it.hintKey).toLowerCase() : "";
@@ -264,7 +305,7 @@ export function MoreDrawer({
                     {t(g.headingKey)}
                   </div>
                   {g.items.map((it) => {
-                    const active = it.id === tab;
+                    const active = it.id === tab || (it.id === "command" && isCommandChild(tab));
                     const inboxBadge = it.id === "inbox" && inboxPending > 0;
                     const updateBadge = it.id === "updates" && updateAvailable;
                     return (
@@ -304,9 +345,9 @@ export function MoreDrawer({
                     onSelect("settings");
                     onClose();
                   }}
-                  aria-current={tab === "settings" ? "page" : undefined}
+                  aria-current={tab === "settings" || isSettingsChild(tab) ? "page" : undefined}
                   className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm transition-colors ${
-                    tab === "settings"
+                    tab === "settings" || isSettingsChild(tab)
                       ? "bg-accent/10 text-accent"
                       : "text-fg-dim hover:bg-surface-2 active:bg-surface-2"
                   }`}
@@ -326,8 +367,14 @@ export function MoreDrawer({
   );
 }
 
-/** All known tab ids, for URL <-> tab mapping. */
-export const TAB_IDS: Tab[] = ALL_GROUPS.flatMap((g) => g.items.map((i) => i.id));
+/**
+ * All known tab ids, for URL <-> tab mapping. Built from the grouped nav plus
+ * the Command Hub children (chat/terminal), which are routable for legacy
+ * deep-links even though they no longer appear as standalone nav entries.
+ */
+export const TAB_IDS: Tab[] = Array.from(
+  new Set<Tab>([...ALL_GROUPS.flatMap((g) => g.items.map((i) => i.id)), ...COMMAND_CHILDREN]),
+);
 
 export function isTab(value: string): value is Tab {
   return (TAB_IDS as string[]).includes(value);
@@ -361,11 +408,63 @@ export function Sidebar({
   brandName?: string;
 }) {
   const { t } = useI18n();
+  void chatEnabled; // Command Hub stays visible regardless; see App.tsx routing.
   const labelCls = expanded ? "inline" : "hidden lg:inline";
-  const nav = NAV.map((g) => ({
-    ...g,
-    items: g.items.filter((i) => i.id !== "chat" || chatEnabled),
-  })).filter((g) => g.items.length > 0);
+
+  // "More" expander state. Persisted so the user's preference sticks, and
+  // force-open whenever the active tab lives in the secondary set so the
+  // highlighted item is never hidden behind a collapsed expander.
+  const activeInMore = MORE_NAV.some((i) => i.id === tab);
+  const [moreOpen, setMoreOpen] = useState(
+    () => localStorage.getItem("cct.nav.more") === "1",
+  );
+  useEffect(() => {
+    if (activeInMore) setMoreOpen(true);
+  }, [activeInMore]);
+  const toggleMore = () =>
+    setMoreOpen((o) => {
+      const next = !o;
+      localStorage.setItem("cct.nav.more", next ? "1" : "0");
+      return next;
+    });
+
+  // One nav row. `active` highlights the current tab; the Command Hub also
+  // highlights when one of its legacy children (chat/terminal) is the route.
+  const navButton = (it: Item) => {
+    const active = it.id === tab || (it.id === "command" && isCommandChild(tab));
+    const inboxBadge = it.id === "inbox" && inboxPending > 0;
+    const updateBadge = it.id === "updates" && updateAvailable;
+    const badge = updateBadge || inboxBadge;
+    const count = inboxBadge ? inboxPending : updateCount;
+    const badgeText = count > 99 ? "99+" : String(count || 1);
+    return (
+      <button
+        key={it.id}
+        onClick={() => onSelect(it.id)}
+        title={it.hintKey ? `${t(it.labelKey)} — ${t(it.hintKey)}` : t(it.labelKey)}
+        aria-label={it.hintKey ? `${t(it.labelKey)}: ${t(it.hintKey)}` : t(it.labelKey)}
+        aria-current={active ? "page" : undefined}
+        className={`flex w-full items-center gap-3 rounded-lg border-l-2 px-2.5 py-2 text-sm transition-colors ${
+          active
+            ? "border-accent bg-accent/10 text-accent"
+            : "border-transparent text-fg-dim hover:bg-surface-2 hover:text-fg"
+        }`}
+      >
+        <span className="relative w-4 shrink-0 text-center">
+          {it.icon}
+          {badge && (
+            <span className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-accent ring-2 ring-surface" />
+          )}
+        </span>
+        <span className={`flex-1 text-left ${labelCls}`}>{t(it.labelKey)}</span>
+        {badge && (
+          <span className={`rounded-full bg-accent/15 px-1.5 text-[10px] font-semibold text-accent ${labelCls}`}>
+            {badgeText}
+          </span>
+        )}
+      </button>
+    );
+  };
 
   return (
     <div className="flex h-full flex-col bg-surface">
@@ -378,52 +477,26 @@ export function Sidebar({
         </span>
       </div>
 
-      {/* Nav groups */}
+      {/* Nav — 3-tier progressive disclosure: primary items always visible,
+          secondary items behind a "More" expander. The expander itself is
+          hidden on the tablet icon rail (md, not expanded), which shows only
+          the primary set; the full set is reachable there via the palette. */}
       <nav className="flex-1 overflow-y-auto px-2 py-4">
-        {nav.map((group) => (
-          <div key={group.headingKey} className="mb-4">
-            <div
-              className={`mono mb-1 px-2 text-[10px] font-medium uppercase tracking-widest text-fg-faint ${labelCls}`}
-            >
-              {t(group.headingKey)}
-            </div>
-            {group.items.map((it) => {
-              const active = it.id === tab;
-              const inboxBadge = it.id === "inbox" && inboxPending > 0;
-              const updateBadge = it.id === "updates" && updateAvailable;
-              const badge = updateBadge || inboxBadge;
-              const count = inboxBadge ? inboxPending : updateCount;
-              const badgeText = count > 99 ? "99+" : String(count || 1);
-              return (
-                <button
-                  key={it.id}
-                  onClick={() => onSelect(it.id)}
-                  title={it.hintKey ? `${t(it.labelKey)} — ${t(it.hintKey)}` : t(it.labelKey)}
-                  aria-label={it.hintKey ? `${t(it.labelKey)}: ${t(it.hintKey)}` : t(it.labelKey)}
-                  aria-current={active ? "page" : undefined}
-                  className={`flex w-full items-center gap-3 rounded-lg border-l-2 px-2.5 py-2 text-sm transition-colors ${
-                    active
-                      ? "border-accent bg-accent/10 text-accent"
-                      : "border-transparent text-fg-dim hover:bg-surface-2 hover:text-fg"
-                  }`}
-                >
-                  <span className="relative w-4 shrink-0 text-center">
-                    {it.icon}
-                    {badge && (
-                      <span className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-accent ring-2 ring-surface" />
-                    )}
-                  </span>
-                  <span className={`flex-1 text-left ${labelCls}`}>{t(it.labelKey)}</span>
-                  {badge && (
-                    <span className={`rounded-full bg-accent/15 px-1.5 text-[10px] font-semibold text-accent ${labelCls}`}>
-                      {badgeText}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        ))}
+        <div className="space-y-0.5">{PRIMARY_NAV.map(navButton)}</div>
+
+        <div className={expanded ? "mt-2" : "mt-2 hidden lg:block"}>
+          <button
+            onClick={toggleMore}
+            aria-expanded={moreOpen}
+            className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-fg-dim transition-colors hover:bg-surface-2 hover:text-fg"
+          >
+            <span className="w-4 shrink-0 text-center">{moreOpen ? "▾" : "▸"}</span>
+            <span className={`flex-1 text-left ${labelCls}`}>
+              {moreOpen ? t("nav_more_collapse") : t("nav_more_expand")}
+            </span>
+          </button>
+          {moreOpen && <div className="mt-0.5 space-y-0.5">{MORE_NAV.map(navButton)}</div>}
+        </div>
       </nav>
 
       {/* Footer controls */}
@@ -479,9 +552,9 @@ export function Sidebar({
           onClick={() => onSelect("settings")}
           title={t("nav_settings")}
           aria-label={t("nav_settings")}
-          aria-current={tab === "settings" ? "page" : undefined}
+          aria-current={tab === "settings" || isSettingsChild(tab) ? "page" : undefined}
           className={`flex w-full items-center gap-3 rounded-lg border-l-2 px-2.5 py-2 text-sm transition-colors ${
-            tab === "settings"
+            tab === "settings" || isSettingsChild(tab)
               ? "border-accent bg-accent/10 text-accent"
               : "border-transparent text-fg-dim hover:bg-surface-2 hover:text-fg"
           }`}

@@ -6,6 +6,10 @@ import { toast } from "../lib/useToast.ts";
 import type { TranslationKey } from "../i18n/en.ts";
 import { AGENT_LANGUAGES } from "../i18n/languages.ts";
 import { uptime } from "../lib/format.ts";
+import { VaultView } from "./Vault.tsx";
+import { ConnectorsView } from "./Connectors.tsx";
+import { PromptView_ } from "./Prompt.tsx";
+import { SkillsView } from "./Skills.tsx";
 
 const MODEL_SUGGESTIONS = ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-8"];
 
@@ -38,6 +42,26 @@ export function SettingsView({ onAuthError }: { onAuthError: () => void }) {
       <PlanBudgetSettings onAuthError={onAuthError} />
       <NotificationsSettings onAuthError={onAuthError} />
       <WhitelabelSettings />
+
+      {/* Configuration — low-traffic config surfaces folded in as collapsible
+          accordion sections (each remains deep-linkable via its own route). */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-fg-dim">
+          {t("settings_group_config")}
+        </h2>
+        <Accordion id="settings-vault" title={t("settings_section_vault")}>
+          <VaultView onAuthError={onAuthError} />
+        </Accordion>
+        <Accordion id="settings-connectors" title={t("settings_section_connectors")}>
+          <ConnectorsView onAuthError={onAuthError} />
+        </Accordion>
+        <Accordion id="settings-prompt" title={t("settings_section_prompt")}>
+          <PromptView_ onAuthError={onAuthError} />
+        </Accordion>
+        <Accordion id="settings-skills" title={t("settings_section_skills")}>
+          <SkillsView onAuthError={onAuthError} />
+        </Accordion>
+      </div>
     </div>
   );
 }

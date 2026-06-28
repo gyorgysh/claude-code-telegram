@@ -30,6 +30,7 @@ export const hu: Translations = {
   nav_remote: "Távoli elérés",
   nav_updates: "Frissítések",
   nav_feedback: "Visszajelzés",
+  nav_command: "Parancsközpont",
   // Navigációs elemek célja (elemleírásként jelenik meg)
   nav_health_hint: "Rendszerállapot: CPU, memória és lemez egy pillantásra",
   nav_sessions_hint: "Aktív csevegési munkamenetek és előzményeik",
@@ -55,6 +56,14 @@ export const hu: Translations = {
   nav_updates_hint: "Új verziók keresése és telepítése",
   nav_feedback_hint: "Hibajelentés vagy javaslat küldése a projektnek",
   nav_settings_hint: "Modell, személyiség, nyelv és egyéb opciók",
+  nav_command_hint: "Beszélj az ügynökkel és futtass shell parancsokat egy helyen",
+  // Oldalsáv háromszintű, fokozatos felfedés
+  nav_more_expand: "Több",
+  nav_more_collapse: "Kevesebb",
+  // Parancsközpont allapok
+  command_tab_chat: "Csevegés",
+  command_tab_terminal: "Terminál",
+  command_terminal_disabled: "A gazdagép terminálja le van tiltva. Engedélyezd a Beállításban, hogy itt parancsokat futtass.",
   // Mobil "Több" alsó lap
   nav_more_search: "Keresés a menüpontok között…",
   nav_more_no_results: "Nincs találat a keresésre.",
@@ -392,6 +401,12 @@ export const hu: Translations = {
   setup_ready_no_bot:
     "Még nincs bot-felhasználónév. Állítsd be a TELEGRAM_BOT_TOKEN értéket a .env fájlban, indítsd újra, és itt megjelenik a botod hivatkozása.",
   settings_title: "Beállítások",
+  // Az egységes Beállítások képernyőbe vont konfigurációs szakaszok
+  settings_group_config: "Konfiguráció",
+  settings_section_vault: "Tároló",
+  settings_section_connectors: "Csatlakozók",
+  settings_section_prompt: "Utasítás és kézikönyv",
+  settings_section_skills: "Készségek",
   settings_agent: "Főügynök",
   settings_agent_desc: "Atlas modellje, személyisége és autonómiája.",
   settings_section_model: "Modell és szolgáltató",

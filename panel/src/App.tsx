@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { api, checkToken, clearToken, getToken, setToken } from "./api.ts";
 import { useTheme } from "./lib/useTheme.ts";
 import { Login } from "./components/Login.tsx";
-import { Sidebar, BottomNav, MoreDrawer, tabLabel, isTab, type Tab } from "./components/Sidebar.tsx";
+import { Sidebar, BottomNav, MoreDrawer, tabLabel, isTab, isCommandChild, type Tab } from "./components/Sidebar.tsx";
 import { useI18n } from "./lib/useI18n.ts";
 import type { TranslationKey } from "./i18n/en.ts";
-import { ChatView } from "./components/Chat.tsx";
+import { CommandHub } from "./components/CommandHub.tsx";
 import { CrewView } from "./components/Crew.tsx";
 import { HealthView } from "./components/Health.tsx";
 import { StatusView } from "./components/Status.tsx";
@@ -27,7 +27,6 @@ import { LogsView } from "./components/Logs.tsx";
 import { HeartbeatView_ } from "./components/Heartbeat.tsx";
 import { SettingsView } from "./components/Settings.tsx";
 import { SetupView } from "./components/Setup.tsx";
-import { TerminalView } from "./components/Terminal.tsx";
 import { RemoteAccessView } from "./components/RemoteAccess.tsx";
 import { FeedbackView } from "./components/Feedback.tsx";
 import { ToastViewport, Breadcrumb } from "./components/ui.tsx";
@@ -47,6 +46,7 @@ export function App() {
   const [drawer, setDrawer] = useState(false);
   const [palette, setPalette] = useState(false);
   const [chatEnabled, setChatEnabled] = useState(true);
+  const [terminalEnabled, setTerminalEnabled] = useState(false);
   const [brandName, setBrandName] = useState("MyHQ");
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updateCount, setUpdateCount] = useState(0);
@@ -103,6 +103,7 @@ export function App() {
     if (!authed) return;
     api.me().then((m) => {
       setChatEnabled(m.chatEnabled);
+      setTerminalEnabled(m.terminalEnabled);
       if (m.brandName) setBrandName(m.brandName);
       setUpdateAvailable(m.updateAvailable);
       setUpdateCount(m.updateCount ?? 0);
@@ -129,11 +130,13 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [authed]);
 
-  // Don't strand the user on a hidden tab.
+  // Don't strand the user on the Command hub when both its sub-views are off.
   useEffect(() => {
-    if (!chatEnabled && tab === "chat") select("health");
+    if (!chatEnabled && !terminalEnabled && (tab === "command" || isCommandChild(tab))) {
+      select("health");
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatEnabled, tab]);
+  }, [chatEnabled, terminalEnabled, tab]);
 
   // Hidden easter egg: flipping the light/dark theme 9 times unlocks (and the
   // next flip leaves) the matrix theme.
@@ -231,7 +234,7 @@ export function App() {
           {/* Desktop breadcrumb: Home → current view. Hidden on mobile (the top
               bar already shows it) and skipped for the dashboard itself and the
               full-height chat/terminal views (which own their vertical space). */}
-          {tab !== "health" && tab !== "chat" && tab !== "terminal" && (
+          {tab !== "health" && tab !== "command" && !isCommandChild(tab) && (
             <Breadcrumb
               className="mb-4 hidden md:flex"
               items={[
@@ -246,8 +249,15 @@ export function App() {
             />
           )}
           {tab === "setup" && <SetupView onAuthError={onAuthError} onGoto={select} />}
-          {tab === "chat" && <ChatView onAuthError={onAuthError} />}
-          {tab === "terminal" && <TerminalView onAuthError={onAuthError} />}
+          {(tab === "command" || isCommandChild(tab)) && (
+            <CommandHub
+              tab={tab}
+              onSubTab={select}
+              chatEnabled={chatEnabled}
+              terminalEnabled={terminalEnabled}
+              onAuthError={onAuthError}
+            />
+          )}
           {tab === "crew" && <CrewView onAuthError={onAuthError} />}
           {tab === "health" && <HealthView onGoto={select} />}
           {tab === "status" && <StatusView onAuthError={onAuthError} />}
@@ -278,7 +288,7 @@ export function App() {
           {tab === "usage" && <UsageView onAuthError={onAuthError} />}
           {tab === "settings" && <SettingsView onAuthError={onAuthError} />}
 
-          {tab !== "chat" && tab !== "terminal" && (
+          {tab !== "command" && !isCommandChild(tab) && (
           <footer className="mt-10 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-xs text-fg-faint">
             <span>{t("app_footer_made_with")}</span>
             <span className="text-fg-faint/50">·</span>
@@ -309,7 +319,6 @@ export function App() {
         tab={tab}
         onSelect={select}
         onOpenMenu={() => setDrawer(true)}
-        chatEnabled={chatEnabled}
         inboxPending={inboxPending}
       />
 

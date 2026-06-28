@@ -28,6 +28,7 @@ export const en = {
   nav_remote: "Remote Access",
   nav_updates: "Updates",
   nav_feedback: "Send Feedback",
+  nav_command: "Command",
   // Navigation item purpose hints (shown as tooltips)
   nav_health_hint: "System health: CPU, memory, and disk at a glance",
   nav_sessions_hint: "Active chat sessions and their history",
@@ -53,6 +54,14 @@ export const en = {
   nav_updates_hint: "Check for and install new versions",
   nav_feedback_hint: "Report a bug or send a suggestion to the project",
   nav_settings_hint: "Model, persona, language, and other options",
+  nav_command_hint: "Talk to the agent and run shell commands in one place",
+  // Sidebar 3-tier progressive disclosure
+  nav_more_expand: "More",
+  nav_more_collapse: "Less",
+  // Command Hub sub-tabs
+  command_tab_chat: "Chat",
+  command_tab_terminal: "Terminal",
+  command_terminal_disabled: "The host terminal is disabled. Enable it in Setup to run shell commands here.",
   // Mobile "More" bottom-sheet drawer
   nav_more_search: "Search destinations…",
   nav_more_no_results: "Nothing matches your search.",
@@ -389,6 +398,12 @@ export const en = {
   setup_ready_no_bot:
     "No bot username yet. Set TELEGRAM_BOT_TOKEN in .env and restart, then the deep-link to your bot will appear here.",
   settings_title: "Settings",
+  // Config sections merged into the unified Settings screen
+  settings_group_config: "Configuration",
+  settings_section_vault: "Vault",
+  settings_section_connectors: "Connectors",
+  settings_section_prompt: "Prompt & Playbook",
+  settings_section_skills: "Skills",
   settings_agent: "Main Agent",
   settings_agent_desc: "Model, persona, and autonomy for Atlas, the agent driving your Telegram chats.",
   settings_section_model: "Model & Provider",

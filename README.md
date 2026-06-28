@@ -268,7 +268,7 @@ Open `http://127.0.0.1:8787` and unlock with your `PANEL_TOKEN`. Keep the bind o
 
 ## Panel API
 
-Everything the panel does is a REST call you can script. Auth is the same `PANEL_TOKEN`, sent as a Bearer header (`Authorization: Bearer $PANEL_TOKEN`) for REST and `?token=` for the WebSocket. All write endpoints take and return JSON. The full catalogue with copy-paste `curl` examples lives in [`work.md`](work.md) under "Fleet API (Panel)"; the groups are:
+Everything the panel does is a REST call you can script. Auth is the same `PANEL_TOKEN`, sent as a Bearer header (`Authorization: Bearer $PANEL_TOKEN`) for REST and `?token=` for the WebSocket. All write endpoints take and return JSON. The full catalogue with copy-paste `curl` examples lives in [`PANEL_API.md`](PANEL_API.md); the groups are:
 
 | Group | Endpoints |
 | --- | --- |

@@ -98,4 +98,4 @@ The sections above describe the original single-bot core. The features below wer
 - **Setup view** (`panel/src/components/Setup.tsx` + `/api/me`): a read-only deployment-facts screen (version, allowed-user count, panel host/port, tunnel/terminal enabled, default workdir/language) sourced from `.env`; these are intentionally not editable from the panel (SEC).
 - **Branding** (`ATLAS_NAME`, `BRAND_NAME`): rename the main agent and the product for self-hosted deployments.
 
-The panel REST surface is catalogued (with `curl` examples) in `work.md` under "Fleet API (Panel)", and grouped in the README's "Panel API" section. Keep all three in sync when adding or renaming a route.
+The panel REST surface is catalogued (with `curl` examples) in `PANEL_API.md`, and grouped in the README's "Panel API" section. `work.md` keeps only a short pointer to it — the full catalogue is deliberately **not** in `work.md` because `work.md` is injected into the system prompt every turn for every agent, so keep per-turn context lean. Keep `PANEL_API.md` and the README table in sync when adding or renaming a route.

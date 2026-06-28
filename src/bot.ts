@@ -37,7 +37,7 @@ import { heartbeat } from "./core/heartbeat.js";
 import { taskDelegator } from "./core/taskRunner.js";
 import { push } from "./core/push.js";
 import { fireWebhook, type WebhookSource } from "./core/webhook.js";
-import { resolveMainRun } from "./core/mainSettings.js";
+import { resolveMainRun, isDryRun, dryRunDescription, DRY_RUN_TOOLS } from "./core/mainSettings.js";
 import { TokenBucketLimiter } from "./core/rateLimiter.js";
 import { workers } from "./core/workers.js";
 import { suggestions } from "./core/suggestions.js";
@@ -494,6 +494,19 @@ async function handleUserPrompt(
       return { behavior: "deny", message: answer };
     }
 
+    // Global dry-run: intercept mutating tools and feed back a synthetic "would
+    // have…" result instead of executing them, so the model narrates intended
+    // actions without touching the host. The runTurn permissionMode is forced off
+    // bypass when dry-run is on (below), so this gate is always consulted.
+    if (isDryRun() && DRY_RUN_TOOLS.includes(toolName as (typeof DRY_RUN_TOOLS)[number])) {
+      const what = dryRunDescription(toolName, input);
+      log.info("Dry-run: skipped mutating tool", { chatId, tool: toolName, what });
+      return {
+        behavior: "deny",
+        message: `[dry-run] Skipped — would have ${what}. Dry-run mode is on, so this was not executed. Continue narrating the remaining intended steps; do not retry this tool.`,
+      };
+    }
+
     const lead = toolName === "Bash" ? bashLeadCmd(input) : undefined;
 
     // Loop guard runs before the normal permission flow so a runaway retry is
@@ -631,7 +644,9 @@ async function handleUserPrompt(
       pendingSuggestions,
       persona: mainRun.persona,
       language: session.language ?? mainRun.defaultLanguage,
-      permissionMode: autonomy === "full" ? "bypassPermissions" : "default",
+      // Dry-run forces the gate on (default mode) even in full autonomy, so the
+      // canUseTool interception above can catch and echo mutating tools.
+      permissionMode: autonomy === "full" && !isDryRun() ? "bypassPermissions" : "default",
       abortController: session.abort,
       mcpServers: {
         telegram: createTelegramMcp(tg, chatId, cwd),

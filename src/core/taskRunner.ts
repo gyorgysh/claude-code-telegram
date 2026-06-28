@@ -17,6 +17,7 @@ import { RunLogWriter } from "./runLog.js";
 import { log, preview } from "../logger.js";
 import { toolDiffMeta } from "../telegram/formatting.js";
 import { agentUsage } from "./agentUsage.js";
+import { isDryRun, dryRunDescription, DRY_RUN_TOOLS } from "./mainSettings.js";
 
 const OUTPUT_HEAD = 3_000;
 const OUTPUT_TAIL = 5_000;
@@ -375,14 +376,26 @@ export class TaskDelegator {
         env,
         systemPromptAppend: append,
         persona: lead?.persona,
-        permissionMode: "bypassPermissions",
+        // Dry-run forces the gate on so mutating tools can be echoed instead of
+        // run; otherwise delegated runs go full bypass.
+        permissionMode: isDryRun() ? "default" : "bypassPermissions",
         // Load full project context (CLAUDE.md, settings) so a delegated task can
         // work on the repo with the same knowledge as the main agent. The earlier
         // crash this skipped was actually a corrupt-memory bug (now fixed in
         // memory.ts), not the project CLAUDE.md.
         abortController: abort,
         mcpServers: { memory: memoryMcp, tasks: createTasksMcp({ createdBy: lead?.id ?? "atlas" }), skills: skillsMcp, self_update: selfUpdateMcp, ...buildConnectorMcps() },
-        canUseTool: async (_n, input) => ({ behavior: "allow", updatedInput: input }),
+        canUseTool: async (name, input) => {
+          if (isDryRun() && DRY_RUN_TOOLS.includes(name as (typeof DRY_RUN_TOOLS)[number])) {
+            const what = dryRunDescription(name, input);
+            log.info("Dry-run: skipped mutating tool (delegated task)", { tool: name, what, taskId: id });
+            return {
+              behavior: "deny",
+              message: `[dry-run] Skipped — would have ${what}. Dry-run mode is on, so this was not executed. Continue narrating the remaining intended steps; do not retry this tool.`,
+            };
+          }
+          return { behavior: "allow", updatedInput: input };
+        },
         onText: (d) => {
           output += d;
           transcript.event({ ts: Date.now(), kind: "text", text: d });

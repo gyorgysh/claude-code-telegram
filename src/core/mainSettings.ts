@@ -40,6 +40,39 @@ interface MainSettings {
    * Per-session /lang overrides this. Falls back to DEFAULT_LANGUAGE env var.
    */
   defaultLanguage?: string;
+  /**
+   * Global dry-run: when true, mutating tools (Bash/Write/Edit/NotebookEdit) are
+   * not executed — the gate returns a synthetic "would have…" result so the
+   * model can narrate intended actions without touching the host. Affects every
+   * interactive turn (forces the permission gate on even in full autonomy).
+   */
+  dryRun?: boolean;
+}
+
+/** Mutating tools intercepted by dry-run (echoed, not executed). */
+export const DRY_RUN_TOOLS = ["Bash", "Write", "Edit", "MultiEdit", "NotebookEdit"] as const;
+
+/** Whether global dry-run mode is currently on. */
+export function isDryRun(): boolean {
+  return load().dryRun === true;
+}
+
+/** A short human description of what a mutating tool *would* have done. */
+export function dryRunDescription(toolName: string, input: Record<string, unknown>): string {
+  const s = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
+  switch (toolName) {
+    case "Bash":
+      return `run command: ${s(input.command).slice(0, 400)}`;
+    case "Write":
+      return `write file ${s(input.file_path)} (${s(input.content).length} chars)`;
+    case "Edit":
+    case "MultiEdit":
+      return `edit file ${s(input.file_path)}`;
+    case "NotebookEdit":
+      return `edit notebook ${s(input.notebook_path)}`;
+    default:
+      return `run ${toolName}`;
+  }
 }
 
 interface MainFile {
@@ -65,6 +98,7 @@ export function mainSettingsView() {
     persona: s.persona ?? "",
     autonomy: s.autonomy ?? "standard",
     defaultLanguage: s.defaultLanguage ?? config.DEFAULT_LANGUAGE,
+    dryRun: s.dryRun === true,
     botUsername: botUsername ?? "",
   };
 }
@@ -75,6 +109,7 @@ export function setMainSettings(patch: {
   persona?: string;
   autonomy?: Autonomy;
   defaultLanguage?: string;
+  dryRun?: boolean;
 }): void {
   const s = load();
   if (patch.model !== undefined) s.model = patch.model.trim() || undefined;
@@ -82,8 +117,9 @@ export function setMainSettings(patch: {
   if (patch.persona !== undefined) s.persona = patch.persona.trim() || undefined;
   if (patch.autonomy !== undefined) s.autonomy = patch.autonomy || undefined;
   if (patch.defaultLanguage !== undefined) s.defaultLanguage = patch.defaultLanguage || undefined;
+  if (patch.dryRun !== undefined) s.dryRun = patch.dryRun || undefined;
   saveJson<MainFile>(FILE, { version: 1, settings: s });
-  audit("mainAgent.update", { model: s.model, providerId: s.providerId });
+  audit("mainAgent.update", { model: s.model, providerId: s.providerId, dryRun: s.dryRun });
 }
 
 /** Per-turn overrides for a main (bot) turn: model + provider env + persona, if set.

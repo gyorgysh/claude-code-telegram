@@ -482,12 +482,13 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
     return { preferredBackend: preferredBackend() };
   });
   app.put("/api/agent", async (req) => {
-    const { model, providerId, persona, autonomy, defaultLanguage } = (req.body ?? {}) as {
+    const { model, providerId, persona, autonomy, defaultLanguage, dryRun } = (req.body ?? {}) as {
       model?: string;
       providerId?: string;
       persona?: string;
       autonomy?: string;
       defaultLanguage?: string;
+      dryRun?: boolean;
     };
     setMainSettings({
       model,
@@ -495,6 +496,7 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
       persona,
       autonomy: autonomy as "supervised" | "standard" | "full" | "auto_until_error" | undefined,
       defaultLanguage,
+      dryRun,
     });
     return mainSettingsView();
   });

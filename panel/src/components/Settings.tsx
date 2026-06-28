@@ -351,6 +351,7 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
   const [providerId, setProviderId] = useState("");
   const [persona, setPersona] = useState("");
   const [autonomy, setAutonomy] = useState<Autonomy>("standard");
+  const [dryRun, setDryRun] = useState(false);
   const [fetched, setFetched] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -363,6 +364,7 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
         setProviderId(a.providerId);
         setPersona(a.persona ?? "");
         setAutonomy(a.autonomy ?? "standard");
+        setDryRun(a.dryRun === true);
       })
       .catch((e) => e instanceof AuthError && onAuthError());
 
@@ -376,7 +378,8 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
     (model !== agent.model ||
       providerId !== agent.providerId ||
       persona !== (agent.persona ?? "") ||
-      autonomy !== (agent.autonomy ?? "standard"));
+      autonomy !== (agent.autonomy ?? "standard") ||
+      dryRun !== (agent.dryRun === true));
 
   // Warn before leaving (tab close / reload) while there are unsaved edits.
   useEffect(() => {
@@ -413,7 +416,7 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
   const save = async () => {
     setBusy("save");
     try {
-      const next = await api.saveAgent({ model, providerId, persona, autonomy });
+      const next = await api.saveAgent({ model, providerId, persona, autonomy, dryRun });
       setAgent(next);
       toast.success(t("saved"));
     } catch (e) {
@@ -555,6 +558,26 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
                 {t(opt.labelKey)}
               </button>
             ))}
+          </div>
+
+          <div className="mt-4 border-t border-line pt-4">
+            <label className="flex cursor-pointer items-start gap-2.5">
+              <input
+                type="checkbox"
+                checked={dryRun}
+                onChange={(e) => setDryRun(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
+              />
+              <span>
+                <span className="text-sm font-medium text-fg">{t("settings_dryrun")}</span>
+                <span className="block text-xs text-fg-dim">{t("settings_dryrun_desc")}</span>
+              </span>
+            </label>
+            {dryRun && (
+              <p className="mt-2 rounded-md border border-warn/40 bg-warn/10 px-2.5 py-1.5 text-xs text-warn-fg">
+                {t("settings_dryrun_active")}
+              </p>
+            )}
           </div>
         </Accordion>
       </div>

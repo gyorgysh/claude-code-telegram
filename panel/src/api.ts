@@ -592,6 +592,8 @@ export interface MainAgent {
   persona: string;
   autonomy: Autonomy;
   defaultLanguage: string;
+  /** Global dry-run: mutating tools are echoed, not executed. */
+  dryRun: boolean;
   /** The main bot's @username (from getMe), for a t.me link. */
   botUsername?: string;
   embeddings: EmbeddingConfig;
@@ -771,7 +773,7 @@ export const api = {
   runProbe: () => req<{ ok: boolean; message: string }>("POST", "/api/usage-probe/run"),
 
   agent: () => get<MainAgent>("/api/agent"),
-  saveAgent: (s: { model?: string; providerId?: string; persona?: string; autonomy?: Autonomy; defaultLanguage?: string }) =>
+  saveAgent: (s: { model?: string; providerId?: string; persona?: string; autonomy?: Autonomy; defaultLanguage?: string; dryRun?: boolean }) =>
     req<MainAgent>("PUT", "/api/agent", s),
   resetAgent: () => req<{ sessions: number; aborted: number }>("POST", "/api/agent/reset"),
   restartAgent: () => req<{ ok: boolean; restarting: boolean }>("POST", "/api/agent/restart"),

@@ -50,6 +50,15 @@ const schema = z.object({
   // to 0 to disable.
   TURN_RATE_LIMIT: z.coerce.number().int().nonnegative().default(5),
   TURN_RATE_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
+  // Per-client rate limit on mutating panel API routes (SEC): an authenticated
+  // panel user (or anyone holding PANEL_TOKEN) must not be able to spam costly
+  // POST/PUT/PATCH/DELETE endpoints (delegate runs, chat sends, schedule runs)
+  // unthrottled. Each client (keyed by IP) may make at most PANEL_RATE_LIMIT
+  // mutating requests per PANEL_RATE_WINDOW_MS (token bucket); over the limit it
+  // gets a 429 with Retry-After. GET/HEAD reads are exempt. Set the limit to 0
+  // to disable.
+  PANEL_RATE_LIMIT: z.coerce.number().int().nonnegative().default(30),
+  PANEL_RATE_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   // Outbound webhooks: when a schedule or worker/task run with a webhookUrl
   // completes, POST a JSON outcome payload to that URL. This is the per-request
   // timeout (ms) for that POST. Every webhook URL is run through assertSafeUrl()

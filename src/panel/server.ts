@@ -55,7 +55,8 @@ import {
   removeColumn,
   reorderColumns,
 } from "../core/columnConfig.js";
-import { taskDelegator } from "../core/taskRunner.js";
+import { taskDelegator, sanitizeCardField } from "../core/taskRunner.js";
+import { TokenBucketLimiter } from "../core/rateLimiter.js";
 import { workers, describeWorkerSchedule, type Worker } from "../core/workers.js";
 import { readRunLog } from "../core/runLog.js";
 import { chat } from "../core/chat.js";
@@ -240,6 +241,19 @@ export async function startPanel(): Promise<(() => Promise<void>) | undefined> {
       return;
     }
     noteAuthSuccess(ip);
+    // Throttle authenticated mutating requests so a token holder can't spam
+    // costly endpoints. Reads (GET/HEAD) and the WS handshake are exempt; the
+    // check runs only after auth so unauthenticated probes can't exhaust buckets.
+    if (panelRateLimiter && isMutatingMethod(req.method) && !req.url.startsWith("/ws")) {
+      if (!panelRateLimiter.tryConsume(ip)) {
+        const retryMs = panelRateLimiter.retryAfterMs(ip);
+        await reply
+          .code(429)
+          .header("Retry-After", String(Math.ceil(retryMs / 1000)))
+          .send({ error: "rate limit exceeded, slow down" });
+        return;
+      }
+    }
   });
 
   registerApi(app, hub);
@@ -331,6 +345,14 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(ab, bb);
 }
 
+/**
+ * Hard cap on a schedule prompt folded into the autonomous run prompt. A
+ * schedule executes with `bypassPermissions`, so an unbounded prompt is both a
+ * latent DoS and a prompt-injection vector — same threat model as a delegated
+ * card, so it reuses `sanitizeCardField` with a comparable cap.
+ */
+const SCHEDULE_PROMPT_MAX = 20_000;
+
 // --- Brute-force lockout -----------------------------------------------------
 // A panel token grants host access, so throttle repeated auth failures per
 // client IP. In-memory only (no dep): after MAX_FAILS failures the IP is locked
@@ -338,6 +360,23 @@ function safeEqual(a: string, b: string): boolean {
 const MAX_FAILS = 10;
 const LOCKOUT_MS = 5 * 60_000;
 const authFailures = new Map<string, { count: number; lockedUntil: number }>();
+
+// --- Per-client rate limit on mutating API routes ----------------------------
+// A valid PANEL_TOKEN grants full host access; even a legitimate holder must not
+// be able to spam costly mutating endpoints (delegate runs, chat sends, schedule
+// runs) unthrottled. A token bucket keyed by client IP throttles write requests
+// (POST/PUT/PATCH/DELETE); GET/HEAD reads are exempt. Disabled when
+// PANEL_RATE_LIMIT is 0. In-memory only, cleared on restart.
+const panelRateLimiter =
+  config.PANEL_RATE_LIMIT > 0
+    ? new TokenBucketLimiter<string>(config.PANEL_RATE_LIMIT, config.PANEL_RATE_WINDOW_MS)
+    : undefined;
+
+/** True for state-changing HTTP methods that should be rate limited. */
+function isMutatingMethod(method: string): boolean {
+  const m = method.toUpperCase();
+  return m === "POST" || m === "PUT" || m === "PATCH" || m === "DELETE";
+}
 
 let warnedUnknownIp = false;
 
@@ -543,13 +582,18 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
       webhookUrl?: string;
     };
     if (!prompt?.trim()) return reply.code(400).send({ error: "prompt required" });
+    // A schedule prompt runs as an autonomous `bypassPermissions` turn, so the
+    // same cap + injection sanitisation applied to delegated card content guards
+    // it against an unbounded / adversarial prompt (latent DoS + prompt-injection).
+    const cleanPrompt = sanitizeCardField(prompt, SCHEDULE_PROMPT_MAX);
+    if (!cleanPrompt) return reply.code(400).send({ error: "prompt required" });
     const spec = parseWhen(when ?? "");
     if (!spec) return reply.code(400).send({ error: "invalid schedule (use 30m, 2h, 1d, or HH:MM)" });
     if (webhookUrl?.trim() && !(await isValidWebhookUrl(webhookUrl)))
       return reply.code(400).send({ error: "invalid or blocked webhook URL" });
     const target = chatId ?? [...allowedUserIds][0];
     if (target === undefined) return reply.code(400).send({ error: "no allowed user to own the schedule" });
-    schedules.add(target, cwd?.trim() || config.WORKDIR, prompt.trim(), spec, webhookUrl);
+    schedules.add(target, cwd?.trim() || config.WORKDIR, cleanPrompt, spec, webhookUrl);
     return { schedules: listSchedules() };
   });
   app.put("/api/schedules/:id", async (req, reply) => {
@@ -563,6 +607,12 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
     };
     if (patch.webhookUrl?.trim() && !(await isValidWebhookUrl(patch.webhookUrl)))
       return reply.code(400).send({ error: "invalid or blocked webhook URL" });
+    // Sanitise + cap an updated prompt the same way as on create (autonomous run).
+    if (typeof patch.prompt === "string") {
+      const cleanPrompt = sanitizeCardField(patch.prompt, SCHEDULE_PROMPT_MAX);
+      if (!cleanPrompt) return reply.code(400).send({ error: "prompt required" });
+      patch.prompt = cleanPrompt;
+    }
     const updated = schedules.updateById(id, patch);
     if (!updated) return reply.code(404).send({ error: "not found" });
     return { schedules: listSchedules() };

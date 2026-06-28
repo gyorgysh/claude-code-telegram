@@ -8,11 +8,11 @@
  * start in a rolling window: each chat gets `capacity` tokens that refill at a
  * steady rate, and a turn only starts if a token is available.
  */
-export class TokenBucketLimiter {
+export class TokenBucketLimiter<K extends string | number = number> {
   private readonly capacity: number;
   /** Tokens replenished per millisecond. */
   private readonly refillPerMs: number;
-  private readonly buckets = new Map<number, { tokens: number; last: number }>();
+  private readonly buckets = new Map<K, { tokens: number; last: number }>();
 
   /**
    * @param capacity   max burst (and steady-state count) of turns per window.
@@ -27,7 +27,7 @@ export class TokenBucketLimiter {
    * Attempt to consume one token for `key`. Returns true if allowed (token
    * spent), false if the bucket is empty (rate exceeded).
    */
-  tryConsume(key: number): boolean {
+  tryConsume(key: K): boolean {
     const now = Date.now();
     let b = this.buckets.get(key);
     if (!b) {
@@ -48,7 +48,7 @@ export class TokenBucketLimiter {
   }
 
   /** Milliseconds until at least one token is available again for `key`. */
-  retryAfterMs(key: number): number {
+  retryAfterMs(key: K): number {
     const b = this.buckets.get(key);
     if (!b || b.tokens >= 1) return 0;
     return Math.ceil((1 - b.tokens) / this.refillPerMs);

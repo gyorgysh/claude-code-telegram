@@ -39,7 +39,7 @@ const NOTES_MAX = 20_000;
  *  - neutralise any literal closing tag that matches our delimiter so the
  *    payload can't terminate the wrapper early.
  */
-function sanitizeCardField(s: string, max: number): string {
+export function sanitizeCardField(s: string, max: number): string {
   const clipped = (s ?? "").slice(0, max);
   return clipped
     .split("\n")

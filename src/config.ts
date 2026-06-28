@@ -57,7 +57,7 @@ const schema = z.object({
   // mutating requests per PANEL_RATE_WINDOW_MS (token bucket); over the limit it
   // gets a 429 with Retry-After. GET/HEAD reads are exempt. Set the limit to 0
   // to disable.
-  PANEL_RATE_LIMIT: z.coerce.number().int().nonnegative().default(30),
+  PANEL_RATE_LIMIT: z.coerce.number().int().nonnegative().default(120),
   PANEL_RATE_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   // Outbound webhooks: when a schedule or worker/task run with a webhookUrl
   // completes, POST a JSON outcome payload to that URL. This is the per-request

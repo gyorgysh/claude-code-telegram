@@ -28,6 +28,7 @@ export const hu: Translations = {
   nav_status: "Állapot",
   nav_remote: "Távoli elérés",
   nav_updates: "Frissítések",
+  nav_feedback: "Visszajelzés",
   // Navigációs elemek célja (elemleírásként jelenik meg)
   nav_health_hint: "Rendszerállapot: CPU, memória és lemez egy pillantásra",
   nav_sessions_hint: "Aktív csevegési munkamenetek és előzményeik",
@@ -50,6 +51,7 @@ export const hu: Translations = {
   nav_status_hint: "Elérhető a Claude és minden modell-háttér?",
   nav_remote_hint: "Nyisd meg a panelt a telefonodon az interneten át",
   nav_updates_hint: "Új verziók keresése és telepítése",
+  nav_feedback_hint: "Hibajelentés vagy javaslat küldése a projektnek",
   nav_settings_hint: "Modell, személyiség, nyelv és egyéb opciók",
   // Témák
   theme_light: "Világos",
@@ -396,6 +398,10 @@ export const hu: Translations = {
   chat_placeholder: "Írj az ügynöknek…  (Enter a küldéshez, Shift+Enter új sorhoz)",
   chat_send: "Küldés",
   chat_failed: "(sikertelen)",
+  chat_agent_atlas: "Atlas",
+  chat_agent_atlas_sub: "Fő ügynök",
+  chat_agent_private: "privát munkamenet",
+  chat_agent_empty: "Kezdj privát beszélgetést vele: {name}. Ez a munkamenet csak a panelen él, saját memóriával.",
 
   // Memória (további)
   memory_fact_placeholder: "Egy tömör, önmagában érthető tény…",
@@ -802,6 +808,26 @@ export const hu: Translations = {
   usage_est_month: "Becsült hónap",
   usage_since_label: "Kezdet",
   usage_no_activity: "Még nincs rögzített aktivitás.",
+  // Token-felhasználás (MyHQ ügynökök, fordulónként)
+  usage_tokens_title: "Token-felhasználás (MyHQ ügynökök)",
+  usage_tokens_today: "Tokenek ma",
+  usage_tokens_lifetime: "Tokenek összesen",
+  usage_tokens_input: "Bemenet",
+  usage_tokens_output: "Kimenet",
+  usage_tokens_cache_read: "Gyorsítótár olvasás",
+  usage_tokens_cache_write: "Gyorsítótár írás",
+  usage_tokens_per_day: "Tokenek naponta (utolsó 30 nap)",
+  usage_tokens_in_out: "Bemeneti és kimeneti tokenek naponta összegezve az összes MyHQ ügynök fordulójából.",
+  usage_tokens_no_data: "Még nincs rögzített token-adat. A MyHQ ügynökök fordulói során halmozódik.",
+  usage_tokens_legend_input: "Bemenet",
+  usage_tokens_legend_output: "Kimenet",
+  usage_agents_title: "Token ügynökönként",
+  usage_agents_no_data: "Még nincs ügynökönkénti adat. Halmozódik ahogy Atlas, Leadek és workerek futnak.",
+  usage_agents_col_agent: "Ügynök",
+  usage_agents_col_input: "Bemenet",
+  usage_agents_col_output: "Kimenet",
+  usage_agents_col_cost: "Költség",
+  usage_agents_col_turns: "Körök",
 
   // Munkamenetek nézet
   sessions_desc_1: "Egy élő hely Telegram csevegésenként. Minden hely követi az aktuális munkakönyvtárat, az autonómia módot és az engedélylistákat az adott csevegéshez. ",
@@ -1128,4 +1154,23 @@ export const hu: Translations = {
   // Toast / notifications
   toast_dismiss: "Értesítés bezárása",
   toast_undo: "Visszavonás",
+
+  // Visszajelzés
+  feedback_title: "Visszajelzés küldése",
+  feedback_desc: "Találtál egy hibát, vagy van egy ötleted? Küldd el egyenesen a projektnek.",
+  feedback_info_title: "Hogyan működik a visszajelzés",
+  feedback_info_body:
+    "Az üzeneted a projekt karbantartójának megy a verzióddal és a platformoddal együtt, semmi mással. Csevegési előzmények, titkok vagy személyes adatok nem kerülnek bele.",
+  feedback_kind: "Típus",
+  feedback_kind_bug: "Hiba",
+  feedback_kind_suggestion: "Javaslat",
+  feedback_kind_other: "Egyéb",
+  feedback_message: "Üzeneted",
+  feedback_message_placeholder: "Írd le a hibát, vagy oszd meg a javaslatodat…",
+  feedback_privacy: "Csak az üzeneted, a verzió és a platform kerül elküldésre.",
+  feedback_send: "Visszajelzés küldése",
+  feedback_sending: "Küldés…",
+  feedback_sent: "Köszönjük, a visszajelzésed elküldtük.",
+  feedback_thanks: "Elküldve ✓",
+  feedback_failed: "Nem sikerült elküldeni a visszajelzést. Próbáld újra később.",
 };

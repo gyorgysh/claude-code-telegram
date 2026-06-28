@@ -16,6 +16,7 @@ import { audit } from "./audit.js";
 import { RunLogWriter } from "./runLog.js";
 import { log, preview } from "../logger.js";
 import { toolDiffMeta } from "../telegram/formatting.js";
+import { agentUsage } from "./agentUsage.js";
 
 const OUTPUT_HEAD = 3_000;
 const OUTPUT_TAIL = 5_000;
@@ -299,6 +300,15 @@ export class TaskDelegator {
         endedAt: Date.now(),
         output: capOutput(output),
         error: res.isError ? res.text?.slice(0, 500) : undefined,
+      });
+      // Track token usage under the lead's name if routed, otherwise "Tasks".
+      agentUsage.record(lead ? lead.name : "Tasks", lead ? "lead" : "task", {
+        costUsd: res.costUsd ?? 0,
+        durationMs: res.durationMs ?? 0,
+        inputTokens: res.tokens?.inputTokens ?? 0,
+        outputTokens: res.tokens?.outputTokens ?? 0,
+        cacheReadTokens: res.tokens?.cacheReadTokens ?? 0,
+        cacheWriteTokens: res.tokens?.cacheWriteTokens ?? 0,
       });
       const finalColumn = res.isError ? undefined : "done";
       if (finalColumn) updateTask(id, { column: finalColumn });

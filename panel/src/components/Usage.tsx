@@ -5,10 +5,12 @@ import {
   type ClaudeUsageSnapshot,
   type ProbeResult,
   type UsageLimitWindow,
+  type UsageSummary,
+  type AgentUsageEntry,
 } from "../api.ts";
 import { usePoll } from "../lib/usePoll.ts";
 import { Card, Button, Empty, Metric } from "./ui.tsx";
-import { ms, usd, relTime, friendlyProbeError } from "../lib/format.ts";
+import { ms, usd, tokens, relTime, friendlyProbeError } from "../lib/format.ts";
 import { useI18n } from "../lib/useI18n.ts";
 import type { TranslationKey } from "../i18n/en.ts";
 
@@ -29,12 +31,14 @@ export function UsageView({ onAuthError }: { onAuthError: () => void }) {
   const [plan, setPlan] = useState<PlanView | null>(null);
   const [probe, setProbe] = useState<ProbeResult | null>(null);
   const [claude, setClaude] = useState<ClaudeUsageSnapshot | null>(null);
+  const [agentEntries, setAgentEntries] = useState<AgentUsageEntry[] | null>(null);
   const [probeRunning, setProbeRunning] = useState(false);
 
   useEffect(() => {
     api.plan().then(setPlan).catch(() => {});
     api.usageProbe().then(setProbe).catch(() => {});
     api.claudeUsage().then(setClaude).catch(() => {});
+    api.usageAgents().then((r) => setAgentEntries(r.agents)).catch(() => {});
   }, []);
 
   if (error) return <Empty>{t("usage_failed_load").replace("{error}", error)}</Empty>;
@@ -81,6 +85,13 @@ export function UsageView({ onAuthError }: { onAuthError: () => void }) {
           <BudgetBar plan={plan} />
         </Card>
       )}
+
+      {/* Token usage — real input/output tokens per turn, summed. Meaningful on
+          every plan (subscription or API), so always shown when we have data. */}
+      {myhq && <TokenUsageCard myhq={myhq} />}
+
+      {/* Per-agent breakdown — always rendered so empty state is visible. */}
+      <AgentBreakdownCard agents={agentEntries ?? []} />
 
       {/* MyHQ session metrics — cost is meaningless on a subscription plan, so omit it */}
       {myhq && (
@@ -374,6 +385,179 @@ function CostChart({
               style={{ height: `${(d.costUsd / maxCost) * 100}%` }}
               title={`${d.day}: ${usd(d.costUsd)} · ${d.turns} ${t("usage_turns")}`}
             />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Per-agent token breakdown
+// ---------------------------------------------------------------------------
+
+const ROLE_LABEL: Record<string, string> = {
+  atlas: "Atlas",
+  lead: "Lead",
+  worker: "Worker",
+  task: "Task",
+};
+
+function AgentBreakdownCard({ agents }: { agents: AgentUsageEntry[] }) {
+  const { t } = useI18n();
+  if (agents.length === 0)
+    return (
+      <Card title={t("usage_agents_title")}>
+        <p className="text-sm text-fg-faint">{t("usage_agents_no_data")}</p>
+      </Card>
+    );
+
+  return (
+    <Card title={t("usage_agents_title")}>
+      <div className="overflow-x-auto">
+        <div className="min-w-[480px]">
+          {/* Header row */}
+          <div className="mb-1 grid grid-cols-[1fr_80px_80px_72px_52px] gap-2 px-1 text-xs font-semibold uppercase tracking-wider text-fg-dim">
+            <span>{t("usage_agents_col_agent")}</span>
+            <span className="text-right">{t("usage_agents_col_input")}</span>
+            <span className="text-right">{t("usage_agents_col_output")}</span>
+            <span className="text-right">{t("usage_agents_col_cost")}</span>
+            <span className="text-right">{t("usage_agents_col_turns")}</span>
+          </div>
+          {/* Data rows */}
+          {agents.map((a) => (
+            <div
+              key={a.name}
+              className="grid grid-cols-[1fr_80px_80px_72px_52px] gap-2 rounded px-1 py-1 text-sm even:bg-bg-surface/40"
+            >
+              <span className="flex items-center gap-1.5 font-medium text-fg truncate">
+                {a.name}
+                <span className="shrink-0 rounded bg-accent/10 px-1 py-0.5 text-[10px] font-semibold text-accent">
+                  {ROLE_LABEL[a.role] ?? a.role}
+                </span>
+              </span>
+              <span className="text-right font-mono text-fg-dim">{tokens(a.total.inputTokens)}</span>
+              <span className="text-right font-mono text-fg-dim">{tokens(a.total.outputTokens)}</span>
+              <span className="text-right font-mono text-fg-dim">
+                {a.total.costUsd > 0 ? usd(a.total.costUsd) : "—"}
+              </span>
+              <span className="text-right font-mono text-fg-dim">{a.total.turns}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Token usage (real input/output tokens per turn, summed)
+// ---------------------------------------------------------------------------
+
+function TokenUsageCard({ myhq }: { myhq: UsageSummary }) {
+  const { t } = useI18n();
+  const hasTokens =
+    myhq.total.inputTokens > 0 ||
+    myhq.total.outputTokens > 0 ||
+    myhq.total.cacheReadTokens > 0 ||
+    myhq.total.cacheWriteTokens > 0;
+
+  return (
+    <Card title={t("usage_tokens_title")}>
+      {!hasTokens ? (
+        <p className="text-sm text-fg-faint">{t("usage_tokens_no_data")}</p>
+      ) : (
+        <div className="space-y-4">
+          {/* Today vs lifetime input/output/cache breakdown */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Tile
+              label={`${t("usage_tokens_input")} · ${t("usage_tokens_today")}`}
+              value={tokens(myhq.today.inputTokens)}
+            />
+            <Tile
+              label={`${t("usage_tokens_output")} · ${t("usage_tokens_today")}`}
+              value={tokens(myhq.today.outputTokens)}
+            />
+            <Tile
+              label={`${t("usage_tokens_input")} · ${t("usage_tokens_lifetime")}`}
+              value={tokens(myhq.total.inputTokens)}
+            />
+            <Tile
+              label={`${t("usage_tokens_output")} · ${t("usage_tokens_lifetime")}`}
+              value={tokens(myhq.total.outputTokens)}
+            />
+          </div>
+
+          {/* Cache footer — useful to see how much is served from cache */}
+          <div className="flex flex-wrap gap-x-5 gap-y-0.5 text-xs text-fg-faint">
+            <span>
+              <span className="font-medium text-fg-dim">{tokens(myhq.total.cacheReadTokens)}</span>{" "}
+              {t("usage_tokens_cache_read")}
+            </span>
+            <span>
+              <span className="font-medium text-fg-dim">{tokens(myhq.total.cacheWriteTokens)}</span>{" "}
+              {t("usage_tokens_cache_write")}
+            </span>
+          </div>
+
+          {/* Daily input vs output chart */}
+          <div className="space-y-2 border-t border-line pt-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wider text-fg-dim">
+                {t("usage_tokens_per_day")}
+              </p>
+              <div className="flex items-center gap-3 text-xs text-fg-faint">
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-sm bg-accent/70" />
+                  {t("usage_tokens_legend_input")}
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-sm bg-emerald-400/70" />
+                  {t("usage_tokens_legend_output")}
+                </span>
+              </div>
+            </div>
+            <TokenChart myhq={myhq} />
+            <p className="text-xs text-fg-faint">{t("usage_tokens_in_out")}</p>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** Stacked daily bar chart of input (bottom) + output (top) tokens per day. */
+function TokenChart({ myhq }: { myhq: UsageSummary }) {
+  const { t } = useI18n();
+  const recent = myhq.daily.slice(-30);
+  const max = Math.max(1, ...recent.map((d) => d.inputTokens + d.outputTokens));
+
+  if (recent.length === 0) return <Empty>{t("usage_no_activity")}</Empty>;
+
+  return (
+    <div className="relative flex h-40 items-end gap-1">
+      {recent.map((d) => {
+        const total = d.inputTokens + d.outputTokens;
+        const totalPct = (total / max) * 100;
+        // Within the bar, split the height between input and output.
+        const inPct = total > 0 ? (d.inputTokens / total) * 100 : 0;
+        const outPct = total > 0 ? (d.outputTokens / total) * 100 : 0;
+        return (
+          <div key={d.day} className="group flex flex-1 flex-col items-center justify-end">
+            <div
+              className="flex w-full flex-col justify-end overflow-hidden rounded-t"
+              style={{ height: `${totalPct}%` }}
+              title={`${d.day}: ${tokens(d.inputTokens)} ${t("usage_tokens_legend_input")} · ${tokens(d.outputTokens)} ${t("usage_tokens_legend_output")}`}
+            >
+              <div
+                className="w-full bg-emerald-400/70 transition-all group-hover:bg-emerald-400"
+                style={{ height: `${outPct}%` }}
+              />
+              <div
+                className="w-full bg-accent/70 transition-all group-hover:bg-accent"
+                style={{ height: `${inPct}%` }}
+              />
+            </div>
           </div>
         );
       })}

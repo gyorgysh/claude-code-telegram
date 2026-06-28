@@ -26,6 +26,7 @@ export const en = {
   nav_status: "Status",
   nav_remote: "Remote Access",
   nav_updates: "Updates",
+  nav_feedback: "Send Feedback",
   // Navigation item purpose hints (shown as tooltips)
   nav_health_hint: "System health: CPU, memory, and disk at a glance",
   nav_sessions_hint: "Active chat sessions and their history",
@@ -48,6 +49,7 @@ export const en = {
   nav_status_hint: "Is Claude and each model backend reachable?",
   nav_remote_hint: "Open the panel to your phone over the internet",
   nav_updates_hint: "Check for and install new versions",
+  nav_feedback_hint: "Report a bug or send a suggestion to the project",
   nav_settings_hint: "Model, persona, language, and other options",
   // Themes
   theme_light: "Light",
@@ -393,6 +395,10 @@ export const en = {
   chat_placeholder: "Message the agent…  (Enter to send, Shift+Enter for newline)",
   chat_send: "Send",
   chat_failed: "(failed)",
+  chat_agent_atlas: "Atlas",
+  chat_agent_atlas_sub: "Main agent",
+  chat_agent_private: "private session",
+  chat_agent_empty: "Start a private chat with {name}. This session is panel-only, with its own memory.",
 
   // Memory (additional)
   memory_fact_placeholder: "One concise, self-contained fact…",
@@ -798,6 +804,26 @@ export const en = {
   usage_est_month: "Est. month",
   usage_since_label: "Since",
   usage_no_activity: "No activity recorded yet.",
+  // Token usage (MyHQ agent, per turn)
+  usage_tokens_title: "Token usage (MyHQ agents)",
+  usage_tokens_today: "Tokens today",
+  usage_tokens_lifetime: "Tokens lifetime",
+  usage_tokens_input: "Input",
+  usage_tokens_output: "Output",
+  usage_tokens_cache_read: "Cache read",
+  usage_tokens_cache_write: "Cache write",
+  usage_tokens_per_day: "Tokens per day (last 30 days)",
+  usage_tokens_in_out: "Input vs output tokens, summed per day across all MyHQ agent turns.",
+  usage_tokens_no_data: "No token data recorded yet. It accrues as MyHQ agents run turns.",
+  usage_tokens_legend_input: "Input",
+  usage_tokens_legend_output: "Output",
+  usage_agents_title: "Tokens by agent",
+  usage_agents_no_data: "No per-agent data yet. Accrues as Atlas, Leads, and workers run.",
+  usage_agents_col_agent: "Agent",
+  usage_agents_col_input: "Input",
+  usage_agents_col_output: "Output",
+  usage_agents_col_cost: "Cost",
+  usage_agents_col_turns: "Turns",
 
   // Sessions view
   sessions_desc_1: "One live slot per Telegram chat. Each slot tracks the current working directory, autonomy mode, and allow-lists for that chat. ",
@@ -1123,6 +1149,25 @@ export const en = {
   // Toast / notifications
   toast_dismiss: "Dismiss notification",
   toast_undo: "Undo",
+
+  // Feedback
+  feedback_title: "Send Feedback",
+  feedback_desc: "Found a bug or have an idea? Send it straight to the project.",
+  feedback_info_title: "How feedback works",
+  feedback_info_body:
+    "Your message is sent to the project maintainer along with your version and platform, nothing else. No chat history, secrets, or personal data is included.",
+  feedback_kind: "Type",
+  feedback_kind_bug: "Bug",
+  feedback_kind_suggestion: "Suggestion",
+  feedback_kind_other: "Other",
+  feedback_message: "Your message",
+  feedback_message_placeholder: "Describe the bug, or share your suggestion…",
+  feedback_privacy: "Only your message, version, and platform are sent.",
+  feedback_send: "Send feedback",
+  feedback_sending: "Sending…",
+  feedback_sent: "Thanks, your feedback was sent.",
+  feedback_thanks: "Sent ✓",
+  feedback_failed: "Couldn't send feedback. Please try again later.",
 };
 
 export type TranslationKey = keyof typeof en;

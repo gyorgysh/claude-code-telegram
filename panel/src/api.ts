@@ -57,6 +57,10 @@ export interface UsageStat {
   turns: number;
   costUsd: number;
   durationMs: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
 }
 
 export interface Health {
@@ -101,6 +105,13 @@ export interface UsageSummary {
   total: UsageStat;
   today: UsageStat;
   daily: Array<{ day: string } & UsageStat>;
+}
+
+export type AgentRole = "atlas" | "lead" | "worker" | "task";
+export interface AgentUsageEntry {
+  name: string;
+  role: AgentRole;
+  total: UsageStat;
 }
 
 export interface PromptView {
@@ -489,6 +500,16 @@ export interface ChatView {
   approvalsInTelegram?: boolean;
 }
 
+/** Snapshot of an interactive chat with one specific worker / Lead. */
+export interface AgentChatView {
+  agentId: string;
+  name: string;
+  cwd: string;
+  messages: ChatMessage[];
+  busy: boolean;
+  hasContext: boolean;
+}
+
 export type Autonomy = "supervised" | "standard" | "full" | "auto_until_error";
 
 export interface EmbeddingConfig {
@@ -624,6 +645,8 @@ export interface TunnelPassword {
 export const api = {
   me: () =>
     get<{ ok: boolean; chatEnabled: boolean; version: string; updateAvailable: boolean; updateCount: number; atlasName: string; brandName: string; defaultWorkdir: string; allowedUserCount: number; panelHost: string; panelPort: number; tunnelEnabled: boolean; terminalEnabled: boolean }>("/api/me"),
+  sendFeedback: (kind: "bug" | "suggestion" | "other", message: string) =>
+    req<{ ok: boolean }>("POST", "/api/feedback", { kind, message }),
   sessions: () => get<{ sessions: SessionView[] }>("/api/sessions"),
   logs: (params?: { date?: string; q?: string; level?: string; limit?: number }) => {
     const qs = new URLSearchParams();
@@ -657,6 +680,7 @@ export const api = {
     req<{ ok: boolean; schedules: ScheduleView[] }>("POST", `/api/schedules/${id}/run`, {}),
   deleteSchedule: (id: string) => req<{ ok: boolean }>("DELETE", `/api/schedules/${id}`),
   usage: () => get<UsageSummary>("/api/usage"),
+  usageAgents: () => get<{ agents: AgentUsageEntry[] }>("/api/usage/agents"),
 
   prompt: () => get<PromptView>("/api/prompt"),
   savePrompt: (content: string) => req<PromptView>("PUT", "/api/prompt", { content }),
@@ -815,6 +839,15 @@ export const api = {
   clearChat: () => req<ChatView>("POST", "/api/chat/clear"),
   chatSettings: (s: { cwd?: string; auto?: boolean }) =>
     req<ChatView>("PUT", "/api/chat/settings", s),
+
+  // Per-agent interactive chat (talk to a specific worker / Lead).
+  agentChat: (id: string) => get<AgentChatView>(`/api/agent-chat/${id}`),
+  sendAgentChat: (id: string, text: string) =>
+    req<AgentChatView>("POST", `/api/agent-chat/${id}/send`, { text }),
+  stopAgentChat: (id: string) => req<{ ok: boolean }>("POST", `/api/agent-chat/${id}/stop`),
+  clearAgentChat: (id: string) => req<AgentChatView>("POST", `/api/agent-chat/${id}/clear`),
+  agentChatSettings: (id: string, s: { cwd?: string }) =>
+    req<AgentChatView>("PUT", `/api/agent-chat/${id}/settings`, s),
 
   providers: () => get<{ providers: Provider[] }>("/api/providers"),
   createProvider: (p: Partial<Provider>) => req<Provider>("POST", "/api/providers", p),

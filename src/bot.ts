@@ -55,6 +55,7 @@ import type { Autonomy } from "./session/manager.js";
 import { sessions, AUTO_UNTIL_ERROR_TOOLS } from "./session/manager.js";
 import { log, preview } from "./logger.js";
 import { loadProbeResult } from "./core/usageProbe.js";
+import { agentUsage } from "./core/agentUsage.js";
 
 export function buildBot(): Telegraf {
   const bot = new Telegraf(config.TELEGRAM_BOT_TOKEN);
@@ -691,7 +692,16 @@ async function handleUserPrompt(
     }
 
     await streamer.finalize();
-    sessions.recordUsage(chatId, res.costUsd ?? 0, res.durationMs ?? 0);
+    const turnUsage = {
+      costUsd: res.costUsd ?? 0,
+      durationMs: res.durationMs ?? 0,
+      inputTokens: res.tokens?.inputTokens ?? 0,
+      outputTokens: res.tokens?.outputTokens ?? 0,
+      cacheReadTokens: res.tokens?.cacheReadTokens ?? 0,
+      cacheWriteTokens: res.tokens?.cacheWriteTokens ?? 0,
+    };
+    sessions.recordUsage(chatId, turnUsage);
+    agentUsage.record(config.ATLAS_NAME, "atlas", turnUsage);
     log.info("Turn complete", {
       chatId,
       ms: Date.now() - startedAt,

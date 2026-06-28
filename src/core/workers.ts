@@ -19,6 +19,7 @@ import { log, preview } from "../logger.js";
 import { toolDiffMeta } from "../telegram/formatting.js";
 import type { Autonomy } from "../session/manager.js";
 import { getLeadProtocol } from "../prompt.js";
+import { agentUsage } from "./agentUsage.js";
 
 const FILE = "workers.json";
 const RUNS_FILE = "workerRuns.json";
@@ -382,6 +383,14 @@ export class WorkerManager {
       run.costUsd = res.costUsd;
       run.durationMs = res.durationMs;
       if (res.isError && res.text) run.error = res.text.slice(0, 500);
+      agentUsage.record(w.name, w.role === "lead" ? "lead" : "worker", {
+        costUsd: res.costUsd ?? 0,
+        durationMs: res.durationMs ?? 0,
+        inputTokens: res.tokens?.inputTokens ?? 0,
+        outputTokens: res.tokens?.outputTokens ?? 0,
+        cacheReadTokens: res.tokens?.cacheReadTokens ?? 0,
+        cacheWriteTokens: res.tokens?.cacheWriteTokens ?? 0,
+      });
     } catch (err) {
       run.status = abort.signal.aborted ? "stopped" : "error";
       if (!abort.signal.aborted) run.error = err instanceof Error ? err.message : String(err);

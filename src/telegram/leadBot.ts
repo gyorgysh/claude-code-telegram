@@ -22,6 +22,7 @@ import { downloadIncomingFile, isViewableImage, readImageInput } from "./files.j
 import { getLeadProtocol } from "../prompt.js";
 import { log } from "../logger.js";
 import { config } from "../config.js";
+import { agentUsage } from "../core/agentUsage.js";
 
 /**
  * A standalone Telegram bot for a single Lead worker. It reuses the same
@@ -129,6 +130,15 @@ export class LeadBot {
       });
 
       await streamer.finalize();
+
+      agentUsage.record(lead.name, "lead", {
+        costUsd: res.costUsd ?? 0,
+        durationMs: res.durationMs ?? 0,
+        inputTokens: res.tokens?.inputTokens ?? 0,
+        outputTokens: res.tokens?.outputTokens ?? 0,
+        cacheReadTokens: res.tokens?.cacheReadTokens ?? 0,
+        cacheWriteTokens: res.tokens?.cacheWriteTokens ?? 0,
+      });
 
       // Same finish UX as the main bot: split on \n---\n to post the closing
       // sentence as a clean message and collapse the work log.

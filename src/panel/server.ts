@@ -29,6 +29,7 @@ import {
 } from "../logger.js";
 import { getHealth } from "../core/health.js";
 import { listSessions, listSchedules, usageSummary } from "../core/snapshot.js";
+import { agentUsage } from "../core/agentUsage.js";
 import { isValidWebhookUrl } from "../core/webhook.js";
 import { getPrompt, savePlaybook } from "../core/playbook.js";
 import { listSkills, createSkill, updateSkill, deleteSkill } from "../core/skills.js";
@@ -57,6 +58,7 @@ import { taskDelegator } from "../core/taskRunner.js";
 import { workers, describeWorkerSchedule, type Worker } from "../core/workers.js";
 import { readRunLog } from "../core/runLog.js";
 import { chat } from "../core/chat.js";
+import { agentChat } from "../core/agentChat.js";
 import { memory, type MemoryEntry } from "../core/memory.js";
 import { suggestions } from "../core/suggestions.js";
 import { getStatus } from "../core/status.js";
@@ -119,6 +121,8 @@ export async function startPanel(): Promise<(() => Promise<void>) | undefined> {
   workers.start((m) => hub.broadcast(m));
   // Wire the in-panel chat session's stream to all clients.
   chat.start((m) => hub.broadcast(m));
+  // Wire per-agent (worker/Lead) interactive chat streams to all clients.
+  agentChat.start((m) => hub.broadcast(m));
   // Wire delegated-task run streams to all clients.
   taskDelegator.start((m) => hub.broadcast(m));
   // Wire the PTY terminal session to all clients.
@@ -553,6 +557,7 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
     return { ok: true };
   });
   app.get("/api/usage", async () => usageSummary());
+  app.get("/api/usage/agents", async () => ({ agents: agentUsage.list() }));
   app.get("/api/audit", async () => ({ events: recentAudit() }));
   // GET /api/logs
   //   ?date=YYYY-MM-DD  — read from the persisted file for that date
@@ -654,6 +659,48 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
   app.post("/api/heartbeat/run", async () => heartbeat.runOnce("panel"));
   // Send a usage/cost report to Telegram right now (panel "Test" button).
   app.post("/api/plan/report-test", async () => heartbeat.sendCostReport());
+
+  // --- feedback: forward a bug report / suggestion to the project endpoint ---
+  // The panel "Send feedback" form POSTs here; we relay it to the central
+  // collector (FEEDBACK_URL, defaulting to gyorgy.sh) with a little deployment
+  // context so reports can be triaged server-side later. Fire-and-await with a
+  // short timeout so a slow collector can't hang the panel; failures surface as
+  // a 502 so the UI can tell the user it didn't go through.
+  app.post("/api/feedback", async (req, reply) => {
+    const { kind, message } = (req.body ?? {}) as { kind?: string; message?: string };
+    const text = typeof message === "string" ? message.trim() : "";
+    if (!text) return reply.code(400).send({ error: "message required" });
+    if (text.length > 5000) return reply.code(400).send({ error: "message too long (max 5000 chars)" });
+    const category = kind === "bug" || kind === "suggestion" || kind === "other" ? kind : "other";
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10_000);
+    try {
+      const res = await fetch(config.FEEDBACK_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json", "user-agent": `${config.BRAND_NAME}-feedback` },
+        body: JSON.stringify({
+          kind: category,
+          message: text,
+          version: VERSION,
+          brand: config.BRAND_NAME,
+          platform: process.platform,
+          submittedAt: new Date().toISOString(),
+        }),
+        signal: ctrl.signal,
+      });
+      if (!res.ok) {
+        log.warn("Feedback relay returned non-2xx", { status: res.status });
+        return reply.code(502).send({ error: "feedback endpoint unavailable" });
+      }
+      log.info("Feedback submitted", { kind: category });
+      return { ok: true };
+    } catch (err) {
+      log.warn("Feedback relay failed", { error: err instanceof Error ? err.message : String(err) });
+      return reply.code(502).send({ error: "feedback endpoint unavailable" });
+    } finally {
+      clearTimeout(timer);
+    }
+  });
 
   // --- self-update ---
   app.get("/api/update", async () => ({ ...getUpdateStatus(), serviceInstalled: serviceInstalled(), platform: process.platform, active: isActive() }));
@@ -1073,6 +1120,41 @@ Respond with ONLY a JSON array, no markdown fences, no explanation. Example form
     const { approvalId, allow } = (req.body ?? {}) as { approvalId?: string; allow?: boolean };
     if (!approvalId) return reply.code(400).send({ error: "approvalId required" });
     return { ok: chat.resolveApproval(approvalId, Boolean(allow)) };
+  });
+
+  // --- per-agent interactive chat (talk to a specific worker / Lead) ---
+  app.get("/api/agent-chat/:id", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const v = agentChat.view(id);
+    if (!v) return reply.code(404).send({ error: "agent not found" });
+    return v;
+  });
+  app.post("/api/agent-chat/:id/send", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { text } = (req.body ?? {}) as { text?: string };
+    const r = agentChat.send(id, typeof text === "string" ? text : "");
+    if (!r.ok) return reply.code(409).send({ error: r.error });
+    return agentChat.view(id);
+  });
+  app.post("/api/agent-chat/:id/stop", async (req) => {
+    const { id } = req.params as { id: string };
+    agentChat.stop(id);
+    return { ok: true };
+  });
+  app.post("/api/agent-chat/:id/clear", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    agentChat.clear(id);
+    const v = agentChat.view(id);
+    if (!v) return reply.code(404).send({ error: "agent not found" });
+    return v;
+  });
+  app.put("/api/agent-chat/:id/settings", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { cwd } = (req.body ?? {}) as { cwd?: string };
+    if (typeof cwd === "string") agentChat.setCwd(id, cwd);
+    const v = agentChat.view(id);
+    if (!v) return reply.code(404).send({ error: "agent not found" });
+    return v;
   });
 
   // --- claude cli usage (legacy stats-cache.json path) ---

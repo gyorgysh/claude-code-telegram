@@ -10,9 +10,15 @@ const AGENTCTL = join(repoRoot, "scripts", "agentctl.sh");
 
 /** Which Windows service manager hosts the bot, if any: the NSSM service 'myhq'
  *  or the 'MyHQ Bot' scheduled task (both installed by myhq-install.ps1). */
+// Full paths to system32 executables so they resolve even when the NSSM
+// service has a restricted PATH that omits C:\Windows\System32.
+const sys32 = join(process.env.SystemRoot ?? "C:\\Windows", "System32");
+const SC_EXE       = join(sys32, "sc.exe");
+const SCHTASKS_EXE = join(sys32, "schtasks.exe");
+
 function windowsServiceKind(): "nssm" | "task" | null {
   try {
-    const out = execFileSync("sc.exe", ["query", "myhq"], {
+    const out = execFileSync(SC_EXE, ["query", "myhq"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     });
@@ -21,7 +27,7 @@ function windowsServiceKind(): "nssm" | "task" | null {
     /* not registered as a service */
   }
   try {
-    execFileSync("schtasks.exe", ["/query", "/tn", "MyHQ Bot"], { stdio: "ignore" });
+    execFileSync(SCHTASKS_EXE, ["/query", "/tn", "MyHQ Bot"], { stdio: "ignore" });
     return "task";
   } catch {
     /* no scheduled task */
@@ -72,20 +78,17 @@ export function restartService(): void {
       // isn't on the service's PATH. An NSSM service is a real Windows service.
       let child;
       if (kind === "nssm") {
-        const psExe = join(
-          process.env.SystemRoot ?? "C:\\Windows",
-          "System32", "WindowsPowerShell", "v1.0", "powershell.exe",
-        );
+        const psExe = join(sys32, "WindowsPowerShell", "v1.0", "powershell.exe");
         child = spawn(
           psExe,
           ["-NoProfile", "-Command", "Restart-Service -Name myhq -Force"],
           { detached: true, stdio: "ignore", windowsHide: true },
         );
       } else if (kind === "task") {
-        const cmdExe = join(process.env.SystemRoot ?? "C:\\Windows", "System32", "cmd.exe");
+        const cmdExe = join(sys32, "cmd.exe");
         child = spawn(
           cmdExe,
-          ["/c", 'schtasks /end /tn "MyHQ Bot" & schtasks /run /tn "MyHQ Bot"'],
+          ["/c", `"${SCHTASKS_EXE}" /end /tn "MyHQ Bot" & "${SCHTASKS_EXE}" /run /tn "MyHQ Bot"`],
           { detached: true, stdio: "ignore", windowsHide: true },
         );
       } else {

@@ -748,7 +748,12 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
           {archiveOpen && (
             <div className="mt-3">
               {archivedCards.length === 0 ? (
-                <p className="text-xs text-fg-faint">{t("tasks_archive_empty")}</p>
+                <div className="flex flex-col items-center gap-2 py-6 text-center text-fg-faint">
+                  <div className="[&_svg]:h-10 [&_svg]:w-10 opacity-60">
+                    <TasksArt />
+                  </div>
+                  <p className="text-xs">{t("tasks_archive_empty")}</p>
+                </div>
               ) : (
                 <div ref={archiveRef} className="grid gap-1.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                   {archivedCards.map((tk) => {
@@ -908,6 +913,13 @@ function Card({
   if (editing && !selectMode) {
     return (
       <div className="rounded-lg border border-accent/40 bg-input p-2">
+        <button
+          onClick={() => setEditing(false)}
+          className="mb-2 flex items-center gap-1 text-xs text-fg-dim transition-colors hover:text-fg"
+        >
+          <span aria-hidden>←</span>
+          <span>{t("tasks_editor_back")}</span>
+        </button>
         <Input value={title} onChange={(e) => setTitle(e.target.value)} className="mb-2" />
         <TextArea
           rows={3}

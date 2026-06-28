@@ -442,6 +442,7 @@ export const en = {
 
   // App layout
   app_open_menu: "Open menu",
+  breadcrumb_home: "Home",
   app_footer_made_with: "Made open source with Claude & Coffee ☕",
 
   // Login
@@ -502,8 +503,10 @@ export const en = {
   skills_empty_desc: "Skills are reusable prompts you can run on demand or attach to a worker. Save a procedure once, reuse it everywhere.",
   skills_files_title: "Project .claude files",
   skills_files_desc: "Agents, skills, commands and CLAUDE.md the driven agent loads from each working directory. Edits write straight to disk.",
-  skills_files_empty: "No .claude config found in any known working directory.",
-  skills_files_select: "Select a file to edit.",
+  skills_files_empty: "No config files found",
+  skills_files_empty_desc: "No .claude config was found in any known working directory.",
+  skills_files_select: "Select a file to edit",
+  skills_files_select_desc: "Pick a file from the list to view and edit it here.",
 
   // Vault
   vault_title: "Secret vault",
@@ -628,6 +631,7 @@ export const en = {
   tasks_mark_done: "Mark Done",
   tasks_archive: "Archive",
   tasks_archive_empty: "No archived cards.",
+  tasks_editor_back: "Back to card",
   tasks_archive_show: "Show archive ({n})",
   tasks_archive_hide: "Hide archive",
   tasks_archive_restore: "Restore",
@@ -1105,6 +1109,8 @@ export const en = {
   connectors_access_write: "Read & write",
   connectors_access_read_hint: "Only list, get, and search tools are exposed.",
   connectors_access_write_hint: "Read tools plus create, update, send, and delete.",
+  connectors_empty_title: "No connectors loaded",
+  connectors_empty_desc: "Integrations appear here once the catalogue loads. If this persists, check the panel connection.",
 
   // Prompt (operator playbook) view
   prompt_playbook_title: "Operator playbook",

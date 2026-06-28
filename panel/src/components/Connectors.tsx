@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, AuthError, type Connector, type ConnectorScope, type SecretView } from "../api.ts";
 import { Badge, Card, Empty, Label, Select } from "./ui.tsx";
+import { ConnectorsArt } from "./onboarding.tsx";
 import { useI18n } from "../lib/useI18n.ts";
 
 export function ConnectorsView({ onAuthError }: { onAuthError: () => void }) {
@@ -42,7 +43,9 @@ export function ConnectorsView({ onAuthError }: { onAuthError: () => void }) {
       <p className="mb-3 text-sm text-fg-dim">{t("connectors_desc")}</p>
       {error && <p className="mb-2 text-sm text-critical-fg">{error}</p>}
       {connectors.length === 0 ? (
-        <Empty>{t("loading")}</Empty>
+        <Empty icon={<ConnectorsArt />} title={t("connectors_empty_title")}>
+          {t("connectors_empty_desc")}
+        </Empty>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {connectors.map((c) => {

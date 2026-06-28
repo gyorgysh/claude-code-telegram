@@ -13,7 +13,7 @@ import { getProvider } from "../core/providers.js";
 import { resolveSecret } from "../core/vault.js";
 import { getLeadProtocol } from "../prompt.js";
 import { config } from "../config.js";
-import { log } from "../logger.js";
+import { log, redactSecrets } from "../logger.js";
 import { registerAsk } from "../core/crewAsk.js";
 
 const DELEGATIONS_FILE = join(config.WORKDIR, "..", "delegations.jsonl");
@@ -110,7 +110,7 @@ export function createCrewMcp(opts: CrewMcpOptions) {
               toAgentId: args.leadId,
               leadName: lead.name,
               task: args.task,
-              outputTail: output.slice(-500),
+              outputTail: redactSecrets(output.slice(-500)),
               durationMs,
               costUsd: res.costUsd,
             });

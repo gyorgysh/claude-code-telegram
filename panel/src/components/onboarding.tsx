@@ -123,6 +123,29 @@ export function LogsArt() {
   );
 }
 
+/** Connectors — two plugs linking together. */
+export function ConnectorsArt() {
+  return (
+    <svg {...svgProps} aria-hidden>
+      <path d="M6 24h6M36 24h6" />
+      <rect x="12" y="18" width="10" height="12" rx="2" />
+      <rect x="26" y="18" width="10" height="12" rx="2" />
+      <path d="M22 21v6M26 21v6" />
+    </svg>
+  );
+}
+
+/** Files — a document with a folded corner. */
+export function FilesArt() {
+  return (
+    <svg {...svgProps} aria-hidden>
+      <path d="M14 8h12l8 8v24a0 0 0 010 0H14a0 0 0 010 0V8z" />
+      <path d="M26 8v8h8" />
+      <path d="M19 26h10M19 31h10M19 21h5" />
+    </svg>
+  );
+}
+
 /** Heartbeat — a steady pulse line, "all clear". */
 export function HeartbeatArt() {
   return (

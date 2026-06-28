@@ -1,7 +1,7 @@
 import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { config } from "../config.js";
 import { systemPrompt } from "../prompt.js";
-import { memory, formatMemories } from "../core/memory.js";
+import { memory, formatMemoriesForPrompt } from "../core/memory.js";
 import { activityBegin, activityEnd } from "../core/activity.js";
 import { log } from "../logger.js";
 import {
@@ -129,7 +129,7 @@ export async function runTurn(opts: RunOptions): Promise<RunResult> {
   // keyword-only fallback otherwise; empty store = no-op. Done once, outside the
   // retry loop below.
   const recalled = await memory.recallForPromptAsync(opts.prompt);
-  const memoryBlock = recalled.length ? formatMemories(recalled) : undefined;
+  const memoryBlock = recalled.length ? formatMemoriesForPrompt(recalled) : undefined;
 
   // The headless `claude` CLI intermittently crashes on startup/teardown with a
   // non-zero exit and NO output (a known CLI bug). It happens before any text

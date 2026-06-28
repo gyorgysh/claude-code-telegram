@@ -445,6 +445,7 @@ export const hu: Translations = {
 
   // App elrendezés
   app_open_menu: "Menü megnyitása",
+  breadcrumb_home: "Kezdőlap",
   app_footer_made_with: "Nyílt forráskóddal készült Claude-dal és kávéval ☕",
 
   // Bejelentkezés
@@ -506,8 +507,10 @@ export const hu: Translations = {
     "A készségek újrahasználható promptok, amelyeket igény szerint futtathatsz vagy munkáshoz köthetsz. Ments el egy eljárást egyszer, használd bárhol.",
   skills_files_title: "Projekt .claude fájlok",
   skills_files_desc: "Ügynökök, készségek, parancsok és a CLAUDE.md, amelyeket a vezérelt ügynök minden munkakönyvtárból betölt. A szerkesztések közvetlenül a lemezre íródnak.",
-  skills_files_empty: "Nem található .claude konfiguráció egyetlen ismert munkakönyvtárban sem.",
-  skills_files_select: "Válassz egy fájlt a szerkesztéshez.",
+  skills_files_empty: "Nincs konfigurációs fájl",
+  skills_files_empty_desc: "Nem található .claude konfiguráció egyetlen ismert munkakönyvtárban sem.",
+  skills_files_select: "Válassz egy fájlt a szerkesztéshez",
+  skills_files_select_desc: "Válassz egy fájlt a listából, hogy itt megtekintsd és szerkeszd.",
 
   // Széf
   vault_title: "Titkok széfje",
@@ -632,6 +635,7 @@ export const hu: Translations = {
   tasks_mark_done: "Kész jelölése",
   tasks_archive: "Archívum",
   tasks_archive_empty: "Nincs archivált kártya.",
+  tasks_editor_back: "Vissza a kártyához",
   tasks_archive_show: "Archívum mutatása ({n})",
   tasks_archive_hide: "Archívum elrejtése",
   tasks_archive_restore: "Visszaállítás",
@@ -1110,6 +1114,8 @@ export const hu: Translations = {
   connectors_access_write: "Olvasás és írás",
   connectors_access_read_hint: "Csak listázó, lekérdező és kereső eszközök érhetők el.",
   connectors_access_write_hint: "Olvasó eszközök, plusz létrehozás, módosítás, küldés és törlés.",
+  connectors_empty_title: "Nincsenek betöltött csatlakozók",
+  connectors_empty_desc: "Az integrációk itt jelennek meg, amint a katalógus betöltődik. Ha ez tartósan így marad, ellenőrizd a panel kapcsolatát.",
 
   // Prompt (üzemeltetői kézikönyv) nézet
   prompt_playbook_title: "Üzemeltetői kézikönyv",

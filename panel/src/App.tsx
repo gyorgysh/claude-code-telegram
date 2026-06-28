@@ -30,7 +30,7 @@ import { SetupView } from "./components/Setup.tsx";
 import { TerminalView } from "./components/Terminal.tsx";
 import { RemoteAccessView } from "./components/RemoteAccess.tsx";
 import { FeedbackView } from "./components/Feedback.tsx";
-import { ToastViewport } from "./components/ui.tsx";
+import { ToastViewport, Breadcrumb } from "./components/ui.tsx";
 import { ConnectionBanner } from "./components/ConnectionBanner.tsx";
 
 /** Tab from the URL path (e.g. /status), falling back to health. */
@@ -198,18 +198,44 @@ export function App() {
           >
             ☰
           </button>
+          {/* Mobile breadcrumb / back affordance: the brand returns to the
+              dashboard, the trailing segment names the current view. */}
           <span className="mono text-sm font-medium text-fg">
-            <span className="text-accent">%</span>
-            <span className="ml-1.5">{brandName}</span>
-            <span className="ml-0.5 text-fg-dim">
-              / {tab === "settings" ? t("nav_settings").toLowerCase() : t(tabLabel(tab as Tab) as TranslationKey).toLowerCase()}
-            </span>
+            <button
+              onClick={() => select("health")}
+              className="text-accent transition-opacity hover:opacity-80"
+              aria-label={t("breadcrumb_home")}
+            >
+              %<span className="ml-1.5 text-fg">{brandName}</span>
+            </button>
+            {tab !== "health" && (
+              <span className="ml-0.5 text-fg-dim">
+                / {tab === "settings" ? t("nav_settings").toLowerCase() : t(tabLabel(tab as Tab) as TranslationKey).toLowerCase()}
+              </span>
+            )}
           </span>
         </header>
 
         <ConnectionBanner />
 
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-24 pt-6 sm:px-6 md:pb-6">
+          {/* Desktop breadcrumb: Home → current view. Hidden on mobile (the top
+              bar already shows it) and skipped for the dashboard itself and the
+              full-height chat/terminal views (which own their vertical space). */}
+          {tab !== "health" && tab !== "chat" && tab !== "terminal" && (
+            <Breadcrumb
+              className="mb-4 hidden md:flex"
+              items={[
+                { label: t("breadcrumb_home"), onClick: () => select("health") },
+                {
+                  label:
+                    tab === "settings"
+                      ? t("nav_settings")
+                      : t(tabLabel(tab as Tab) as TranslationKey),
+                },
+              ]}
+            />
+          )}
           {tab === "setup" && <SetupView onAuthError={onAuthError} onGoto={select} />}
           {tab === "chat" && <ChatView onAuthError={onAuthError} />}
           {tab === "terminal" && <TerminalView onAuthError={onAuthError} />}

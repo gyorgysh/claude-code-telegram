@@ -3,7 +3,7 @@ import { api, AuthError, type ClaudeRoot, type Skill } from "../api.ts";
 import { useI18n } from "../lib/useI18n.ts";
 import { toast } from "../lib/useToast.ts";
 import { Badge, Button, Card, Empty, Input, Label, TextArea } from "./ui.tsx";
-import { SkillsArt } from "./onboarding.tsx";
+import { SkillsArt, FilesArt } from "./onboarding.tsx";
 
 export function SkillsView({ onAuthError }: { onAuthError: () => void }) {
   return (
@@ -197,7 +197,9 @@ function ProjectFiles({ onAuthError }: { onAuthError: () => void }) {
     <Card title={t("skills_files_title")}>
       <p className="mb-3 text-sm text-fg-dim">{t("skills_files_desc")}</p>
       {roots.length === 0 ? (
-        <Empty>{t("skills_files_empty")}</Empty>
+        <Empty icon={<FilesArt />} title={t("skills_files_empty")}>
+          {t("skills_files_empty_desc")}
+        </Empty>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
           <div className="space-y-3">
@@ -243,7 +245,9 @@ function ProjectFiles({ onAuthError }: { onAuthError: () => void }) {
                 </div>
               </>
             ) : (
-              <Empty>{t("skills_files_select")}</Empty>
+              <Empty icon={<FilesArt />} title={t("skills_files_select")}>
+                {t("skills_files_select_desc")}
+              </Empty>
             )}
           </div>
         </div>

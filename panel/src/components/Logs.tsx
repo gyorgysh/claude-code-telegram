@@ -880,7 +880,12 @@ function RankList({
     <div className="flex-1 min-w-0">
       <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">{title}</div>
       {items.length === 0 ? (
-        <div className="text-xs text-fg-faint">{empty}</div>
+        <div className="flex flex-col items-center gap-2 py-6 text-center text-fg-faint">
+          <div className="[&_svg]:h-9 [&_svg]:w-9 opacity-60">
+            <LogsArt />
+          </div>
+          <span className="text-xs">{empty}</span>
+        </div>
       ) : (
         <div className="flex flex-col gap-1.5">
           {items.map((it) => (

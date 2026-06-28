@@ -330,6 +330,16 @@ function redactString(s: string): string {
   return out;
 }
 
+/**
+ * Scrub known secret shapes (Bearer tokens, sk-/gh_/npm_ prefixes, JWTs,
+ * key=value credential pairs, --token flags) from an arbitrary string. Exposed
+ * so other on-disk sinks (e.g. the delegation log) can reuse the same patterns
+ * the logger applies in emit(). Best-effort and pattern-based.
+ */
+export function redactSecrets(s: string): string {
+  return redactString(s);
+}
+
 /** Deep-redact a meta object by scrubbing every string value (and key=val shapes). */
 function redactMeta(meta: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};

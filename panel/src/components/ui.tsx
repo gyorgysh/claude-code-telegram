@@ -114,6 +114,40 @@ export function Empty({
   );
 }
 
+/** One crumb in a breadcrumb trail. A crumb with `onClick` renders as a button
+ *  (a navigable ancestor); the last crumb is plain text (the current page). */
+export type Crumb = { label: ReactNode; onClick?: () => void };
+
+/** A breadcrumb trail for nested views. Renders nothing for a single crumb so
+ *  top-level pages that only know their own name don't show a lone label. */
+export function Breadcrumb({ items, className = "" }: { items: Crumb[]; className?: string }) {
+  if (items.length < 2) return null;
+  return (
+    <nav aria-label="Breadcrumb" className={`flex flex-wrap items-center gap-1.5 text-sm ${className}`}>
+      {items.map((c, i) => {
+        const last = i === items.length - 1;
+        return (
+          <span key={i} className="flex items-center gap-1.5">
+            {c.onClick && !last ? (
+              <button
+                onClick={c.onClick}
+                className="text-fg-dim transition-colors hover:text-fg"
+              >
+                {c.label}
+              </button>
+            ) : (
+              <span className={last ? "font-medium text-fg" : "text-fg-dim"} aria-current={last ? "page" : undefined}>
+                {c.label}
+              </span>
+            )}
+            {!last && <span className="text-fg-faint" aria-hidden>/</span>}
+          </span>
+        );
+      })}
+    </nav>
+  );
+}
+
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "ghost" | "danger";
 };

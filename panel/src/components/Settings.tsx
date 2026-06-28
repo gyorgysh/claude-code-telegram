@@ -263,7 +263,7 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
 
   const dirtyDot = dirty ? (
     <span
-      className="h-1.5 w-1.5 rounded-full bg-amber-400"
+      className="h-1.5 w-1.5 rounded-full bg-warn"
       title={t("settings_unsaved")}
       aria-label={t("settings_unsaved")}
     />
@@ -380,7 +380,7 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
         <Button onClick={reset} disabled={busy === "reset"}>
           {t("settings_new_context")}
         </Button>
-        {dirty && <span className="text-xs text-amber-400">{t("settings_unsaved")}</span>}
+        {dirty && <span className="text-xs text-warn-fg">{t("settings_unsaved")}</span>}
       </div>
     </Card>
   );
@@ -617,7 +617,7 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
                   <span className="text-xs text-fg-faint">{t("plan_autodetected")}</span>
                 </div>
               ) : probe?.source === "fallback" ? (
-                <p className="text-xs text-amber-400">{t("plan_oauth_unavailable")}</p>
+                <p className="text-xs text-warn-fg">{t("plan_oauth_unavailable")}</p>
               ) : (
                 <p className="text-xs text-fg-faint">{t("plan_click_detect")}</p>
               )}
@@ -635,7 +635,7 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
                   <span className="w-28 shrink-0 text-xs text-fg-dim">{lim.label}</span>
                   <div className="flex-1 h-1.5 rounded-full bg-surface-2 overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${lim.severity === "critical" ? "bg-red-500" : lim.severity === "warning" ? "bg-amber-400" : "bg-accent"}`}
+                      className={`h-full rounded-full ${lim.severity === "critical" ? "bg-critical" : lim.severity === "warning" ? "bg-warn" : "bg-accent"}`}
                       style={{ width: `${Math.min(100, lim.percent)}%` }}
                     />
                   </div>
@@ -1175,9 +1175,9 @@ function ProvidersSettings({ onAuthError }: { onAuthError: () => void }) {
             </Button>
             <Button onClick={() => setEditing(null)}>{t("cancel")}</Button>
           </div>
-          {probe.error && <p className="text-xs text-red-400">{probe.error}</p>}
+          {probe.error && <p className="text-xs text-critical-fg">{probe.error}</p>}
           {probe.models && (
-            <p className="text-xs text-emerald-400">
+            <p className="text-xs text-ok-fg">
               {t("settings_provider_models")
                 .replace("{n}", String(probe.models.length))
                 .replace("{models}", probe.models.join(", "))}
@@ -1301,14 +1301,14 @@ function ProviderRow({
   const probed = status.running !== undefined; // known local backend with a live probe
   const state = !probed ? "unknown" : !status.running ? "down" : status.connected ? "up" : "idle";
   const dot =
-    state === "down" ? "bg-red-500" : state === "up" ? "bg-emerald-500" : state === "idle" ? "bg-amber-500" : "bg-fg-faint";
+    state === "down" ? "bg-critical" : state === "up" ? "bg-ok" : state === "idle" ? "bg-warn" : "bg-fg-faint";
   const pill =
     state === "down"
-      ? "bg-red-500/15 text-red-400"
+      ? "bg-critical-subtle text-critical-fg"
       : state === "up"
-        ? "bg-emerald-500/15 text-emerald-400"
+        ? "bg-ok-subtle text-ok-fg"
         : state === "idle"
-          ? "bg-amber-500/15 text-amber-400"
+          ? "bg-warn-subtle text-warn-fg"
           : "bg-surface-2 text-fg-faint";
   const pillLabel = state === "down" ? t("status_down") : state === "up" ? t("status_up") : state === "idle" ? t("emb_backend_idle") : "—";
   const connectBusy = busy === status.kind;

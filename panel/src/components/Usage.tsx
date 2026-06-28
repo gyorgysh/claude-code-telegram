@@ -164,10 +164,10 @@ export function UsageView({ onAuthError }: { onAuthError: () => void }) {
 // ---------------------------------------------------------------------------
 
 function barColor(s: UsageLimitWindow["severity"]): string {
-  return s === "critical" ? "bg-red-500" : s === "warning" ? "bg-amber-400" : "bg-accent";
+  return s === "critical" ? "bg-critical" : s === "warning" ? "bg-warn" : "bg-accent";
 }
 function textColor(s: UsageLimitWindow["severity"]): string {
-  return s === "critical" ? "text-red-400" : s === "warning" ? "text-amber-400" : "text-emerald-400";
+  return s === "critical" ? "text-critical-fg" : s === "warning" ? "text-warn-fg" : "text-ok-fg";
 }
 
 function formatMs(ms: number): string {
@@ -205,7 +205,7 @@ function LimitBar({ lim }: { lim: UsageLimitWindow }) {
       </div>
       <div className="flex items-center justify-between text-xs">
         <span className="text-fg-faint">{lim.severity === "normal" ? t("usage_within_limits") : lim.severity}</span>
-        <span className={`font-medium ${resetsInMs < 600_000 ? "text-amber-400" : "text-fg-dim"}`}>
+        <span className={`font-medium ${resetsInMs < 600_000 ? "text-warn-fg" : "text-fg-dim"}`}>
           {t("usage_resets_in").replace("{time}", formatMs(resetsInMs))}
         </span>
       </div>
@@ -248,7 +248,7 @@ function LiveLimitsCard({
       {!probe || probe.source === "none" ? (
         <p className="text-sm text-fg-faint">{t("usage_no_data")}</p>
       ) : probe.source === "fallback" ? (
-        <p className="text-sm text-amber-400">
+        <p className="text-sm text-warn-fg">
           {friendlyProbeError(probe.error) ?? t("usage_oauth_unavailable")}
         </p>
       ) : probe.limits.length === 0 ? (
@@ -256,7 +256,7 @@ function LiveLimitsCard({
       ) : (
         <div className="space-y-5">
           {(probe.stale || probe.error) && (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+            <div className="rounded-lg border border-warn/30 bg-warn-subtle px-3 py-2 text-xs text-warn-fg">
               {friendlyProbeError(probe.error) ?? t("usage_oauth_unavailable")}
             </div>
           )}
@@ -329,8 +329,8 @@ function ActivityCard({ claude }: { claude: ClaudeUsageSnapshot }) {
 function BudgetBar({ plan }: { plan: PlanView }) {
   const { t } = useI18n();
   const pct = Math.min(100, plan.pctUsed);
-  const color = plan.pctUsed >= 90 ? "bg-red-500" : plan.pctUsed >= 70 ? "bg-amber-400" : "bg-emerald-400";
-  const tcolor = plan.pctUsed >= 90 ? "text-red-400" : plan.pctUsed >= 70 ? "text-amber-400" : "text-emerald-400";
+  const color = plan.pctUsed >= 90 ? "bg-critical" : plan.pctUsed >= 70 ? "bg-warn" : "bg-ok";
+  const tcolor = plan.pctUsed >= 90 ? "text-critical-fg" : plan.pctUsed >= 70 ? "text-warn-fg" : "text-ok-fg";
 
   return (
     <div className="space-y-2">
@@ -379,7 +379,7 @@ function CostChart({
         if (capPct > 100) return null;
         return (
           <div
-            className="pointer-events-none absolute inset-x-0 border-t border-dashed border-red-400/40"
+            className="pointer-events-none absolute inset-x-0 border-t border-dashed border-critical/40"
             style={{ bottom: `${capPct}%` }}
             title={`Daily cap ceiling: $${dailyCap.toFixed(4)}`}
           />

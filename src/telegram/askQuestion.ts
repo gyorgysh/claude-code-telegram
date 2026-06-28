@@ -4,6 +4,7 @@ import { config } from "../config.js";
 import { escapeHtml } from "./formatting.js";
 import { log } from "../logger.js";
 import { isHexId, CALLBACK_MAX_BYTES } from "./callback.js";
+import { t, langForChat } from "./i18n/index.js";
 
 /** One option of an AskUserQuestion question. */
 interface AskOption {
@@ -84,29 +85,31 @@ export class AskQuestionManager {
     resolve: (answer: string) => void,
   ): Promise<void> {
     const id = randomBytes(4).toString("hex");
-    const text = renderQuestion(question);
+    const lang = langForChat(chatId);
+    const text = renderQuestion(question, lang);
     const selected = new Set<number>();
 
     const msg = await this.tg.sendMessage(chatId, text, {
       parse_mode: "HTML",
-      ...this.keyboard(id, question, selected),
+      ...this.keyboard(id, question, selected, lang),
     });
 
     const timeout = setTimeout(() => {
       const entry = this.pending.get(id);
       if (!entry) return;
       this.pending.delete(id);
-      const fallback = question.options[0]?.label ?? "(no answer)";
+      const fallback = question.options[0]?.label ?? t("ask_no_answer");
       log.warn("AskUserQuestion timed out — using default", { chatId, header: question.header });
       void this.tg
         .editMessageText(
           chatId,
           msg.message_id,
           undefined,
-          `${text}\n\n⏳ <i>Timed out — defaulted to "${escapeHtml(fallback)}".</i>`,
+          `${text}\n\n<i>${t("ask_timed_out_default", lang, { fallback: escapeHtml(fallback) })}</i>`,
           { parse_mode: "HTML" },
         )
         .catch(() => {});
+      // Tool result handed back to the model stays English for consistency.
       entry.resolve(`${fallback} (no reply, defaulted on timeout)`);
     }, config.APPROVAL_TIMEOUT_MS);
     timeout.unref?.();
@@ -123,14 +126,14 @@ export class AskQuestionManager {
   }
 
   /** Build the inline keyboard for a question (option buttons + Other [+ Done]). */
-  private keyboard(id: string, question: AskQuestion, selected: Set<number>) {
+  private keyboard(id: string, question: AskQuestion, selected: Set<number>, lang: string) {
     const rows = question.options.map((opt, i) => {
       const mark = question.multiSelect && selected.has(i) ? "✅ " : "";
       return [Markup.button.callback(`${mark}${btnLabel(opt.label)}`, `${CB_PREFIX}:${id}:o:${i}`)];
     });
-    rows.push([Markup.button.callback("✏️ Other (type a reply)", `${CB_PREFIX}:${id}:other`)]);
+    rows.push([Markup.button.callback(t("ask_other_btn", lang), `${CB_PREFIX}:${id}:other`)]);
     if (question.multiSelect) {
-      rows.push([Markup.button.callback("✔️ Done", `${CB_PREFIX}:${id}:done`)]);
+      rows.push([Markup.button.callback(t("ask_done_btn", lang), `${CB_PREFIX}:${id}:done`)]);
     }
     return Markup.inlineKeyboard(rows);
   }
@@ -142,29 +145,30 @@ export class AskQuestionManager {
 
   /** Resolve (or progress) a pending question from a callback_query; returns a toast. */
   async resolve(data: string): Promise<string> {
-    if (Buffer.byteLength(data, "utf8") > CALLBACK_MAX_BYTES) return "This question has expired.";
+    if (Buffer.byteLength(data, "utf8") > CALLBACK_MAX_BYTES) return t("ask_expired");
     const segs = data.split(":");
-    if (segs.length < 3 || segs.length > 4) return "This question has expired.";
+    if (segs.length < 3 || segs.length > 4) return t("ask_expired");
     const [, id, kind, idxStr] = segs;
-    if (!isHexId(id)) return "This question has expired.";
+    if (!isHexId(id)) return t("ask_expired");
     const entry = this.pending.get(id);
-    if (!entry) return "This question has expired.";
+    if (!entry) return t("ask_expired");
     const { question } = entry;
+    const lang = langForChat(entry.chatId);
 
     if (kind === "other") {
       entry.awaitingText = true;
       await this.tg
-        .sendMessage(entry.chatId, "✏️ Type your answer as a normal message.", {
+        .sendMessage(entry.chatId, t("ask_type_answer", lang), {
           reply_parameters: { message_id: entry.messageId },
         })
         .catch(() => {});
-      return "Type your answer";
+      return t("ask_type_answer_toast", lang);
     }
 
     if (kind === "o") {
       const idx = Number(idxStr);
       const opt = question.options[idx];
-      if (!opt) return "Unknown option.";
+      if (!opt) return t("ask_unknown_option", lang);
       if (question.multiSelect) {
         // Toggle and re-render; wait for Done to confirm.
         if (entry.selected.has(idx)) entry.selected.delete(idx);
@@ -174,10 +178,12 @@ export class AskQuestionManager {
             entry.chatId,
             entry.messageId,
             undefined,
-            this.keyboard(id, question, entry.selected).reply_markup,
+            this.keyboard(id, question, entry.selected, lang).reply_markup,
           )
           .catch(() => {});
-        return entry.selected.has(idx) ? `Selected ${opt.label}` : `Unselected ${opt.label}`;
+        return entry.selected.has(idx)
+          ? t("ask_selected", lang, { label: opt.label })
+          : t("ask_unselected", lang, { label: opt.label });
       }
       // Single-select: resolve immediately.
       await this.finalize(id, opt.label);
@@ -185,13 +191,13 @@ export class AskQuestionManager {
     }
 
     if (kind === "done") {
-      if (entry.selected.size === 0) return "Pick at least one option first.";
+      if (entry.selected.size === 0) return t("ask_pick_one", lang);
       const labels = [...entry.selected].sort((a, b) => a - b).map((i) => question.options[i].label);
       await this.finalize(id, labels.join(", "));
       return `✅ ${labels.join(", ")}`;
     }
 
-    return "Unknown action.";
+    return t("ask_unknown_action", lang);
   }
 
   /** Whether a pending question for this chat is armed for a free-text answer. */
@@ -233,18 +239,26 @@ export class AskQuestionManager {
     await this.tg
       .editMessageReplyMarkup(entry.chatId, entry.messageId, undefined, undefined)
       .catch(() => {});
+    const lang = langForChat(entry.chatId);
     await this.tg
-      .sendMessage(entry.chatId, `🗣️ <b>${escapeHtml(entry.question.header)}:</b> ${escapeHtml(answer)}`, {
-        parse_mode: "HTML",
-        reply_parameters: { message_id: entry.messageId },
-      })
+      .sendMessage(
+        entry.chatId,
+        t("ask_answer_given", lang, {
+          header: escapeHtml(entry.question.header),
+          answer: escapeHtml(answer),
+        }),
+        {
+          parse_mode: "HTML",
+          reply_parameters: { message_id: entry.messageId },
+        },
+      )
       .catch(() => {});
     entry.resolve(answer);
   }
 }
 
 /** Render a question's body (header + question + numbered option descriptions). */
-function renderQuestion(q: AskQuestion): string {
+function renderQuestion(q: AskQuestion, lang: string): string {
   const lines = [`❓ <b>${escapeHtml(q.header)}</b>`, escapeHtml(q.question)];
   const described = q.options.filter((o) => o.description && o.description.trim());
   if (described.length > 0) {
@@ -253,7 +267,7 @@ function renderQuestion(q: AskQuestion): string {
       lines.push(`• <b>${escapeHtml(o.label)}</b> — ${escapeHtml(o.description as string)}`);
     }
   }
-  if (q.multiSelect) lines.push("\n<i>Pick one or more, then tap Done.</i>");
+  if (q.multiSelect) lines.push(`\n${t("ask_pick_instruction", lang)}`);
   return lines.join("\n");
 }
 

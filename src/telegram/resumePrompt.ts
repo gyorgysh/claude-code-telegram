@@ -1,6 +1,7 @@
 import { Markup, type Telegram } from "telegraf";
 import { sessions } from "../session/manager.js";
 import { log } from "../logger.js";
+import { t, langForChat } from "./i18n/index.js";
 
 /** Auto-resume after this long if the user doesn't tap a button. */
 const AUTO_RESUME_MS = 10_000;
@@ -20,11 +21,11 @@ interface Pending {
 /** One in-flight resume offer per chat (keyed by chatId). */
 const pending = new Map<number, Pending>();
 
-function offerKeyboard() {
+function offerKeyboard(lang: string) {
   return Markup.inlineKeyboard([
     [
-      Markup.button.callback("↩️ Resume previous context", `${CB_PREFIX}:resume`),
-      Markup.button.callback("🆕 Fresh start", `${CB_PREFIX}:fresh`),
+      Markup.button.callback(t("resume_btn", lang), `${CB_PREFIX}:resume`),
+      Markup.button.callback(t("resume_fresh_btn", lang), `${CB_PREFIX}:fresh`),
     ],
   ]);
 }
@@ -52,12 +53,12 @@ export async function maybeOfferResume(
   }
 
   log.info("Offering session resume after restart", { chatId });
+  const lang = langForChat(chatId);
   const msg = await tg
     .sendMessage(
       chatId,
-      "♻️ I restarted since we last spoke. Resume our previous conversation, " +
-        `or start fresh?\n\n<i>Auto-resuming in ${AUTO_RESUME_MS / 1000}s…</i>`,
-      { parse_mode: "HTML", ...offerKeyboard() },
+      t("resume_offer", lang, { seconds: AUTO_RESUME_MS / 1000 }),
+      { parse_mode: "HTML", ...offerKeyboard(lang) },
     )
     .catch(() => undefined);
 
@@ -77,10 +78,11 @@ export function isResumeCallback(data: string): boolean {
 
 /** Resolve a resume-offer button press; returns a short toast for answerCbQuery. */
 export function resolveResumeCallback(tg: Telegram, chatId: number, data: string): string {
+  const lang = langForChat(chatId);
   const action = data.slice(CB_PREFIX.length + 1) === "fresh" ? "fresh" : "resume";
-  if (!pending.has(chatId)) return "This prompt has expired.";
+  if (!pending.has(chatId)) return t("resume_expired", lang);
   finish(tg, chatId, action);
-  return action === "fresh" ? "Starting fresh" : "Resuming previous context";
+  return action === "fresh" ? t("resume_starting_fresh", lang) : t("resume_resuming", lang);
 }
 
 /** Apply the decision: clear context on "fresh", then run the held prompt. */
@@ -96,10 +98,11 @@ function finish(tg: Telegram, chatId: number, action: "resume" | "fresh"): void 
   }
 
   if (entry.messageId !== undefined) {
+    const lang = langForChat(chatId);
     const note =
       action === "fresh"
-        ? "🆕 <i>Started a fresh conversation.</i>"
-        : "↩️ <i>Resumed the previous conversation.</i>";
+        ? t("resume_started_fresh", lang)
+        : t("resume_resumed", lang);
     void tg
       .editMessageText(chatId, entry.messageId, undefined, note, { parse_mode: "HTML" })
       .catch(() => {});

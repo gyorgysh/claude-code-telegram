@@ -7,8 +7,8 @@ import { useI18n } from "../lib/useI18n.ts";
 type Level = LogEntry["level"];
 const LEVELS: Level[] = ["error", "warn", "info", "debug"];
 const LEVEL_COLOR: Record<Level, string> = {
-  error: "text-red-400",
-  warn: "text-amber-400",
+  error: "text-critical-fg",
+  warn: "text-warn-fg",
   info: "text-fg-muted",
   debug: "text-fg-faint",
 };
@@ -654,7 +654,7 @@ function ActivityFeed({
                     )}
                     <span
                       className={`text-sm font-medium ${
-                        a.tone === "error" ? "text-red-500 dark:text-red-400" : "text-fg"
+                        a.tone === "error" ? "text-critical-fg" : "text-fg"
                       }`}
                     >
                       {a.verb}
@@ -690,8 +690,8 @@ function ActivityFeed({
                       <div
                         key={i}
                         className={
-                          line.startsWith("+ ") ? "text-emerald-600 dark:text-emerald-400" :
-                          line.startsWith("- ") ? "text-red-600 dark:text-red-400" :
+                          line.startsWith("+ ") ? "text-ok-fg" :
+                          line.startsWith("- ") ? "text-critical-fg" :
                           "text-fg-dim"
                         }
                       >

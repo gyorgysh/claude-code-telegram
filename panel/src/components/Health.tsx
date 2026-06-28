@@ -92,7 +92,7 @@ export function HealthView({ onGoto }: { onGoto?: (t: Tab) => void }) {
           {t("health_process_up").replace("{brand}", brand)} {uptime(health.processUptimeSec)}
         </span>
         <span className="ml-auto flex items-center gap-1.5 text-xs">
-          <span className={`inline-block h-2 w-2 rounded-full ${status === "live" ? "bg-emerald-500" : "bg-amber-500"}`} />
+          <span className={`inline-block h-2 w-2 rounded-full ${status === "live" ? "bg-ok" : "bg-warn"}`} />
           {status === "live" ? t("health_live") : t("health_reconnecting")}
         </span>
       </div>
@@ -145,15 +145,15 @@ export function HealthView({ onGoto }: { onGoto?: (t: Tab) => void }) {
 // ---------------------------------------------------------------------------
 
 function barColor(severity: UsageLimitWindow["severity"]): string {
-  if (severity === "critical") return "bg-red-500";
-  if (severity === "warning") return "bg-amber-400";
+  if (severity === "critical") return "bg-critical";
+  if (severity === "warning") return "bg-warn";
   return "bg-accent";
 }
 
 function textColor(severity: UsageLimitWindow["severity"]): string {
-  if (severity === "critical") return "text-red-400";
-  if (severity === "warning") return "text-amber-400";
-  return "text-emerald-400";
+  if (severity === "critical") return "text-critical-fg";
+  if (severity === "warning") return "text-warn-fg";
+  return "text-ok-fg";
 }
 
 function formatResets(ms: number): string {
@@ -203,7 +203,7 @@ function LimitBar({ lim }: { lim: UsageLimitWindow }) {
       </div>
       <div className="flex items-center justify-between text-xs">
         <span className="text-fg-faint">{t("health_used")}</span>
-        <span className={`font-medium ${resetsInMs < 600_000 ? "text-amber-400" : "text-fg-dim"}`}>
+        <span className={`font-medium ${resetsInMs < 600_000 ? "text-warn-fg" : "text-fg-dim"}`}>
           {t("health_resets_in").replace("{time}", formatResets(resetsInMs))}
         </span>
       </div>
@@ -277,7 +277,7 @@ function ClaudeUsageCard() {
         <div className="space-y-5">
           {/* Error / fallback / stale notice */}
           {(probe.error || probe.stale || probe.source === "fallback") && (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+            <div className="rounded-lg border border-warn/30 bg-warn-subtle px-3 py-2 text-xs text-warn-fg">
               {friendlyProbeError(probe.error) ?? t("health_oauth_fallback")}
             </div>
           )}
@@ -436,7 +436,7 @@ function MaintenancePreviewSection({ refreshKey }: { refreshKey?: number }) {
               )}
               {preview.toMerge.length > 0 && (
                 <div className="space-y-1.5">
-                  <p className="text-xs font-semibold text-amber-400">
+                  <p className="text-xs font-semibold text-warn-fg">
                     {t("health_maint_preview_merge").replace("{n}", String(preview.toMerge.length))}
                   </p>
                   {preview.toMerge.map((m, i) => (
@@ -458,7 +458,7 @@ function MaintenancePreviewSection({ refreshKey }: { refreshKey?: number }) {
 }
 
 function PreviewGroup({ label, tone, entries }: { label: string; tone: "delete" | "demote"; entries: MemoryEntry[] }) {
-  const color = tone === "delete" ? "text-red-400" : "text-amber-400";
+  const color = tone === "delete" ? "text-critical-fg" : "text-warn-fg";
   return (
     <div className="space-y-1.5">
       <p className={`text-xs font-semibold ${color}`}>{label}</p>

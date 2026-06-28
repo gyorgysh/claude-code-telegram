@@ -4,6 +4,7 @@ import { config } from "../config.js";
 import { escapeHtml } from "./formatting.js";
 import { log } from "../logger.js";
 import { parseCallback, isHexId } from "./callback.js";
+import { t, langForChat } from "./i18n/index.js";
 
 /** What the user decided about a detected loop. */
 export type LoopChoice = "skip" | "once" | "continue";
@@ -40,18 +41,19 @@ export class LoopPromptManager {
     count: number,
   ): Promise<LoopChoice> {
     const id = randomBytes(4).toString("hex");
-    const text =
-      `🔁 <b>Loop detected</b>\n` +
-      `<b>${escapeHtml(toolName)}</b> has run the same call <b>${count}×</b> this turn:\n\n` +
-      `<pre><code>${escapeHtml(clamp(summary))}</code></pre>\n` +
-      `Skip it, allow it once more, or let it keep going?`;
+    const lang = langForChat(chatId);
+    const text = t("loop_prompt", lang, {
+      tool: escapeHtml(toolName),
+      count,
+      summary: escapeHtml(clamp(summary)),
+    });
 
     const keyboard = Markup.inlineKeyboard([
       [
-        Markup.button.callback("⏭️ Skip", `${CB_PREFIX}:${id}:skip`),
-        Markup.button.callback("1️⃣ Approve once", `${CB_PREFIX}:${id}:once`),
+        Markup.button.callback(t("loop_skip_btn", lang), `${CB_PREFIX}:${id}:skip`),
+        Markup.button.callback(t("loop_approve_once_btn", lang), `${CB_PREFIX}:${id}:once`),
       ],
-      [Markup.button.callback("▶️ Continue", `${CB_PREFIX}:${id}:continue`)],
+      [Markup.button.callback(t("loop_continue_btn", lang), `${CB_PREFIX}:${id}:continue`)],
     ]);
 
     const msg = await this.tg.sendMessage(chatId, text, { parse_mode: "HTML", ...keyboard });
@@ -65,7 +67,7 @@ export class LoopPromptManager {
             chatId,
             msg.message_id,
             undefined,
-            `${text}\n\n⏳ <i>Timed out — continuing.</i>`,
+            `${text}\n\n${t("loop_timed_out", lang)}`,
             { parse_mode: "HTML" },
           )
           .catch(() => {});
@@ -84,22 +86,23 @@ export class LoopPromptManager {
   /** Resolve a pending loop prompt from a callback_query; returns a toast. */
   async resolve(data: string): Promise<string> {
     const parts = parseCallback(data, `${CB_PREFIX}:`, 2);
-    if (!parts) return "This prompt has expired.";
+    if (!parts) return t("loop_expired");
     const [id, action] = parts;
-    if (!isHexId(id)) return "This prompt has expired.";
+    if (!isHexId(id)) return t("loop_expired");
     const entry = this.pending.get(id);
-    if (!entry) return "This prompt has expired.";
+    if (!entry) return t("loop_expired");
 
     clearTimeout(entry.timeout);
     this.pending.delete(id);
 
+    const lang = langForChat(entry.chatId);
     const choice = (action as LoopChoice) ?? "continue";
     const label =
       choice === "skip"
-        ? "⏭️ Skipped"
+        ? t("loop_skipped_toast", lang)
         : choice === "once"
-          ? "1️⃣ Allowed once"
-          : "▶️ Continuing";
+          ? t("loop_allowed_once_toast", lang)
+          : t("loop_continuing_toast", lang);
 
     await this.tg
       .editMessageReplyMarkup(entry.chatId, entry.messageId, undefined, undefined)

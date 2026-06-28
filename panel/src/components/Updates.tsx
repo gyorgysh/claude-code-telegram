@@ -185,7 +185,7 @@ export function UpdatesView({
           </div>
         </div>
 
-        {status?.error && <p className="mt-2 text-sm text-red-400">{status.error}</p>}
+        {status?.error && <p className="mt-2 text-sm text-critical-fg">{status.error}</p>}
         {status?.checkedAt && !status.error && (
           <p className="mt-1 text-xs text-fg-faint">
             {t("updates_checked").replace("{time}", relTime(status.checkedAt))}
@@ -218,7 +218,7 @@ export function UpdatesView({
           </div>
         )}
         {available && status?.active && (
-          <p className="mt-2 text-xs text-amber-400">⚠️ {t("updates_active_warn")}</p>
+          <p className="mt-2 text-xs text-warn-fg">⚠️ {t("updates_active_warn")}</p>
         )}
       </Card>
 
@@ -250,7 +250,7 @@ export function UpdatesView({
           </span>
         </div>
         {status?.active && (
-          <p className="mt-2 text-xs text-amber-400">⚠️ {t("updates_active_warn")}</p>
+          <p className="mt-2 text-xs text-warn-fg">⚠️ {t("updates_active_warn")}</p>
         )}
       </Card>
 

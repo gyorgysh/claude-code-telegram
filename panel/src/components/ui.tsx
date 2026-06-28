@@ -56,7 +56,7 @@ export function Metric({
 export function Bar({ pct, className = "" }: { pct: number; className?: string }) {
   const clamped = Math.max(0, Math.min(100, pct));
   const color =
-    clamped < 60 ? "bg-emerald-500" : clamped < 85 ? "bg-amber-500" : "bg-red-500";
+    clamped < 60 ? "bg-ok" : clamped < 85 ? "bg-warn" : "bg-critical";
   return (
     <div className={`h-1.5 w-full overflow-hidden rounded-full bg-line ${className}`}>
       <div
@@ -76,8 +76,8 @@ export function Badge({
 }) {
   const tones: Record<string, string> = {
     zinc: "bg-surface-2 text-fg-muted",
-    green: "bg-emerald-500/15 text-emerald-400",
-    amber: "bg-amber-500/15 text-amber-400",
+    green: "bg-ok-subtle text-ok-fg",
+    amber: "bg-warn-subtle text-warn-fg",
     blue: "bg-accent/15 text-accent",
   };
   return (
@@ -122,7 +122,7 @@ export function Button({ variant = "ghost", className = "", ...props }: ButtonPr
   const styles: Record<string, string> = {
     primary: "bg-accent text-accent-fg hover:opacity-90",
     ghost: "border border-line text-fg-muted hover:bg-surface-2",
-    danger: "border border-red-500/30 text-red-400 hover:bg-red-500/10",
+    danger: "border border-critical/30 text-critical-fg hover:bg-critical-subtle",
   };
   return (
     <button
@@ -347,8 +347,8 @@ const TOAST_STYLES: Record<
   ToastVariant,
   { icon: string; border: string; text: string }
 > = {
-  success: { icon: "✓", border: "border-l-emerald-500", text: "text-emerald-400" },
-  error: { icon: "✕", border: "border-l-red-500", text: "text-red-400" },
+  success: { icon: "✓", border: "border-l-ok", text: "text-ok-fg" },
+  error: { icon: "✕", border: "border-l-critical", text: "text-critical-fg" },
   info: { icon: "ⓘ", border: "border-l-accent", text: "text-accent" },
 };
 

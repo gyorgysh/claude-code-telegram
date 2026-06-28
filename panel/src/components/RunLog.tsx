@@ -66,7 +66,7 @@ export function RunLog({ runId }: { runId: string }) {
         }
         if (e.kind === "result" && e.isError) {
           return (
-            <div key={i} className="mt-0.5 text-xs text-red-400">
+            <div key={i} className="mt-0.5 text-xs text-critical-fg">
               ✗ {t("runlog_tool_error")}
             </div>
           );

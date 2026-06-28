@@ -59,12 +59,12 @@ export function ConnectionBanner() {
   const offline = status === "offline";
 
   const tone = ok
-    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40"
+    ? "bg-ok-subtle text-ok-fg border-ok/30"
     : offline
-      ? "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/40"
-      : "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40";
+      ? "bg-critical-subtle text-critical-fg border-critical/30"
+      : "bg-warn-subtle text-warn-fg border-warn/30";
 
-  const dot = ok ? "bg-emerald-500" : offline ? "bg-red-500" : "bg-amber-500";
+  const dot = ok ? "bg-ok" : offline ? "bg-critical" : "bg-warn";
 
   const title = reloading
     ? t("conn_reloading")

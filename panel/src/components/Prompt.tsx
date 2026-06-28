@@ -68,7 +68,7 @@ export function PromptView_({ onAuthError }: { onAuthError: () => void }) {
           <Button variant="primary" onClick={save} disabled={saving || !dirty}>
             {saving ? t("saving") : t("prompt_save")}
           </Button>
-          {saved && <span className="text-xs text-emerald-400">{t("saved")}</span>}
+          {saved && <span className="text-xs text-ok-fg">{t("saved")}</span>}
           {dirty && !saved && <span className="text-xs text-fg-faint">{t("prompt_unsaved")}</span>}
         </div>
       </Card>

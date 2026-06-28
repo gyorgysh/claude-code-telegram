@@ -241,7 +241,7 @@ export function MemoryView({ onAuthError }: { onAuthError: () => void }) {
         </div>
       )}
 
-      {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
+      {error && <p className="mb-2 text-sm text-critical-fg">{error}</p>}
 
       {editing && (
         <div className="mb-4 space-y-3 rounded-lg border border-line bg-input p-3">
@@ -417,7 +417,7 @@ function TierBar({ stats }: { stats: MemoryStats }) {
   const { t } = useI18n();
   const total = stats.total || 1;
   const segs: Array<{ tier: MemoryTier; count: number; cls: string }> = [
-    { tier: "hot", count: stats.byTier.hot, cls: "bg-amber-500" },
+    { tier: "hot", count: stats.byTier.hot, cls: "bg-warn" },
     { tier: "warm", count: stats.byTier.warm, cls: "bg-blue-500" },
     { tier: "cold", count: stats.byTier.cold, cls: "bg-zinc-500" },
   ];

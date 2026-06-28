@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { config } from "../config.js";
 import { transcribeVosk, voskConfigured } from "./vosk.js";
+import { t } from "./i18n/index.js";
 
 /** True if voice transcription is configured for the selected provider. */
 export function voiceEnabled(): boolean {
@@ -9,10 +10,10 @@ export function voiceEnabled(): boolean {
 }
 
 /** A short hint telling the operator how to enable voice for their provider. */
-export function voiceSetupHint(): string {
+export function voiceSetupHint(lang?: string): string {
   return config.TRANSCRIBE_PROVIDER === "vosk"
-    ? "🎤 Voice isn't set up. Set VOSK_MODEL_PATH to a downloaded Vosk model (and install ffmpeg)."
-    : "🎤 Voice isn't set up. Add OPENAI_API_KEY to .env to enable transcription.";
+    ? t("voice_hint_vosk", lang)
+    : t("voice_hint_openai", lang);
 }
 
 /** Transcribe a voice/audio file using the configured backend (openai | vosk). */

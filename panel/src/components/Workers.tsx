@@ -386,7 +386,7 @@ function RunRow({ run: r }: { run: WorkerRun }) {
         <span className="tabular text-fg-dim">{relTime(r.startedAt)}</span>
         {r.durationMs != null && <span className="tabular text-fg-faint">{ms(r.durationMs)}</span>}
         {!hideCost && r.costUsd != null && <span className="tabular text-fg-faint">{usd(r.costUsd)}</span>}
-        {r.error && <span className="truncate text-red-400">{r.error}</span>}
+        {r.error && <span className="truncate text-critical-fg">{r.error}</span>}
         <span className="ml-auto shrink-0 text-accent">
           {open ? t("workers_hide_full_log") : t("workers_view_full_log")}
         </span>
@@ -517,7 +517,7 @@ function WorkerWizard({
         <p className="mb-4 text-xs text-fg-dim">{t("wizard_subtitle")}</p>
         <div className="space-y-4">
           <div>
-            <Label>{t("wizard_q_goal")} <span className="text-red-400">*</span></Label>
+            <Label>{t("wizard_q_goal")} <span className="text-critical-fg">*</span></Label>
             <TextArea
               rows={3}
               value={answers.goal}
@@ -572,7 +572,7 @@ function WorkerWizard({
             </div>
           </div>
           {genError && (
-            <p className="rounded bg-red-500/10 px-3 py-2 text-xs text-red-400">
+            <p className="rounded bg-critical-subtle px-3 py-2 text-xs text-critical-fg">
               {t("wizard_error").replace("{error}", genError)}
             </p>
           )}
@@ -630,7 +630,7 @@ function WorkerWizard({
       {configs.map((cfg, idx) => (
         <Card key={idx} title={cfg.name || `Agent ${idx + 1}`}>
           {created.has(idx) ? (
-            <p className="text-xs text-emerald-400">{t("wizard_created")}</p>
+            <p className="text-xs text-ok-fg">{t("wizard_created")}</p>
           ) : (
             <WizardConfigEditor
               form={cfg}

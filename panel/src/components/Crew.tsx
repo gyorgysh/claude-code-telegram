@@ -305,7 +305,7 @@ export function CrewView({ onAuthError }: { onAuthError: () => void }) {
             </div>
           )}
           {voteError && (
-            <p className="mt-2 text-xs text-red-400">{voteError}</p>
+            <p className="mt-2 text-xs text-critical-fg">{voteError}</p>
           )}
         </div>
 
@@ -458,7 +458,7 @@ function CouncilCard({
 
   if (session.noQuorum) {
     return (
-      <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
+      <div className="rounded-lg border border-warn/30 bg-warn-subtle p-3 text-sm">
         <div className="flex items-center gap-2">
           <span className="font-medium text-fg">{session.proposal.slice(0, 100)}</span>
           <Badge tone="amber">{t("crew_council_no_quorum")}</Badge>
@@ -469,7 +469,7 @@ function CouncilCard({
             onBlur={() => setConfirmDel(false)}
             aria-label={t("crew_council_delete")}
             title={t("crew_council_delete")}
-            className="text-xs text-fg-faint hover:text-red-400"
+            className="text-xs text-fg-faint hover:text-critical-fg"
           >
             {confirmDel ? t("crew_council_delete_confirm") : "✕"}
           </button>
@@ -513,7 +513,7 @@ function CouncilCard({
           onBlur={() => setConfirmDel(false)}
           aria-label={t("crew_council_delete")}
           title={t("crew_council_delete")}
-          className="shrink-0 text-xs text-fg-faint hover:text-red-400 transition-colors px-1"
+          className="shrink-0 text-xs text-fg-faint hover:text-critical-fg transition-colors px-1"
         >
           {confirmDel ? t("crew_council_delete_confirm") : "✕"}
         </button>
@@ -578,7 +578,7 @@ function CrewNode({
 }) {
   const { t } = useI18n();
   const toneClass: Record<Tone, string> = {
-    amber: "text-amber-400",
+    amber: "text-warn-fg",
     accent: "text-[var(--accent)]",
     blue: "text-blue-400",
     zinc: "text-fg-dim",

@@ -146,7 +146,7 @@ function Pill({
     >
       <span className={`relative h-2 w-2 shrink-0 rounded-full ${dot}`}>
         {listening && (
-          <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-green-400" />
+          <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-ok" />
         )}
       </span>
       <span className="min-w-0">
@@ -216,7 +216,7 @@ function AtlasChat({ onAuthError }: { onAuthError: () => void }) {
           disabled={!view?.bypassAllowed}
           title={view?.bypassAllowed ? t("chat_toggle_auto") : t("chat_toggle_locked")}
           className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-            view?.auto ? "bg-amber-500/15 text-amber-400" : "bg-surface-2 text-fg-dim"
+            view?.auto ? "bg-warn-subtle text-warn-fg" : "bg-surface-2 text-fg-dim"
           } ${view?.bypassAllowed ? "" : "cursor-not-allowed opacity-60"}`}
         >
           {!view?.bypassAllowed && <span className="mr-1">🔒</span>}
@@ -415,7 +415,7 @@ function Bubble({ m }: { m: ChatMessage }) {
           user
             ? "whitespace-pre-wrap rounded-tr-sm bg-accent text-accent-fg"
             : m.error
-              ? "whitespace-pre-wrap rounded-tl-sm border border-red-500/30 bg-red-500/5 text-red-400"
+              ? "whitespace-pre-wrap rounded-tl-sm border border-critical/30 bg-critical-subtle text-critical-fg"
               : "rounded-tl-sm bg-surface text-fg"
         }`}
       >

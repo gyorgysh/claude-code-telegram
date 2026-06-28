@@ -22,13 +22,13 @@ function colTone(col: ColumnDef, idx: number): string {
   if (col.id === "archive") return "text-fg-faint";
   if (idx === 0) return "text-fg-dim";
   const last = (c: string) => col.id.toLowerCase().includes(c);
-  if (last("done") || last("complete") || last("finish")) return "text-emerald-400";
+  if (last("done") || last("complete") || last("finish")) return "text-ok-fg";
   if (idx === 1) return "text-accent";
   return "text-fg-muted";
 }
 
 const PRIO_DOT: Record<Priority, string> = {
-  high: "bg-red-500",
+  high: "bg-critical",
   normal: "bg-fg-faint",
   low: "bg-sky-500",
 };
@@ -328,7 +328,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
           <button
             onClick={bulkDelete}
             disabled={selected.size === 0}
-            className="flex min-h-[44px] items-center rounded border border-red-500/40 px-2.5 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-40 transition-colors"
+            className="flex min-h-[44px] items-center rounded border border-critical/30 px-2.5 text-xs text-critical-fg hover:bg-critical-subtle disabled:opacity-40 transition-colors"
           >
             {t("tasks_bulk_delete").replace("{n}", String(selected.size))}
           </button>
@@ -501,7 +501,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
                         onClick={() => startEditWip(col)}
                         title={t("tasks_set_wip")}
                         aria-label={t("tasks_set_wip")}
-                        className={`tabular shrink-0 rounded px-1.5 text-xs ${HIT44} ${over ? "bg-red-500/15 text-red-400" : "text-fg-faint hover:text-fg-dim"}`}
+                        className={`tabular shrink-0 rounded px-1.5 text-xs ${HIT44} ${over ? "bg-critical-subtle text-critical-fg" : "text-fg-faint hover:text-fg-dim"}`}
                       >
                         {cards.length}
                         {limit != null && ` / ${limit}`}
@@ -514,8 +514,8 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
                       aria-label={t("tasks_remove_column")}
                       className={`shrink-0 rounded px-1 text-xs transition-colors ${HIT44} ${
                         confirmDelCol === col.id
-                          ? "bg-red-500/15 text-red-400"
-                          : "text-fg-faint hover:text-red-400"
+                          ? "bg-critical-subtle text-critical-fg"
+                          : "text-fg-faint hover:text-critical-fg"
                       }`}
                     >
                       {confirmDelCol === col.id ? t("tasks_remove_confirm") : "✕"}
@@ -866,13 +866,13 @@ function Card({
               onClick={() => setDelegateOpen((o) => !o)}
               className={`text-xs font-medium ${
                 dstatus === "ok"
-                  ? "text-emerald-400"
+                  ? "text-ok-fg"
                   : dstatus === "error"
-                    ? "text-red-400"
+                    ? "text-critical-fg"
                     : dstatus === "stopped"
                       ? "text-fg-dim"
                       : dstatus === "queued"
-                        ? "text-amber-400"
+                        ? "text-warn-fg"
                         : "text-accent"
               }`}
             >
@@ -884,7 +884,7 @@ function Card({
               {!running && <span className="ml-1 opacity-50">{delegateOpen ? "▲" : "▼"}</span>}
             </button>
             {running && (
-              <button onClick={stop} className="text-xs text-red-400 hover:underline">
+              <button onClick={stop} className="text-xs text-critical-fg hover:underline">
                 {t("stop")}
               </button>
             )}
@@ -934,7 +934,7 @@ function Card({
                   </div>
                 )
               )}
-              {task.delegate?.error && <div className="mt-1 text-xs text-red-400">{task.delegate.error}</div>}
+              {task.delegate?.error && <div className="mt-1 text-xs text-critical-fg">{task.delegate.error}</div>}
               {!running && task.delegate?.runId && (
                 <>
                   <button
@@ -971,7 +971,7 @@ function Card({
           </button>
           <button
             onClick={() => moveTo("done")}
-            className="flex min-h-[44px] flex-1 items-center justify-center rounded border border-line text-xs text-emerald-400 hover:bg-surface-2"
+            className="flex min-h-[44px] flex-1 items-center justify-center rounded border border-line text-xs text-ok-fg hover:bg-surface-2"
           >
             {t("tasks_mark_done")}
           </button>

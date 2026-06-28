@@ -105,7 +105,7 @@ export function SchedulesView({ onAuthError }: { onAuthError: () => void }) {
           <p>{t("info_schedules_pause")}</p>
         </InfoCard>
       </div>
-      {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
+      {error && <p className="mb-2 text-sm text-critical-fg">{error}</p>}
 
       {adding && (
         <div className="mb-4 space-y-3 rounded-lg border border-line bg-input p-3">

@@ -52,7 +52,7 @@ export function HeartbeatView_({ onAuthError }: { onAuthError: () => void }) {
     await load();
   };
 
-  if (!view) return <Card title={t("hb_title")}>{error ? <p className="text-sm text-red-400">{error}</p> : <Empty>{t("loading")}</Empty>}</Card>;
+  if (!view) return <Card title={t("hb_title")}>{error ? <p className="text-sm text-critical-fg">{error}</p> : <Empty>{t("loading")}</Empty>}</Card>;
   const c = view.config;
 
   return (

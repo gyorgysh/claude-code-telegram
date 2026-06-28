@@ -155,7 +155,7 @@ export function RemoteAccessView({ onAuthError }: { onAuthError: () => void }) {
   if (!view) {
     return (
       <Card title={t("ra_title")}>
-        {error ? <p className="text-sm text-red-400">{error}</p> : <Empty>{t("loading")}</Empty>}
+        {error ? <p className="text-sm text-critical-fg">{error}</p> : <Empty>{t("loading")}</Empty>}
       </Card>
     );
   }
@@ -208,11 +208,11 @@ export function RemoteAccessView({ onAuthError }: { onAuthError: () => void }) {
         right={<StateBadge state={view.state} t={t} />}
       >
         <p className="mb-4 text-sm text-fg-dim">{t("ra_desc")}</p>
-        {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
+        {error && <p className="mb-2 text-sm text-critical-fg">{error}</p>}
 
         {/* Public URL panel (when up) */}
         {running && view.url && (
-          <div className="mb-4 rounded-lg border border-green-500/30 bg-green-500/5 p-3">
+          <div className="mb-4 rounded-lg border border-ok/30 bg-ok-subtle p-3">
             <div className="mb-1 text-xs font-medium uppercase tracking-wider text-fg-dim">
               {t("ra_public_url")}
             </div>
@@ -230,7 +230,7 @@ export function RemoteAccessView({ onAuthError }: { onAuthError: () => void }) {
               </div>
             )}
             {view.basicAuth && view.hasPassword && (
-              <div className="mt-3 grid gap-2 border-t border-green-500/20 pt-3 sm:grid-cols-2">
+              <div className="mt-3 grid gap-2 border-t border-ok/20 pt-3 sm:grid-cols-2">
                 <div>
                   <div className="text-xs font-medium uppercase tracking-wider text-fg-dim">
                     {t("ra_login_user")}
@@ -264,7 +264,7 @@ export function RemoteAccessView({ onAuthError }: { onAuthError: () => void }) {
           </div>
         )}
         {view.state === "error" && view.error && (
-          <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-400">
+          <div className="mb-4 rounded-lg border border-critical/30 bg-critical-subtle p-3 text-sm text-critical-fg">
             {view.error}
           </div>
         )}
@@ -320,7 +320,7 @@ export function RemoteAccessView({ onAuthError }: { onAuthError: () => void }) {
           </div>
         ) : (
           <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-line bg-surface p-3">
-            <span className="mt-0.5 text-base leading-none text-green-400">✓</span>
+            <span className="mt-0.5 text-base leading-none text-ok-fg">✓</span>
             <div>
               <div className="text-sm font-medium text-fg">{t("ra_cloudflare_free_title")}</div>
               <div className="mt-0.5 text-xs text-fg-faint">{t("ra_cloudflare_free_subtitle")}</div>

@@ -127,7 +127,7 @@ export function FeedbackView({ onAuthError }: { onAuthError: () => void }) {
             {busy ? t("feedback_sending") : t("feedback_send")}
           </Button>
           {sent && !busy && (
-            <span className="text-sm text-emerald-400">{t("feedback_thanks")}</span>
+            <span className="text-sm text-ok-fg">{t("feedback_thanks")}</span>
           )}
         </div>
       </Card>

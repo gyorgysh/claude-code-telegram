@@ -40,7 +40,7 @@ export function ConnectorsView({ onAuthError }: { onAuthError: () => void }) {
   return (
     <Card title={t("connectors_title")}>
       <p className="mb-3 text-sm text-fg-dim">{t("connectors_desc")}</p>
-      {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
+      {error && <p className="mb-2 text-sm text-critical-fg">{error}</p>}
       {connectors.length === 0 ? (
         <Empty>{t("loading")}</Empty>
       ) : (

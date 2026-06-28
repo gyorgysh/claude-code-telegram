@@ -44,7 +44,7 @@ export function Login({ onAuthed }: { onAuthed: () => void }) {
           placeholder="PANEL_TOKEN"
           className="mt-4 w-full rounded-lg border border-line bg-input px-3 py-2 text-sm text-fg outline-none focus:border-accent"
         />
-        {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+        {error && <p className="mt-2 text-sm text-critical-fg">{error}</p>}
         <button
           type="submit"
           disabled={busy}

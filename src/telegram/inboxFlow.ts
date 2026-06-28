@@ -3,13 +3,12 @@ import { suggestions, type Suggestion } from "../core/suggestions.js";
 import { log } from "../logger.js";
 import { escapeHtml } from "./formatting.js";
 import { parseCallback, isHexId } from "./callback.js";
-
-const HEADER = "<b>📥 Suggestion inbox</b>";
+import { t, langForChat } from "./i18n/index.js";
 
 type Row = ReturnType<typeof Markup.button.callback>[];
 
 /** One block of HTML per pending suggestion + its action rows. */
-function renderItem(s: Suggestion): { text: string; rows: Row[] } {
+function renderItem(s: Suggestion, lang: string): { text: string; rows: Row[] } {
   const cat = s.category ? ` <i>[${escapeHtml(s.category)}]</i>` : "";
   const text =
     `• <b>${escapeHtml(s.title)}</b>${cat}\n` +
@@ -18,35 +17,36 @@ function renderItem(s: Suggestion): { text: string; rows: Row[] } {
     text,
     rows: [
       [
-        Markup.button.callback("📋 Park", `inbox:${s.id}:acc`),
-        Markup.button.callback("🚀 Delegate", `inbox:${s.id}:del`),
-        Markup.button.callback("✕ Dismiss", `inbox:${s.id}:dis`),
+        Markup.button.callback(t("inbox_park_btn", lang), `inbox:${s.id}:acc`),
+        Markup.button.callback(t("inbox_delegate_btn", lang), `inbox:${s.id}:del`),
+        Markup.button.callback(t("inbox_dismiss_btn", lang), `inbox:${s.id}:dis`),
       ],
-      [Markup.button.callback("🔎 Details", `inbox:${s.id}:det`)],
+      [Markup.button.callback(t("inbox_details_btn", lang), `inbox:${s.id}:det`)],
     ],
   };
 }
 
 /** Build the full digest body + keyboard from the pending queue. */
-function buildDigest(): { body: string; keyboard: ReturnType<typeof Markup.inlineKeyboard> } {
+function buildDigest(lang: string): { body: string; keyboard: ReturnType<typeof Markup.inlineKeyboard> } {
+  const header = t("inbox_header", lang);
   const pending = suggestions.pending();
   if (pending.length === 0) {
     return {
-      body: `${HEADER}\n\nInbox clear. Nothing waiting for review.`,
+      body: `${header}\n\n${t("inbox_empty", lang)}`,
       keyboard: Markup.inlineKeyboard([]),
     };
   }
-  const blocks = pending.map(renderItem);
+  const blocks = pending.map((s) => renderItem(s, lang));
   const body =
-    `${HEADER}\n${pending.length} pending. ` +
-    `Park files a backlog card; delegate gets it done now; dismiss archives it.\n\n` +
+    `${header}\n${pending.length} pending. ` +
+    `${t("inbox_instructions", lang)}\n\n` +
     blocks.map((b) => b.text).join("\n\n");
   return { body, keyboard: Markup.inlineKeyboard(blocks.flatMap((b) => b.rows)) };
 }
 
 /** Reply to /inbox with the pending suggestion digest. */
 export async function sendInbox(tg: Telegram, chatId: number): Promise<void> {
-  const { body, keyboard } = buildDigest();
+  const { body, keyboard } = buildDigest(langForChat(chatId));
   await tg.sendMessage(chatId, body, { parse_mode: "HTML", ...keyboard });
 }
 
@@ -61,60 +61,72 @@ export async function resolveInboxCallback(
   data: string,
   messageId: number | undefined,
 ): Promise<string> {
+  const lang = langForChat(chatId);
   const parts = parseCallback(data, "inbox:", 2);
-  if (!parts) return "That suggestion is gone.";
+  if (!parts) return t("inbox_gone", lang);
   const [id, action] = parts;
-  if (!isHexId(id)) return "That suggestion is gone.";
+  if (!isHexId(id)) return t("inbox_gone", lang);
   const s = suggestions.get(id);
-  if (!s) return "That suggestion is gone.";
+  if (!s) return t("inbox_gone", lang);
 
   let toast = "";
   if (action === "det") {
     // Reply with the full detail text; don't touch the digest.
-    const cat = s.category ? `\n<i>Category: ${escapeHtml(s.category)}</i>` : "";
+    const cat = s.category
+      ? t("inbox_details_category", lang, { category: escapeHtml(s.category) })
+      : "";
     await tg
       .sendMessage(
         chatId,
-        `🔎 <b>${escapeHtml(s.title)}</b>\n<i>from ${escapeHtml(s.fromAgentName)}</i>${cat}\n\n${escapeHtml(s.detail)}`,
+        t("inbox_details", lang, {
+          title: escapeHtml(s.title),
+          agent: escapeHtml(s.fromAgentName),
+          category: cat,
+          detail: escapeHtml(s.detail),
+        }),
         { parse_mode: "HTML" },
       )
       .catch(() => {});
-    return "Details posted";
+    return t("inbox_details_posted", lang);
   } else if (action === "acc") {
     const updated = suggestions.accept(id);
     if (updated?.status === "accepted") {
       log.info("Suggestion parked", { id, taskId: updated.taskId });
-      toast = "Parked → backlog card";
+      toast = t("inbox_parked", lang);
     } else {
-      toast = "Already decided";
+      toast = t("inbox_already_decided", lang);
     }
   } else if (action === "del") {
     const { suggestion, leadName, started } = suggestions.delegate(id);
     if (started && suggestion) {
-      const who = leadName ?? "a generic run";
+      const who = leadName ?? t("inbox_generic_run", lang);
       log.info("Suggestion delegated", { id, taskId: suggestion.taskId, leadName });
       await tg
         .sendMessage(
           chatId,
-          `🚀 Delegated <b>${escapeHtml(suggestion.title)}</b> to <b>${escapeHtml(who)}</b>. ` +
-            `The card is in progress; I'll report back when it's done.`,
+          t("inbox_delegated", lang, {
+            title: escapeHtml(suggestion.title),
+            who: escapeHtml(who),
+          }),
           { parse_mode: "HTML" },
         )
         .catch(() => {});
-      toast = leadName ? `Delegated to ${leadName}` : "Delegated";
+      toast = leadName
+        ? t("inbox_delegated_toast", lang, { lead: leadName })
+        : t("inbox_delegated_toast_plain", lang);
     } else {
-      toast = suggestion ? "Couldn't start (already running?)" : "That suggestion is gone.";
+      toast = suggestion ? t("inbox_delegate_failed", lang) : t("inbox_gone", lang);
     }
   } else if (action === "dis") {
     const updated = suggestions.dismiss(id);
-    toast = updated?.status === "dismissed" ? "Dismissed" : "Already decided";
+    toast = updated?.status === "dismissed" ? t("inbox_dismissed", lang) : t("inbox_already_decided", lang);
   } else {
     return "";
   }
 
   // Re-render the digest in place so the decided item drops off.
   if (messageId !== undefined) {
-    const { body, keyboard } = buildDigest();
+    const { body, keyboard } = buildDigest(lang);
     await tg
       .editMessageText(chatId, messageId, undefined, body, {
         parse_mode: "HTML",

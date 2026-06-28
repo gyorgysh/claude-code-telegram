@@ -19,7 +19,7 @@ export function StatusView({ onAuthError }: { onAuthError: () => void }) {
       {data && <ServiceBanner s={data.service} />}
       <Card title={t("status_backends_title")}>
         <p className="mb-3 text-sm text-fg-dim">{t("status_backends_desc")}</p>
-        {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
+        {error && <p className="mb-2 text-sm text-critical-fg">{error}</p>}
         {!data ? (
           <Empty>{t("checking")}</Empty>
         ) : data.backends.length === 0 ? (
@@ -40,7 +40,7 @@ function ServiceBanner({ s }: { s: ServiceStatus }) {
   const { t } = useI18n();
   const ok = s.indicator === "none";
   const bad = s.indicator === "major" || s.indicator === "critical";
-  const dot = ok ? "bg-emerald-500" : s.indicator === "minor" ? "bg-amber-500" : bad ? "bg-red-500" : "bg-fg-faint";
+  const dot = ok ? "bg-ok" : s.indicator === "minor" ? "bg-warn" : bad ? "bg-critical" : "bg-fg-faint";
   return (
     <Card title={t("status_service_title")}>
       <div className="flex items-center justify-between gap-3">
@@ -70,7 +70,7 @@ function BackendRow({ b }: { b: BackendStatus }) {
   const { t } = useI18n();
   const state = !b.reachable ? "down" : !b.authOk ? "auth" : "up";
   const dot =
-    state === "up" ? "bg-emerald-500" : state === "auth" ? "bg-amber-500" : "bg-red-500";
+    state === "up" ? "bg-ok" : state === "auth" ? "bg-warn" : "bg-critical";
   const label = state === "up" ? t("status_up") : state === "auth" ? t("status_auth") : t("status_down");
 
   return (
@@ -85,16 +85,16 @@ function BackendRow({ b }: { b: BackendStatus }) {
           <div className="mono mt-1 truncate text-xs text-fg-faint" title={b.baseUrl}>
             {b.baseUrl}
           </div>
-          {b.error && <p className="mt-1 text-xs text-red-400">{b.error}</p>}
+          {b.error && <p className="mt-1 text-xs text-critical-fg">{b.error}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-2 text-xs text-fg-dim">
           <span className="tabular">{t("status_models").replace("{n}", String(b.models.length))}</span>
           <span className={`rounded px-1.5 py-0.5 font-medium ${
             state === "up"
-              ? "bg-emerald-500/15 text-emerald-400"
+              ? "bg-ok-subtle text-ok-fg"
               : state === "auth"
-                ? "bg-amber-500/15 text-amber-400"
-                : "bg-red-500/15 text-red-400"
+                ? "bg-warn-subtle text-warn-fg"
+                : "bg-critical-subtle text-critical-fg"
           }`}>
             {label}
           </span>

@@ -4,6 +4,9 @@ import { config } from "../config.js";
 import { escapeHtml } from "./formatting.js";
 import { log } from "../logger.js";
 import { parseCallback, isHexId } from "./callback.js";
+import { t, langForChat } from "./i18n/index.js";
+import { approvalQueue } from "../core/approvals.js";
+import { push } from "../core/push.js";
 
 export type ApprovalChoice = "allow" | "deny" | "always" | "alwayscmd";
 
@@ -78,7 +81,10 @@ export class PermissionManager {
   /** One open batch per chat while buffering / awaiting resolution. */
   private batches = new Map<number, Batch>();
 
-  constructor(private tg: Telegram) {}
+  constructor(private tg: Telegram) {
+    // Let the panel resolve the same pending requests the Telegram buttons do.
+    approvalQueue.attach((id, choice) => this.resolveById(id, choice));
+  }
 
   async request(chatId: number, toolName: string, input: unknown): Promise<ApprovalChoice> {
     const id = randomBytes(4).toString("hex");
@@ -90,11 +96,22 @@ export class PermissionManager {
         if (!entry || entry.settled) return;
         entry.settled = "deny";
         log.warn("Approval timed out — auto-denied", { chatId, tool: toolName });
+        approvalQueue.remove(id);
         resolve("deny");
         void this.afterSettle(chatId);
       }, config.APPROVAL_TIMEOUT_MS);
 
       this.pending.set(id, { id, resolve, timeout, chatId, toolName, input, lead });
+    });
+
+    // Mirror the request into the panel Approvals queue.
+    approvalQueue.add({
+      id,
+      chatId,
+      toolName,
+      preview: describeInput(toolName, input),
+      lead,
+      ts: Date.now(),
     });
 
     // Attach to (or open) this chat's batch and (re)arm the debounce flush.
@@ -134,6 +151,20 @@ export class PermissionManager {
       ...Markup.inlineKeyboard(this.keyboard(batch)),
     });
     batch.messageId = msg.message_id;
+
+    // Mirror to Web Push so a closed panel tab gets an OS-level prompt. Approval
+    // still happens in Telegram (or the panel); this is just an alert to act.
+    const tools = live
+      .map((id) => this.pending.get(id)?.toolName)
+      .filter(Boolean) as string[];
+    void push
+      .notify({
+        title: tools.length > 1 ? `${tools.length} approvals needed` : "Approval needed",
+        body: tools.length > 1 ? tools.join(", ") : (tools[0] ?? "A tool needs approval"),
+        tag: "approval",
+        kind: "approval",
+      })
+      .catch(() => {});
   }
 
   /** Re-render an already-posted batch's text + keyboard in place. */
@@ -149,12 +180,13 @@ export class PermissionManager {
 
   /** Build the grouped message body listing each pending tool call. */
   private text(batch: Batch): string {
+    const lang = langForChat(batch.chatId);
     const entries = batch.ids.map((id) => this.pending.get(id)).filter(Boolean) as Pending[];
     const live = entries.filter((e) => !e.settled);
     const header =
       live.length > 1
-        ? `🔐 <b>${live.length} permissions needed</b>`
-        : `🔐 <b>Permission needed</b>`;
+        ? t("appr_header_many", lang, { n: live.length })
+        : t("appr_header_one", lang);
     const lines = entries.map((e, i) => {
       const n = entries.length > 1 ? `${i + 1}. ` : "";
       const mark = e.settled === undefined ? "" : e.settled === "deny" ? " — ❌" : " — ✅";
@@ -168,6 +200,7 @@ export class PermissionManager {
 
   /** Build the inline keyboard: per-tool rows + a shared bulk row when >1. */
   private keyboard(batch: Batch): ReturnType<typeof Markup.button.callback>[][] {
+    const lang = langForChat(batch.chatId);
     const entries = batch.ids.map((id) => this.pending.get(id)).filter(Boolean) as Pending[];
     const live = entries.filter((e) => !e.settled);
     const rows: ReturnType<typeof Markup.button.callback>[][] = [];
@@ -176,16 +209,19 @@ export class PermissionManager {
       // Solo prompt keeps the full preset set (Approve/Deny + Always [+ cmd]).
       const e = live[0];
       rows.push([
-        Markup.button.callback("✅ Approve", `${CB_PREFIX}:${e.id}:allow`),
-        Markup.button.callback("❌ Deny", `${CB_PREFIX}:${e.id}:deny`),
+        Markup.button.callback(t("appr_approve", lang), `${CB_PREFIX}:${e.id}:allow`),
+        Markup.button.callback(t("appr_deny", lang), `${CB_PREFIX}:${e.id}:deny`),
       ]);
       rows.push([
-        Markup.button.callback(`♾️ Always allow ${e.toolName}`, `${CB_PREFIX}:${e.id}:always`),
+        Markup.button.callback(
+          t("appr_always_tool", lang, { tool: e.toolName }),
+          `${CB_PREFIX}:${e.id}:always`,
+        ),
       ]);
       if (e.lead) {
         rows.push([
           Markup.button.callback(
-            `♾️ Always allow \`${e.lead}\` commands`,
+            t("appr_always_cmd", lang, { cmd: e.lead }),
             `${CB_PREFIX}:${e.id}:alwayscmd`,
           ),
         ]);
@@ -203,8 +239,8 @@ export class PermissionManager {
       ]);
     }
     rows.push([
-      Markup.button.callback("✅✅ Allow all", `${CB_PREFIX}:_all:allowall`),
-      Markup.button.callback("❌❌ Deny all", `${CB_PREFIX}:_all:denyall`),
+      Markup.button.callback(t("appr_allow_all", lang), `${CB_PREFIX}:_all:allowall`),
+      Markup.button.callback(t("appr_deny_all", lang), `${CB_PREFIX}:_all:denyall`),
     ]);
     return rows;
   }
@@ -219,20 +255,21 @@ export class PermissionManager {
    * string. `chatId` is required to scope bulk Allow-all / Deny-all presses.
    */
   async resolve(data: string, chatId?: number): Promise<string> {
+    const lang = chatId !== undefined ? langForChat(chatId) : undefined;
     // Validate structure before dispatch: appr:<id>:<action>, exactly 3 parts.
     const parts = parseCallback(data, `${CB_PREFIX}:`, 2);
-    if (!parts) return "This request has expired.";
+    if (!parts) return t("appr_expired", lang);
     const [id, action] = parts;
     // id is 8-char hex (randomBytes(4)) or the literal "_all" for bulk presses.
-    if (id !== "_all" && !isHexId(id)) return "This request has expired.";
+    if (id !== "_all" && !isHexId(id)) return t("appr_expired", lang);
 
     if (action === "allowall" || action === "denyall") {
-      if (chatId === undefined) return "This request has expired.";
+      if (chatId === undefined) return t("appr_expired", lang);
       return this.resolveAll(chatId, action === "allowall" ? "allow" : "deny");
     }
 
     const entry = this.pending.get(id);
-    if (!entry || entry.settled) return "This request has expired.";
+    if (!entry || entry.settled) return t("appr_expired", lang);
 
     clearTimeout(entry.timeout);
     // Whitelist the action before casting: a crafted callback could carry an
@@ -241,15 +278,17 @@ export class PermissionManager {
       ? (action as ApprovalChoice)
       : "deny";
     entry.settled = choice;
+    approvalQueue.remove(id);
 
+    const elang = langForChat(entry.chatId);
     const label =
       choice === "allow"
-        ? "✅ Approved"
+        ? t("appr_toast_approved", elang)
         : choice === "always"
-          ? `♾️ Always allowing ${entry.toolName}`
+          ? t("appr_toast_always_tool", elang, { tool: entry.toolName })
           : choice === "alwayscmd"
-            ? "♾️ Always allowing that command"
-            : "❌ Denied";
+            ? t("appr_toast_always_cmd", elang)
+            : t("appr_toast_denied", elang);
 
     entry.resolve(choice);
     await this.afterSettle(entry.chatId);
@@ -259,21 +298,42 @@ export class PermissionManager {
   /** Resolve every pending approval for a chat at once (bulk Allow/Deny). */
   private async resolveAll(chatId: number, choice: "allow" | "deny"): Promise<string> {
     const batch = this.batches.get(chatId);
+    const lang = langForChat(chatId);
     const entries = (batch?.ids ?? [])
       .map((id) => this.pending.get(id))
       .filter((e): e is Pending => !!e && !e.settled);
-    if (entries.length === 0) return "No pending requests.";
+    if (entries.length === 0) return t("appr_toast_none", lang);
 
     for (const entry of entries) {
       clearTimeout(entry.timeout);
       entry.settled = choice;
+      approvalQueue.remove(entry.id);
       entry.resolve(choice);
     }
 
     await this.afterSettle(chatId);
     return choice === "allow"
-      ? `✅✅ Approved all ${entries.length}`
-      : `❌❌ Denied all ${entries.length}`;
+      ? t("appr_toast_approved_all", lang, { n: entries.length })
+      : t("appr_toast_denied_all", lang, { n: entries.length });
+  }
+
+  /**
+   * Resolve a single pending approval by id (used by the panel Approvals view).
+   * Mirrors the single-request branch of `resolve()`: validates the action,
+   * settles the entry, drops it from the panel queue, resolves the SDK promise,
+   * and updates the Telegram grouped message in place. Returns false when the
+   * id is unknown or already settled.
+   */
+  resolveById(id: string, choice: ApprovalChoice): boolean {
+    if (!VALID_CHOICES.has(choice)) return false;
+    const entry = this.pending.get(id);
+    if (!entry || entry.settled) return false;
+    clearTimeout(entry.timeout);
+    entry.settled = choice;
+    approvalQueue.remove(id);
+    entry.resolve(choice);
+    void this.afterSettle(entry.chatId);
+    return true;
   }
 
   /**

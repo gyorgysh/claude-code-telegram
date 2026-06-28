@@ -209,7 +209,7 @@ export function UpdatesView({
       <Card title={t("updates_manual_title")}>
         <p className="text-sm text-fg-dim">{t("updates_manual_desc")}</p>
         <pre className="mono mt-2 overflow-x-auto rounded bg-surface-2 p-2 text-xs text-fg">
-          scripts/update.sh
+          {status?.platform === "win32" ? ".\\scripts\\windows\\update.ps1" : "scripts/update.sh"}
         </pre>
       </Card>
     </div>

@@ -1,4 +1,4 @@
-import { execFile, execFileSync } from "node:child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -7,6 +7,27 @@ import { log } from "../logger.js";
 import { audit } from "./audit.js";
 
 const AGENTCTL = join(repoRoot, "scripts", "agentctl.sh");
+
+/** Which Windows service manager hosts the bot, if any: the NSSM service 'myhq'
+ *  or the 'MyHQ Bot' scheduled task (both installed by myhq-install.ps1). */
+function windowsServiceKind(): "nssm" | "task" | null {
+  try {
+    const out = execFileSync("sc.exe", ["query", "myhq"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    if (/myhq/i.test(out)) return "nssm";
+  } catch {
+    /* not registered as a service */
+  }
+  try {
+    execFileSync("schtasks.exe", ["/query", "/tn", "MyHQ Bot"], { stdio: "ignore" });
+    return "task";
+  } catch {
+    /* no scheduled task */
+  }
+  return null;
+}
 
 /** Whether this checkout is being run under a known service manager, so a
  *  restart will actually respawn the process (rather than just kill it). */
@@ -24,8 +45,11 @@ export function serviceInstalled(): boolean {
       });
       return /myhq\.service/.test(out);
     }
+    if (process.platform === "win32") {
+      return windowsServiceKind() !== null;
+    }
   } catch {
-    /* systemctl missing or errored — treat as not installed */
+    /* manager missing or errored — treat as not installed */
   }
   return false;
 }
@@ -40,6 +64,29 @@ export function restartService(): void {
   audit("agent.restart", { platform: process.platform });
   log.warn("Panel requested a service restart — respawning shortly");
   setTimeout(() => {
+    if (process.platform === "win32") {
+      const kind = windowsServiceKind();
+      // NSSM: signal the wrapper to restart its child (our process). Task: end
+      // then re-run. Spawn detached so the command survives our process being
+      // killed mid-restart; the service manager brings us back up.
+      const cmd =
+        kind === "nssm"
+          ? "nssm restart myhq"
+          : kind === "task"
+            ? 'schtasks /end /tn "MyHQ Bot" & schtasks /run /tn "MyHQ Bot"'
+            : null;
+      if (!cmd) {
+        log.error("Service restart failed: no Windows service or scheduled task found");
+        return;
+      }
+      const child = spawn("cmd.exe", ["/c", cmd], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      child.unref();
+      return;
+    }
     const child = execFile(AGENTCTL, ["restart"], (err) => {
       if (err) log.error("Service restart failed", { error: err.message });
     });

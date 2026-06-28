@@ -554,7 +554,7 @@ configure_remote_access() {
   if [ -z "$choice" ]; then
     printf '\n%s\n' "${B}Reach the panel from your phone?${R} ${DIM}(secure public tunnel to this panel, still behind your login)${R}" >"${TTY:-/dev/stdout}"
     printf '%s\n' "  ${B}1)${R} No, local only ${DIM}(default, most secure)${R}" >"${TTY:-/dev/stdout}"
-    printf '%s\n' "  ${B}2)${R} Cloudflare ${DIM}(free quick tunnel, no account or token needed)${R}" >"${TTY:-/dev/stdout}"
+    printf '%s\n' "  ${B}2)${R} Cloudflare ${DIM}(free quick tunnel, no account or token needed)${R} ${DIM}[recommended]${R}" >"${TTY:-/dev/stdout}"
     printf '%s\n' "  ${B}3)${R} ngrok ${DIM}(needs a free authtoken from ngrok.com)${R}" >"${TTY:-/dev/stdout}"
     printf '%s\n' "  ${B}4)${R} Install both, decide later in the panel" >"${TTY:-/dev/stdout}"
     case "$(ask "Choose 1-4" "1")" in

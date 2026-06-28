@@ -489,13 +489,13 @@ function Configure-RemoteAccess {
     Write-Host "  Reach the panel from your phone over a secure public tunnel (still behind your login)."
     $choice = if ($env:MYHQ_REMOTE) { $env:MYHQ_REMOTE } else { "" }
     if (-not $choice) {
-        Write-Host "  1) No, local only (default — most secure)"
-        Write-Host "  2) ngrok (needs a free authtoken from ngrok.com)"
-        Write-Host "  3) Cloudflare (free quick tunnel, no account needed)"
+        Write-Host "  1) No, local only (default - most secure)"
+        Write-Host "  2) Cloudflare (free quick tunnel, no account or token needed) [recommended]"
+        Write-Host "  3) ngrok (needs a free authtoken from ngrok.com)"
         Write-Host "  4) Install both, decide later in the panel"
         switch (Ask "Choose 1-4" "1") {
-            "2" { $choice = "ngrok" }
-            "3" { $choice = "cloudflare" }
+            "2" { $choice = "cloudflare" }
+            "3" { $choice = "ngrok" }
             "4" { $choice = "both" }
             default { $choice = "none" }
         }

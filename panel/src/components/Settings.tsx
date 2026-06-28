@@ -30,12 +30,63 @@ export function SettingsView({ onAuthError }: { onAuthError: () => void }) {
       <div>
         <h1 className="text-lg font-semibold text-fg">{t("settings_title")}</h1>
       </div>
+      <ServiceControl onAuthError={onAuthError} />
       <LanguageSettings onAuthError={onAuthError} />
       <MainAgentSettings onAuthError={onAuthError} />
       <ProvidersSettings onAuthError={onAuthError} />
       <PlanBudgetSettings onAuthError={onAuthError} />
       <WhitelabelSettings />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Control — service-level actions (restart the whole MyHQ process)
+// ---------------------------------------------------------------------------
+
+function ServiceControl({ onAuthError }: { onAuthError: () => void }) {
+  const { t } = useI18n();
+  const [serviceInstalled, setServiceInstalled] = useState(false);
+  const [brand, setBrand] = useState("MyHQ");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api
+      .agent()
+      .then((a) => setServiceInstalled(a.serviceInstalled))
+      .catch((e) => e instanceof AuthError && onAuthError());
+    api.me().then((m) => m.brandName && setBrand(m.brandName)).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const restart = async () => {
+    if (!confirm(t("settings_restart_confirm"))) return;
+    setBusy(true);
+    try {
+      await api.restartAgent();
+      toast.info(t("settings_restarting"));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card title={t("settings_control")}>
+      <p className="mb-4 text-sm text-fg-dim">{t("settings_control_desc")}</p>
+      <Button
+        variant="danger"
+        onClick={restart}
+        disabled={!serviceInstalled || busy}
+        title={serviceInstalled ? "" : t("settings_no_service")}
+      >
+        {busy ? t("settings_restarting") : t("settings_restart_app").replace("{brand}", brand)}
+      </Button>
+      {!serviceInstalled && (
+        <p className="mt-2 text-xs text-fg-dim">{t("settings_no_service")}</p>
+      )}
+    </Card>
   );
 }
 
@@ -196,19 +247,6 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
     }
   };
 
-  const restart = async () => {
-    if (!confirm(t("settings_restart_confirm"))) return;
-    setBusy("restart");
-    try {
-      await api.restartAgent();
-      toast.info(t("settings_restarting"));
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(null);
-    }
-  };
-
   const dirtyDot = dirty ? (
     <span
       className="h-1.5 w-1.5 rounded-full bg-amber-400"
@@ -327,14 +365,6 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
         </Button>
         <Button onClick={reset} disabled={busy === "reset"}>
           {t("settings_new_context")}
-        </Button>
-        <Button
-          variant="danger"
-          onClick={restart}
-          disabled={!agent.serviceInstalled || busy === "restart"}
-          title={agent.serviceInstalled ? "" : t("settings_no_service")}
-        >
-          {t("settings_restart_service")}
         </Button>
         {dirty && <span className="text-xs text-amber-400">{t("settings_unsaved")}</span>}
       </div>

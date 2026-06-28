@@ -656,8 +656,8 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
   app.post("/api/plan/report-test", async () => heartbeat.sendCostReport());
 
   // --- self-update ---
-  app.get("/api/update", async () => ({ ...getUpdateStatus(), serviceInstalled: serviceInstalled(), active: isActive() }));
-  app.post("/api/update/check", async () => ({ ...(await checkForUpdate()), serviceInstalled: serviceInstalled(), active: isActive() }));
+  app.get("/api/update", async () => ({ ...getUpdateStatus(), serviceInstalled: serviceInstalled(), platform: process.platform, active: isActive() }));
+  app.post("/api/update/check", async () => ({ ...(await checkForUpdate()), serviceInstalled: serviceInstalled(), platform: process.platform, active: isActive() }));
   app.post("/api/update/run", async () => {
     if (getUpdateStatus().updating) return { started: false };
     // Stream output to panel clients; don't await (the run may restart us).

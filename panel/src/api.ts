@@ -594,6 +594,8 @@ export interface UpdateStatus {
   checking: boolean;
   updating: boolean;
   serviceInstalled: boolean;
+  /** Host platform (process.platform) so the UI can show the right manual command. */
+  platform?: string;
   /** A turn/delegation is in flight — update/restore would interrupt it. */
   active?: boolean;
 }

@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    update.ps1 — Windows counterpart of scripts/update.sh.
+    update.ps1 - Windows counterpart of scripts/update.sh.
 
 .DESCRIPTION
     Sync to the latest code, reinstall deps, rebuild (panel UI + bot), and
@@ -98,7 +98,7 @@ if (-not $restarted) {
     }
 }
 if (-not $restarted) {
-    Ok "Build complete. No service installed — restart your manual run to pick up changes."
+    Ok "Build complete. No service installed - restart your manual run to pick up changes."
 }
 
 exit 0

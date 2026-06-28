@@ -11,12 +11,12 @@ $Node = if ($env:NODE_BIN) { $env:NODE_BIN } else {
 }
 
 if (-not $Node) {
-    Write-Host "✖ node not found. Install Node 20+ or set NODE_BIN." -ForegroundColor Red
+    Write-Host "x node not found. Install Node 20+ or set NODE_BIN." -ForegroundColor Red
     exit 1
 }
 
 if (-not (Test-Path "dist\index.js")) {
-    Write-Host "• Building…" -ForegroundColor Cyan
+    Write-Host "* Building..." -ForegroundColor Cyan
     npm run build
 }
 

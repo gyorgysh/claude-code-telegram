@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    uninstall.ps1 — remove the MyHQ Windows service (and optionally the files).
+    uninstall.ps1 - remove the MyHQ Windows service (and optionally the files).
 
 .DESCRIPTION
     Stops and removes the NSSM service ('myhq') and/or the 'MyHQ Bot' scheduled
@@ -62,7 +62,7 @@ if ($nssm) {
         Say "No NSSM service '$SvcName' found."
     }
 } else {
-    Say "nssm not on PATH — skipping NSSM service check."
+    Say "nssm not on PATH - skipping NSSM service check."
 }
 
 # --- Scheduled task ---------------------------------------------------------

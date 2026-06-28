@@ -47,7 +47,9 @@ $MinNode    = 20
 $AutoYes    = $env:MYHQ_YES -eq "1"
 $Tutorial   = "https://gyorgy.sh/blog/myhq"
 
-$Script:PanelPortChosen = ""
+$Script:PanelPortChosen  = ""
+$Script:PanelTokenChosen = ""
+$Script:ServiceMode      = ""   # "service" once the bot is installed as a service
 
 # ---------------------------------------------------------------------------
 # Pretty output helpers
@@ -315,7 +317,8 @@ function Configure-Env {
             }
         }
 
-        $Script:PanelPortChosen = $panelPort
+        $Script:PanelPortChosen  = $panelPort
+        $Script:PanelTokenChosen = $panelToken
         Write-Host ""
         Ok "Panel configured on port $panelPort."
         Write-Host "  Token: $panelToken" -ForegroundColor Yellow
@@ -440,6 +443,7 @@ function Install-Service {
         & nssm set $svcName AppRotateOnline 1
         New-Item -ItemType Directory -Path (Join-Path $InstallDir "logs") -Force | Out-Null
         & nssm start $svcName
+        $Script:ServiceMode = "service"
         Ok "Service '$svcName' installed and started."
         Write-Host "  Control: nssm start|stop|restart $svcName" -ForegroundColor Cyan
     } else {
@@ -455,6 +459,7 @@ function Install-Service {
         Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
             -Settings $settings -Principal $principal -Force | Out-Null
         Start-ScheduledTask -TaskName $taskName
+        $Script:ServiceMode = "service"
         Ok "Task Scheduler entry '$taskName' created and started."
         Write-Host "  Control: Task Scheduler → $taskName" -ForegroundColor Cyan
     }
@@ -504,6 +509,37 @@ function Claude-Login {
 }
 
 # ---------------------------------------------------------------------------
+# Panel login link + browser auto-open
+# ---------------------------------------------------------------------------
+function Get-PanelLoginUrl {
+    # Token in the query — the SPA consumes it on first load, then strips it
+    # from the address bar. Empty when the panel is disabled.
+    if (-not $Script:PanelPortChosen) { return "" }
+    return "http://127.0.0.1:$($Script:PanelPortChosen)/?token=$($Script:PanelTokenChosen)"
+}
+
+function Open-Panel {
+    # When the panel is enabled and the bot runs as a service, wait for the port
+    # to come up, then open the one-click login URL in the default browser so the
+    # user lands logged-in. Skipped in non-interactive ($AutoYes) runs.
+    if (-not $Script:PanelPortChosen) { return }
+    if ($Script:ServiceMode -ne "service") { return }
+    if ($AutoYes) { return }
+
+    Say "Waiting for the panel to come up…"
+    for ($i = 0; $i -lt 20; $i++) {
+        if (-not (Test-PortFree ([int]$Script:PanelPortChosen))) { break }  # not free = listening
+        Start-Sleep -Milliseconds 500
+    }
+    try {
+        Start-Process (Get-PanelLoginUrl)
+        Ok "Opened the panel in your browser — you're logged in."
+    } catch {
+        Warn "Couldn't auto-open a browser. Open the login link below manually."
+    }
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 Write-Host "`n  MyHQ Windows Installer" -ForegroundColor Magenta
@@ -521,12 +557,20 @@ Configure-RemoteAccess
 Claude-Login
 Install-Service
 Write-UpdateScript
+Open-Panel
 
 Write-Host "`n"
 Ok "MyHQ installation complete!"
 Write-Host "  Install dir : $InstallDir" -ForegroundColor Cyan
 if ($Script:PanelPortChosen) {
-    Write-Host "  Panel       : http://127.0.0.1:$($Script:PanelPortChosen)  (token saved to .env)" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  Panel login" -ForegroundColor Cyan
+    Write-Host "    One-click login link (token included — keep it private):"
+    Write-Host "      $(Get-PanelLoginUrl)" -ForegroundColor Yellow
+    Write-Host "    Or open http://127.0.0.1:$($Script:PanelPortChosen) and paste the token:"
+    Write-Host "      $($Script:PanelTokenChosen)" -ForegroundColor Yellow
+    Write-Host "      (also saved as PANEL_TOKEN in .env)" -ForegroundColor DarkGray
+    Write-Host ""
 }
 Write-Host "  Tutorial    : $Tutorial" -ForegroundColor Cyan
 Write-Host "  To update   : .\scripts\windows\myhq-update.ps1" -ForegroundColor Cyan

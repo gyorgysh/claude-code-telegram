@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api, clearToken, getToken } from "./api.ts";
+import { api, checkToken, clearToken, getToken, setToken } from "./api.ts";
 import { useTheme } from "./lib/useTheme.ts";
 import { Login } from "./components/Login.tsx";
 import { Sidebar, BottomNav, tabLabel, isTab, type Tab } from "./components/Sidebar.tsx";
@@ -47,6 +47,30 @@ export function App() {
   const [inboxPending, setInboxPending] = useState(0);
   const { theme, toggle, set } = useTheme();
   const { t } = useI18n();
+
+  // Accept a token passed in the URL (?token=…) — used by the installer's
+  // one-click login link so the first visit authenticates without pasting the
+  // secret. Validate it, persist it, then strip it from the URL so the token
+  // isn't left in browser history or leaked by sharing the address bar.
+  useEffect(() => {
+    const url = new URL(location.href);
+    const urlToken = url.searchParams.get("token");
+    if (!urlToken) return;
+    let cancelled = false;
+    void (async () => {
+      const ok = await checkToken(urlToken).catch(() => false);
+      if (cancelled) return;
+      if (ok) {
+        setToken(urlToken);
+        setAuthed(true);
+      }
+      url.searchParams.delete("token");
+      history.replaceState(null, "", url.pathname + url.search + url.hash);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Live pending-suggestions count for the Inbox nav badge: seed it once, then
   // let the shared /ws keep it current (the server pushes the full list on change).

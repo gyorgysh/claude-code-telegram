@@ -12,6 +12,7 @@ import { tunnelManager } from "./core/tunnelManager.js";
 import { workers } from "./core/workers.js";
 import { memory } from "./core/memory.js";
 import { embeddingsEnabled, autoProbeEmbeddings } from "./core/embeddings.js";
+import { autoDetectLocalProviders } from "./core/providers.js";
 import { leadBots } from "./telegram/leadBotManager.js";
 import { log } from "./logger.js";
 import { registerIdleGate, whenSettled } from "./core/activity.js";
@@ -66,6 +67,11 @@ async function main(): Promise<void> {
   // explicitly configured EMBEDDING_ENABLED. Fire-and-forget; sets the runtime
   // flag so the subsequent ensureEmbeddings() call sees the right state.
   await autoProbeEmbeddings().catch(() => {});
+
+  // Auto-add a provider preset for any local model server (Ollama :11434, LM
+  // Studio :1234) that's running and not already configured. Background, best-
+  // effort — never blocks boot.
+  void autoDetectLocalProviders().catch(() => {});
 
   // Backfill semantic embeddings for existing memories in the background (no-op
   // when embeddings are disabled). Best-effort: failures fall back to keyword search.

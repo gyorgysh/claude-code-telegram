@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { loadJson, saveJson } from "./jsonStore.js";
 import { audit } from "./audit.js";
+import { probeProviderModels } from "./providerModels.js";
+import { log } from "../logger.js";
 
 const FILE = "providers.json";
 
@@ -118,4 +120,45 @@ export function deleteProvider(id: string): boolean {
   persist(next);
   audit("provider.delete", { id });
   return true;
+}
+
+/** Local model servers we probe at startup, matching the panel prefill presets. */
+const LOCAL_PRESETS: ProviderInput[] = [
+  { name: "Ollama (local)", baseUrl: "http://localhost:11434", authToken: "ollama" },
+  { name: "LM Studio (local)", baseUrl: "http://localhost:1234", authToken: "lmstudio" },
+];
+
+/** Normalise a base URL for comparison (drop trailing slash + a /v1 suffix). */
+function normalizeBase(url: string): string {
+  return url.trim().replace(/\/+$/, "").replace(/\/v1$/, "");
+}
+
+/**
+ * Best-effort startup auto-detection of local model servers. Probes the default
+ * Ollama (:11434) and LM Studio (:1234) endpoints and, for each one that's live,
+ * adds a provider preset if the user doesn't already have a provider pointing at
+ * that endpoint. Never overwrites or removes anything — a user who deleted an
+ * auto-added preset and stopped that server won't get it back; one who left the
+ * server running keeps it. Runs concurrently and swallows all errors so a flaky
+ * endpoint can never block boot.
+ */
+export async function autoDetectLocalProviders(): Promise<void> {
+  const existing = new Set(load().map((p) => normalizeBase(p.baseUrl)));
+  await Promise.all(
+    LOCAL_PRESETS.map(async (preset) => {
+      if (existing.has(normalizeBase(preset.baseUrl))) return;
+      try {
+        const probe = await probeProviderModels(preset.baseUrl, preset.authToken);
+        if (!probe.reachable || !probe.models.length) return;
+        createProvider(preset);
+        log.info("Local model provider auto-detected and added", {
+          name: preset.name,
+          baseUrl: preset.baseUrl,
+          models: probe.models.length,
+        });
+      } catch {
+        // Unreachable or errored — skip silently; probed again next boot.
+      }
+    }),
+  );
 }

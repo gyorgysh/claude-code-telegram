@@ -26,6 +26,26 @@ MIN_NODE=20
 
 PANEL_PORT_CHOSEN=""
 PANEL_TOKEN_CHOSEN=""
+SERVICE_MODE=""   # "1" once the bot is installed as a running service
+
+# Open a URL in the user's default browser, best-effort. Returns non-zero
+# silently if no opener is available (headless box, SSH session, …).
+open_url() {
+  local url="$1"
+  if [ "$OS" = "mac" ] && command -v open >/dev/null 2>&1; then
+    open "$url" >/dev/null 2>&1 && return 0
+  elif command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$url" >/dev/null 2>&1 && return 0
+  fi
+  return 1
+}
+
+# Compose the panel login URL (token in the query — the SPA consumes it on first
+# load, then strips it from the address bar). Empty when the panel is disabled.
+panel_login_url() {
+  [ -n "$PANEL_PORT_CHOSEN" ] || return 0
+  printf 'http://127.0.0.1:%s/?token=%s' "$PANEL_PORT_CHOSEN" "$PANEL_TOKEN_CHOSEN"
+}
 
 # --- pretty output ----------------------------------------------------------
 if [ -t 1 ]; then
@@ -611,6 +631,7 @@ choose_run_mode() {
   if [ "$mode" = "service" ]; then
     say "Installing as a service…"
     ( cd "$APP_DIR" && ./scripts/install-service.sh )
+    SERVICE_MODE=1
   else
     cat <<EOF
 
@@ -628,19 +649,49 @@ EOF
   fi
 }
 
+# When the panel is enabled and the bot was installed as a service, wait for the
+# panel port to come up, then open the one-click login URL in the default
+# browser so the user lands logged-in. Best-effort and only when interactive.
+open_panel() {
+  [ -n "$PANEL_PORT_CHOSEN" ] || return 0
+  [ "$SERVICE_MODE" = "1" ] || return 0
+  [ -n "$TTY" ] || return 0
+
+  say "Waiting for the panel to come up…"
+  local i
+  for i in $(seq 1 20); do
+    port_free "$PANEL_PORT_CHOSEN" || break   # not free = listening
+    sleep 0.5
+  done
+
+  local url; url="$(panel_login_url)"
+  if open_url "$url"; then
+    ok "Opened the panel in your browser — you're logged in."
+  else
+    warn "Couldn't auto-open a browser. Open the login link below manually."
+  fi
+}
+
 final_notes() {
-  local panel_line=""
+  local panel_block=""
   if [ -n "$PANEL_PORT_CHOSEN" ]; then
-    panel_line="  • Open the panel:   ${B}http://127.0.0.1:${PANEL_PORT_CHOSEN}${R}  (unlock with the token saved to .env)"$'\n'
+    panel_block="
+${B}Panel login${R}
+  • One-click login link ${DIM}(token included — keep it private)${R}:
+      ${B}$(panel_login_url)${R}
+  • Or open ${B}http://127.0.0.1:${PANEL_PORT_CHOSEN}${R} and paste the token:
+      ${B}${PANEL_TOKEN_CHOSEN}${R}
+    ${DIM}(also saved as PANEL_TOKEN in ${APP_DIR}/.env)${R}
+"
   fi
 
   cat <<EOF
 
 ${GR}${B}Done.${R} MyHQ is installed at ${B}${APP_DIR}${R}.
-
+${panel_block}
 ${B}Next steps${R}
   • If you didn't log in or set an API key: ${B}claude setup-token${R}  (needs a Pro/Max plan)
-${panel_line}  • Tune the operator playbook: ${B}${APP_DIR}/work.md${R}
+  • Tune the operator playbook: ${B}${APP_DIR}/work.md${R}
   • Manage the service: ${B}${APP_DIR}/scripts/agentctl.sh${R} {start|stop|restart|status|logs}
   • Update later:        ${B}${APP_DIR}/scripts/update.sh${R}
   • Uninstall service:   ${B}${APP_DIR}/scripts/uninstall-service.sh${R}
@@ -673,6 +724,7 @@ main() {
   configure_remote_access
   configure_voice
   choose_run_mode
+  open_panel
   final_notes
 }
 

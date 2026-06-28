@@ -78,22 +78,22 @@ export function restartService(): void {
       // isn't on the service's PATH. An NSSM service is a real Windows service.
       let child;
       if (kind === "nssm") {
-        // Use sc.exe stop + start directly — no powershell, no ExecutionPolicy,
-        // no elevation prompt. sc.exe is callable from the service process itself
-        // since it already runs with service-control rights as .\admin.
-        // Chain via cmd so we can run two sc.exe calls in one detached child.
+        // sc.exe restart is the cleanest single call. Spawn cmd.exe and pass
+        // the whole command as one /c string — matching the C# pattern of
+        // cmd.exe /c <command>. This avoids argument-array splitting issues
+        // and needs no PowerShell / ExecutionPolicy.
         const cmdExe = join(sys32, "cmd.exe");
         child = spawn(
           cmdExe,
-          ["/c", `"${SC_EXE}" stop myhq & "${SC_EXE}" start myhq`],
-          { detached: true, stdio: "ignore", windowsHide: true },
+          ["/c", `sc.exe restart myhq`],
+          { detached: true, stdio: "ignore", windowsHide: true, shell: false },
         );
       } else if (kind === "task") {
         const cmdExe = join(sys32, "cmd.exe");
         child = spawn(
           cmdExe,
           ["/c", `"${SCHTASKS_EXE}" /end /tn "MyHQ Bot" & "${SCHTASKS_EXE}" /run /tn "MyHQ Bot"`],
-          { detached: true, stdio: "ignore", windowsHide: true },
+          { detached: true, stdio: "ignore", windowsHide: true, shell: false },
         );
       } else {
         log.error("Service restart failed: no Windows service or scheduled task found");

@@ -78,10 +78,14 @@ export function restartService(): void {
       // isn't on the service's PATH. An NSSM service is a real Windows service.
       let child;
       if (kind === "nssm") {
-        const psExe = join(sys32, "WindowsPowerShell", "v1.0", "powershell.exe");
+        // Use sc.exe stop + start directly — no powershell, no ExecutionPolicy,
+        // no elevation prompt. sc.exe is callable from the service process itself
+        // since it already runs with service-control rights as .\admin.
+        // Chain via cmd so we can run two sc.exe calls in one detached child.
+        const cmdExe = join(sys32, "cmd.exe");
         child = spawn(
-          psExe,
-          ["-NoProfile", "-Command", "Restart-Service -Name myhq -Force"],
+          cmdExe,
+          ["/c", `"${SC_EXE}" stop myhq & "${SC_EXE}" start myhq`],
           { detached: true, stdio: "ignore", windowsHide: true },
         );
       } else if (kind === "task") {

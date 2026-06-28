@@ -124,7 +124,10 @@ class SelfUpdateManager {
   private build(): Promise<{ ok: boolean; tail: string }> {
     return new Promise((resolve) => {
       const out: string[] = [];
-      const child = spawn("npm", ["run", "build"], { cwd: repoRoot });
+      // Use npm.cmd on Windows — bare "npm" fails with ENOENT in a service
+      // environment since npm ships as a .cmd shim, not a plain executable.
+      const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
+      const child = spawn(npmCmd, ["run", "build"], { cwd: repoRoot });
       const onData = (b: Buffer) => {
         for (const line of b.toString().split("\n")) if (line.trim()) out.push(line);
       };

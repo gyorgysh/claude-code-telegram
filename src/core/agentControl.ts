@@ -72,14 +72,19 @@ export function restartService(): void {
       // isn't on the service's PATH. An NSSM service is a real Windows service.
       let child;
       if (kind === "nssm") {
+        const psExe = join(
+          process.env.SystemRoot ?? "C:\\Windows",
+          "System32", "WindowsPowerShell", "v1.0", "powershell.exe",
+        );
         child = spawn(
-          "powershell.exe",
+          psExe,
           ["-NoProfile", "-Command", "Restart-Service -Name myhq -Force"],
           { detached: true, stdio: "ignore", windowsHide: true },
         );
       } else if (kind === "task") {
+        const cmdExe = join(process.env.SystemRoot ?? "C:\\Windows", "System32", "cmd.exe");
         child = spawn(
-          "cmd.exe",
+          cmdExe,
           ["/c", 'schtasks /end /tn "MyHQ Bot" & schtasks /run /tn "MyHQ Bot"'],
           { detached: true, stdio: "ignore", windowsHide: true },
         );

@@ -428,14 +428,6 @@ function WorkerWizard({
   const [created, setCreated] = useState<Set<number>>(new Set());
   const [genError, setGenError] = useState<string | null>(null);
 
-  // Prefill the working directory with the panel's default so generated configs
-  // (and the editable review step) have a valid cwd out of the box.
-  useEffect(() => {
-    api
-      .me()
-      .then((m) => setAnswers((a) => (a.cwd.trim() ? a : { ...a, cwd: m.defaultWorkdir })))
-      .catch(() => {});
-  }, []);
 
   const generate = async () => {
     if (!answers.goal.trim()) return;

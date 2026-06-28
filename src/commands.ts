@@ -23,6 +23,7 @@ import { fetchProviderModels } from "./core/providerModels.js";
 import { resolveSecret } from "./core/vault.js";
 import { tunnelManager } from "./core/tunnelManager.js";
 import { ttsEnabled, ttsSetupHint } from "./telegram/tts.js";
+import { t, langForChat, type TranslationKey } from "./telegram/i18n/index.js";
 import { log } from "./logger.js";
 
 // ---------------------------------------------------------------------------
@@ -59,7 +60,7 @@ export async function resolveModelCallback(
   if (messageId) {
     await sendModelMenu(tg, chatId, messageId).catch(() => {});
   }
-  return `Model set to ${model}`;
+  return t("cmd_model_set", langForChat(chatId), { model });
 }
 
 /** Send (or edit) the model-picker message. */
@@ -101,15 +102,12 @@ export async function sendModelMenu(
     }
   }
 
+  const lang = langForChat(chatId);
   const localSection = providerLines.length
-    ? `\n\n<b>Local / provider models</b>\nType <code>/model &lt;name&gt;</code> to switch:${providerLines.join("\n")}`
+    ? t("cmd_model_local_header", lang) + providerLines.join("\n")
     : "";
 
-  const text =
-    `🧠 <b>Model</b>\n` +
-    `Current: <code>${escapeHtml(effectiveLabel)}</code>\n\n` +
-    `Tap a shortcut or type <code>/model &lt;name&gt;</code> for any model id:` +
-    localSection;
+  const text = t("cmd_model_menu", lang, { model: escapeHtml(effectiveLabel) }) + localSection;
 
   if (editMessageId) {
     await tg
@@ -126,79 +124,35 @@ export async function sendModelMenu(
   }
 }
 
-function buildStart(firstName?: string): string {
-  const A = config.ATLAS_NAME;
-  const B = config.BRAND_NAME;
-  const hey = firstName ? `Hey ${escapeHtml(firstName)}` : "Hey";
-  return `👋 <b>${hey}! I'm ${A}, your ${B} coordinator.</b>
-
-I run as a real Claude Code agent on this machine. I can read files, write code, run commands, check services, and ship things. Replies stream live as I work. Anything that writes or executes pauses for your approval first.
-
-<b>Talk to me like a person:</b>
-<i>"What's eating all the disk space?"</i>
-<i>"Deploy the site and let me know when it's done."</i>
-<i>"Summarize any errors from the last hour of logs."</i>
-
-I coordinate a crew of specialist Leads (DevOps, Finance, Research, whatever you configure). Use /council to put a decision to a full team vote, or message a Lead directly if they have their own bot.
-
-You can send me files and photos (I see images inline) and voice notes (transcribed and run as prompts).
-
-/help for the full command list.`;
+function buildStart(firstName: string | undefined, lang: string): string {
+  const greeting = firstName
+    ? t("cmd_start_greeting_named", lang, { name: escapeHtml(firstName) })
+    : t("cmd_start_greeting_anon", lang);
+  return t("cmd_start", lang, {
+    greeting,
+    agent: escapeHtml(config.ATLAS_NAME),
+    brand: escapeHtml(config.BRAND_NAME),
+  });
 }
 
-function buildHelp(): string {
-  const A = config.ATLAS_NAME;
-  return `🤖 <b>${escapeHtml(A)}: Commands</b>
-
-<b>Conversation</b>
-/new: fresh context (clear session)
-/stop: abort the running request
-
-<b>Files &amp; Git</b>
-/cd &lt;path&gt;: change working directory
-/pwd: current directory
-/projects: switch between saved working dirs
-/diff: review the working-tree diff with Commit / Discard buttons
-/commit &lt;message&gt;: stage all changes and commit
-
-<b>Autonomy</b>
-/mode supervised|standard|full|auto_until_error: approval level for this chat
-/model: switch the AI model (Claude, local, providers)
-/allow &lt;Tool&gt; · /allowed · /disallow &lt;Tool|all&gt;: persistent tool allow-rules
-
-<b>Crew</b>
-/inbox: review suggestions agents filed for you (accept → a task, or dismiss)
-/council &lt;idea&gt;: put a proposal to a full Lead council vote
-
-<b>Scheduling</b>
-/schedule add &lt;when&gt; | &lt;prompt&gt;: timed autonomous run (<code>30m</code>, <code>2h</code>, <code>HH:MM</code>)
-/schedule list · /schedule rm &lt;id&gt;
-
-<b>Info</b>
-/status: session info (cwd, model, autonomy, session id)
-/usage: plan, subscription limits, and API spend
-/update [now]: check for a new version, or apply it with <code>/update now</code>
-/restore [confirm]: reset code to the latest GitHub commit, keeping your data &amp; config
-/lang [code]: show or set response language (e.g. <code>/lang hu</code>)
-/voice [on|off]: toggle spoken voice replies (TTS)
-/help: this message
-
-Send files or photos (seen inline as vision input), or voice notes (transcribed and run as prompts).`;
+function buildHelp(lang: string): string {
+  return t("cmd_help", lang, { agent: escapeHtml(config.ATLAS_NAME) });
 }
 
 export function registerCommands(bot: Telegraf): void {
   bot.start(async (ctx) => {
-    await ctx.replyWithHTML(buildStart(ctx.from?.first_name));
+    const lang = langForChat(ctx.chat.id);
+    await ctx.replyWithHTML(buildStart(ctx.from?.first_name, lang));
   });
 
   bot.help(async (ctx) => {
-    await ctx.replyWithHTML(buildHelp());
+    await ctx.replyWithHTML(buildHelp(langForChat(ctx.chat.id)));
   });
 
   bot.command("new", async (ctx) => {
     sessions.reset(ctx.chat.id);
     log.info("Command /new", { chatId: ctx.chat.id });
-    await ctx.reply("🆕 Started a fresh conversation.");
+    await ctx.reply(t("cmd_new_done", langForChat(ctx.chat.id)));
   });
 
   bot.command("pwd", async (ctx) => {
@@ -207,21 +161,22 @@ export function registerCommands(bot: Telegraf): void {
   });
 
   bot.command("cd", async (ctx) => {
+    const lang = langForChat(ctx.chat.id);
     const s = sessions.get(ctx.chat.id);
     const arg = ctx.message.text.split(/\s+/).slice(1).join(" ").trim();
     if (!arg) {
-      await ctx.reply("Usage: /cd <path>");
+      await ctx.reply(t("cmd_cd_usage", lang));
       return;
     }
     const target = isAbsolute(arg) ? arg : resolve(s.cwd, arg);
     if (!existsSync(target) || !statSync(target).isDirectory()) {
-      await ctx.reply(`⚠️ Not a directory: ${target}`);
+      await ctx.reply(t("cmd_cd_not_dir", lang, { path: target }));
       return;
     }
     s.cwd = target;
     sessions.save();
     log.info("Command /cd", { chatId: ctx.chat.id, cwd: target });
-    await ctx.replyWithHTML(`📂 Now in <code>${target}</code>`);
+    await ctx.replyWithHTML(t("cmd_cd_done", lang, { path: target }));
   });
 
   bot.command("diff", async (ctx) => {
@@ -230,22 +185,23 @@ export function registerCommands(bot: Telegraf): void {
   });
 
   bot.command("commit", async (ctx) => {
+    const lang = langForChat(ctx.chat.id);
     const s = sessions.get(ctx.chat.id);
     const message = ctx.message.text.split(/\s+/).slice(1).join(" ").trim();
     if (!message) {
-      await ctx.reply("Usage: /commit <message>");
+      await ctx.reply(t("cmd_commit_usage", lang));
       return;
     }
     if (!(await git.isRepo(s.cwd))) {
-      await ctx.reply(`⚠️ Not a git repository: ${s.cwd}`);
+      await ctx.reply(t("cmd_commit_not_repo", lang, { cwd: s.cwd }));
       return;
     }
     const res = await git.commitAll(s.cwd, message);
     log.info("Command /commit", { chatId: ctx.chat.id, ok: res.ok });
     await ctx.replyWithHTML(
       res.ok
-        ? `✅ Committed.\n<pre>${escapeHtml(res.out)}</pre>`
-        : `⚠️ Commit failed.\n<pre>${escapeHtml(res.out)}</pre>`,
+        ? t("git_committed", lang, { out: escapeHtml(res.out) })
+        : t("git_commit_failed", lang, { out: escapeHtml(res.out) }),
     );
   });
 
@@ -255,60 +211,65 @@ export function registerCommands(bot: Telegraf): void {
   });
 
   bot.command("allow", async (ctx) => {
+    const lang = langForChat(ctx.chat.id);
     const s = sessions.get(ctx.chat.id);
     const tool = ctx.message.text.split(/\s+/)[1];
     if (!tool) {
-      await ctx.reply("Usage: /allow <Tool>  (e.g. /allow Bash, /allow Write)");
+      await ctx.reply(t("cmd_allow_usage", lang));
       return;
     }
     s.sessionAllowedTools.add(tool);
     sessions.save();
     log.info("Command /allow", { chatId: ctx.chat.id, tool });
-    await ctx.replyWithHTML(`♾️ Always allowing <b>${escapeHtml(tool)}</b> (no prompt).`);
+    await ctx.replyWithHTML(t("cmd_allow_done", lang, { tool: escapeHtml(tool) }));
   });
 
   bot.command("disallow", async (ctx) => {
+    const lang = langForChat(ctx.chat.id);
     const s = sessions.get(ctx.chat.id);
     const arg = ctx.message.text.split(/\s+/)[1];
     if (!arg) {
-      await ctx.reply("Usage: /disallow <Tool|all>");
+      await ctx.reply(t("cmd_disallow_usage", lang));
       return;
     }
     if (arg === "all") {
       s.sessionAllowedTools.clear();
       s.allowedBashCmds.clear();
       sessions.save();
-      await ctx.reply("🔒 Cleared all always-allow rules. Tools will prompt again.");
+      await ctx.reply(t("cmd_disallow_cleared", lang));
       return;
     }
     const had = s.sessionAllowedTools.delete(arg) || s.allowedBashCmds.delete(arg);
     sessions.save();
     log.info("Command /disallow", { chatId: ctx.chat.id, arg, had });
     await ctx.replyWithHTML(
-      had ? `🔒 Removed <b>${escapeHtml(arg)}</b> from always-allow.` : `Not in the allow-list: ${escapeHtml(arg)}`,
+      had
+        ? t("cmd_disallow_removed", lang, { tool: escapeHtml(arg) })
+        : t("cmd_disallow_not_found", lang, { tool: escapeHtml(arg) }),
     );
   });
 
   bot.command("allowed", async (ctx) => {
+    const lang = langForChat(ctx.chat.id);
     const s = sessions.get(ctx.chat.id);
     const tools = [...s.sessionAllowedTools];
     const cmds = [...s.allowedBashCmds];
     if (tools.length === 0 && cmds.length === 0) {
-      await ctx.replyWithHTML(
-        "No always-allow rules. Risky tools prompt every time (safe mode).\n" +
-          "Add one with <code>/allow &lt;Tool&gt;</code> or the “Always allow” buttons.",
-      );
+      await ctx.replyWithHTML(t("cmd_allowed_empty", lang));
       return;
     }
+    const toolList = tools.map((tool) => `<code>${escapeHtml(tool)}</code>`).join(", ");
+    const cmdList = cmds.map((c) => `<code>${escapeHtml(c)}</code>`).join(", ");
     await ctx.replyWithHTML(
-      `<b>♾️ Always allowed (no prompt)</b>\n` +
-        (tools.length ? `Tools: ${tools.map((t) => `<code>${escapeHtml(t)}</code>`).join(", ")}\n` : "") +
-        (cmds.length ? `Bash: ${cmds.map((c) => `<code>${escapeHtml(c)}</code>`).join(", ")}\n` : "") +
-        `\nClear with <code>/disallow &lt;name&gt;</code> or <code>/disallow all</code>.`,
+      t("cmd_allowed_header", lang) + "\n" +
+        (tools.length ? t("cmd_allowed_tools", lang, { list: toolList }) + "\n" : "") +
+        (cmds.length ? t("cmd_allowed_bash", lang, { list: cmdList }) + "\n" : "") +
+        t("cmd_allowed_footer", lang),
     );
   });
 
   bot.command("schedule", async (ctx) => {
+    const lang = langForChat(ctx.chat.id);
     const s = sessions.get(ctx.chat.id);
     const raw = ctx.message.text.replace(/^\/schedule(@\S+)?\s*/, "");
     const [sub, ...rest] = raw.split(/\s+/);
@@ -317,19 +278,15 @@ export function registerCommands(bot: Telegraf): void {
     if (!sub || sub === "list") {
       const list = schedules.list(ctx.chat.id);
       if (list.length === 0) {
-        await ctx.replyWithHTML(
-          "No schedules. Add one:\n" +
-            "<code>/schedule add 2h | check disk space and warn if &gt;90%</code>\n" +
-            "<code>/schedule add 09:00 | summarize yesterday's logs</code>",
-        );
+        await ctx.replyWithHTML(t("cmd_sched_empty", lang));
         return;
       }
       const lines = list.map(
         (x) =>
-          `• <code>${x.id}</code>: ${escapeHtml(describeSpec(x.spec))}, ${x.enabled === false ? "⏸ paused" : `next ${new Date(x.nextRunAt).toLocaleString()}`}\n  <i>${escapeHtml(x.prompt.slice(0, 80))}</i>`,
+          `• <code>${x.id}</code>: ${escapeHtml(describeSpec(x.spec))}, ${x.enabled === false ? t("cmd_sched_paused", lang) : t("cmd_sched_next", lang, { when: new Date(x.nextRunAt).toLocaleString() })}\n  <i>${escapeHtml(x.prompt.slice(0, 80))}</i>`,
       );
       await ctx.replyWithHTML(
-        `<b>⏰ Schedules</b>\n${lines.join("\n")}\n\nRemove with <code>/schedule rm &lt;id&gt;</code>.`,
+        t("cmd_sched_header", lang) + "\n" + lines.join("\n") + t("cmd_sched_footer", lang),
       );
       return;
     }
@@ -338,10 +295,14 @@ export function registerCommands(bot: Telegraf): void {
     if (sub === "rm" || sub === "remove" || sub === "del") {
       const id = rest[0];
       if (!id) {
-        await ctx.reply("Usage: /schedule rm <id>");
+        await ctx.reply(t("cmd_sched_rm_usage", lang));
         return;
       }
-      await ctx.reply(schedules.remove(ctx.chat.id, id) ? `🗑 Removed ${id}.` : `No schedule with id ${id}.`);
+      await ctx.reply(
+        schedules.remove(ctx.chat.id, id)
+          ? t("cmd_sched_rm_done", lang, { id })
+          : t("cmd_sched_rm_not_found", lang, { id }),
+      );
       return;
     }
 
@@ -350,34 +311,38 @@ export function registerCommands(bot: Telegraf): void {
       const body = rest.join(" ");
       const pipe = body.indexOf("|");
       if (pipe === -1) {
-        await ctx.reply("Usage: /schedule add <when> | <prompt>\nwhen = 30m|2h|1d or HH:MM (24h, server time)");
+        await ctx.reply(t("cmd_sched_add_usage", lang));
         return;
       }
       const when = body.slice(0, pipe).trim();
       const prompt = body.slice(pipe + 1).trim();
       const spec = parseWhen(when);
       if (!spec) {
-        await ctx.reply(`Couldn't parse “${when}”. Use 30m / 2h / 1d, or HH:MM (min interval 1m).`);
+        await ctx.reply(t("cmd_sched_add_bad_when", lang, { when }));
         return;
       }
       if (!prompt) {
-        await ctx.reply("The prompt (after |) is empty.");
+        await ctx.reply(t("cmd_sched_add_empty_prompt", lang));
         return;
       }
       const sched = schedules.add(ctx.chat.id, s.cwd, prompt, spec);
       log.info("Command /schedule add", { chatId: ctx.chat.id, id: sched.id });
       await ctx.replyWithHTML(
-        `⏰ Scheduled <code>${sched.id}</code>: ${escapeHtml(describeSpec(spec))}.\n` +
-          `First run ${new Date(sched.nextRunAt).toLocaleString()} in <code>${escapeHtml(s.cwd)}</code>.\n` +
-          `<i>Runs autonomously (no approval prompts).</i>`,
+        t("cmd_sched_add_done", lang, {
+          id: sched.id,
+          desc: escapeHtml(describeSpec(spec)),
+          when: new Date(sched.nextRunAt).toLocaleString(),
+          cwd: escapeHtml(s.cwd),
+        }),
       );
       return;
     }
 
-    await ctx.reply("Usage: /schedule [list] | /schedule add <when> | <prompt> | /schedule rm <id>");
+    await ctx.reply(t("cmd_sched_usage", lang));
   });
 
   bot.command("usage", async (ctx) => {
+    const lang = langForChat(ctx.chat.id);
     const s = sessions.get(ctx.chat.id);
     const today = new Date().toISOString().slice(0, 10);
     const probe = loadProbeResult();
@@ -388,7 +353,7 @@ export function registerCommands(bot: Telegraf): void {
     const stale = probeAgeMs > 5 * 60_000;
     if (stale) void runProbe().catch(() => {});
 
-    const lines: string[] = ["<b>📊 Usage</b>"];
+    const lines: string[] = [t("cmd_usage_header", lang)];
 
     // Plan + account — probe data wins; planSettings is the fallback.
     // Track whether this is a subscription user so we skip the API budget block.
@@ -403,26 +368,26 @@ export function registerCommands(bot: Telegraf): void {
       const email = probe.account.email
         ? ` · <tg-spoiler>${escapeHtml(probe.account.email)}</tg-spoiler>`
         : "";
-      lines.push(`\n<b>Plan</b>  ${planLabel}${email}`);
+      lines.push(t("cmd_usage_plan", lang, { label: planLabel }) + email);
     } else {
       const planLabel = plan.plan === "max" ? "Claude Max" : plan.plan === "pro" ? "Claude Pro" : "API (pay-per-token)";
-      lines.push(`\n<b>Plan</b>  ${planLabel}`);
+      lines.push(t("cmd_usage_plan", lang, { label: planLabel }));
     }
 
     // Subscription limits — only shown when the OAuth probe has real data.
     if (probe?.source === "oauth" && probe.limits.length > 0) {
-      lines.push("\n<b>Subscription limits</b>");
+      lines.push(t("cmd_usage_limits_header", lang));
       for (const lim of probe.limits) {
         const msLeft = Math.max(0, new Date(lim.resetsAt).getTime() - Date.now());
         const sev = lim.severity === "critical" ? "🔴" : lim.severity === "warning" ? "🟡" : "🟢";
-        lines.push(`${sev} ${lim.label}   <b>${lim.percent}%</b>  ${fmtBar(lim.percent)}  resets in ${fmtCountdown(msLeft)}`);
+        lines.push(`${sev} ${lim.label}   <b>${lim.percent}%</b>  ${fmtBar(lim.percent)}  ${t("cmd_usage_resets_in", lang, { countdown: fmtCountdown(msLeft) })}`);
       }
     }
 
     // This chat
-    lines.push("\n<b>This chat</b>");
-    lines.push(`Today     ${fmtUsage(s.usage.daily[today])}`);
-    lines.push(`Lifetime  ${fmtUsage(s.usage.total)}`);
+    lines.push(t("cmd_usage_chat_header", lang));
+    lines.push(t("cmd_usage_today", lang, { usage: fmtUsage(s.usage.daily[today]) }));
+    lines.push(t("cmd_usage_lifetime", lang, { usage: fmtUsage(s.usage.total) }));
 
     // API budget — only for confirmed API users with a cap set.
     if (!isSubscriber && plan.monthlyCap > 0) {
@@ -435,39 +400,45 @@ export function registerCommands(bot: Telegraf): void {
       }, 0);
       const pct = Math.round((periodSpend / plan.monthlyCap) * 100);
       const daysLeft = daysUntilReset(plan.billingDay);
-      lines.push(`\n<b>API budget</b>`);
-      lines.push(`Period spend  <b>$${periodSpend.toFixed(2)}</b> / $${plan.monthlyCap.toFixed(2)} (${pct}%)  ${fmtBar(pct)}`);
-      lines.push(`Billing resets in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`);
+      lines.push(t("cmd_usage_budget_header", lang));
+      lines.push(t("cmd_usage_budget_period", lang, {
+        spend: periodSpend.toFixed(2),
+        cap: plan.monthlyCap.toFixed(2),
+        pct: String(pct),
+        bar: fmtBar(pct),
+      }));
+      lines.push(t("cmd_usage_budget_reset", lang, { days: String(daysLeft), s: daysLeft === 1 ? "" : "s" }));
     }
 
     // Activity from stats-cache
     if (probe?.activity) {
       const a = probe.activity;
-      lines.push(`\n<b>Activity</b>`);
-      lines.push(`Messages  today ${a.messageCount}  ·  this week ${a.weeklyMessageCount}`);
+      lines.push(t("cmd_usage_activity_header", lang));
+      lines.push(t("cmd_usage_activity", lang, { today: String(a.messageCount), week: String(a.weeklyMessageCount) }));
     }
 
     // Freshness footer
     if (probe) {
       const ageMin = Math.round(probeAgeMs / 60_000);
-      const aged = ageMin < 2 ? "just now" : `${ageMin}m ago`;
-      lines.push(`\n<i>Subscription data from ${aged}${stale ? " · refreshing" : ""}</i>`);
+      const aged = ageMin < 2 ? t("cmd_usage_fresh_just_now", lang) : t("cmd_usage_fresh_ago", lang, { n: String(ageMin) });
+      lines.push(t("cmd_usage_fresh", lang, { age: aged, refreshing: stale ? t("cmd_usage_refreshing", lang) : "" }));
     } else {
-      lines.push(`\n<i>No subscription data yet · checking now</i>`);
+      lines.push(t("cmd_usage_no_data", lang));
     }
 
     await ctx.replyWithHTML(lines.join("\n"));
   });
 
   bot.command("status", async (ctx) => {
+    const lang = langForChat(ctx.chat.id);
     const s = sessions.get(ctx.chat.id);
     const lines = [
       `<b>Status</b>`,
       `📂 <code>${s.cwd}</code>`,
       `🧠 ${config.ATLAS_NAME} · <code>${mainSettingsView().effectiveModel}</code>`,
       `🔒 autonomy: <b>${s.autonomy}</b>`,
-      `🔗 session: <code>${s.sessionId ?? "(new)"}</code>`,
-      `⚙️ ${s.busy ? "running…" : "idle"}`,
+      `🔗 session: <code>${s.sessionId ?? t("cmd_status_new_session", lang)}</code>`,
+      `⚙️ ${s.busy ? t("cmd_status_running", lang) : t("cmd_status_idle", lang)}`,
     ];
 
     // Remote access tunnel — show the provider + public link when it's live so
@@ -476,18 +447,20 @@ export function registerCommands(bot: Telegraf): void {
     if (tv.enabled) {
       const provider = tv.provider === "cloudflare" ? "Cloudflare" : "ngrok";
       if (tv.state === "running" && tv.url) {
-        lines.push(`🌐 remote (<b>${provider}</b>): ${escapeHtml(tv.url)}`);
+        lines.push(t("cmd_status_tunnel_running", lang, { provider, url: escapeHtml(tv.url) }));
         if (tv.basicAuth && tv.hasPassword) {
           const pw = tunnelManager.revealPassword();
           lines.push(
-            `🔑 login: <code>${escapeHtml(tv.basicAuthUser)}</code>` +
-              (pw ? ` / <code>${escapeHtml(pw)}</code>` : ""),
+            t("cmd_status_tunnel_login", lang, {
+              user: escapeHtml(tv.basicAuthUser),
+              pass: pw ? escapeHtml(pw) : "",
+            }),
           );
         }
       } else if (tv.state === "starting") {
-        lines.push(`🌐 remote (<b>${provider}</b>): starting…`);
+        lines.push(t("cmd_status_tunnel_starting", lang, { provider }));
       } else {
-        lines.push(`🌐 remote (<b>${provider}</b>): off`);
+        lines.push(t("cmd_status_tunnel_off", lang, { provider }));
       }
     }
 
@@ -495,98 +468,92 @@ export function registerCommands(bot: Telegraf): void {
   });
 
   bot.command("update", async (ctx) => {
+    const lang = langForChat(ctx.chat.id);
     const arg = ctx.message.text.split(/\s+/)[1]?.toLowerCase();
     if (isUpdating()) {
-      await ctx.reply("⏳ An update is already running.");
+      await ctx.reply(t("cmd_update_running", lang));
       return;
     }
-    await ctx.reply("🔍 Checking for updates…");
+    await ctx.reply(t("cmd_update_checking", lang));
     const st = await checkForUpdate();
     if (st.error) {
-      await ctx.reply(`⚠️ Update check failed: ${st.error}`);
+      await ctx.reply(t("cmd_update_check_failed", lang, { error: st.error }));
       return;
     }
     if (!st.available) {
-      await ctx.replyWithHTML(`✓ Already up to date (<code>${st.current}</code> on <b>${st.branch}</b>).`);
+      await ctx.replyWithHTML(t("cmd_update_up_to_date", lang, { version: st.current, branch: st.branch }));
       return;
     }
     const list = st.commits.slice(0, 10).map((c) => `• ${escapeHtml(c)}`).join("\n");
     // Only auto-run when the user confirmed with "now"; otherwise just report.
     if (arg !== "now") {
-      const busyNote = isActive()
-        ? "\n\n⚠️ <b>A task is currently running</b> — it will be stopped when the bot restarts."
-        : "";
+      const busyNote = isActive() ? t("cmd_update_busy_warn", lang) : "";
+      const restart = serviceInstalled() ? t("cmd_update_confirm_restart", lang) : "";
       await ctx.replyWithHTML(
-        `⬆️ <b>${st.behindBy}</b> update(s) available on <b>${st.branch}</b>:\n${list}` +
+        t("cmd_update_available", lang, { n: String(st.behindBy), branch: st.branch, list }) +
           busyNote +
-          `\n\nSend <code>/update now</code> to apply (fetch, rebuild${serviceInstalled() ? ", and restart" : ""}).`,
+          t("cmd_update_confirm", lang, { restart }),
       );
       return;
     }
-    await ctx.replyWithHTML(
-      `🚀 Updating (${st.behindBy} commit${st.behindBy === 1 ? "" : "s"})…\n` +
-        (serviceInstalled()
-          ? "The bot will restart when the build finishes."
-          : "Restart your manual run afterward to pick up the new code."),
-    );
+    const updateNote = serviceInstalled()
+      ? t("cmd_update_starting_service", lang)
+      : t("cmd_update_starting_manual", lang);
+    await ctx.replyWithHTML(`🚀 Updating (${st.behindBy} commit${st.behindBy === 1 ? "" : "s"})…\n${updateNote}`);
     log.warn("Update triggered from Telegram", { chatId: ctx.chat.id });
     // Fire-and-forget: on a serviced host this process is replaced mid-run.
     void runUpdate((line) => log.info(`[update] ${line}`)).then(async (r) => {
       // This only reaches the user on non-serviced hosts (we survive the run).
       if (!serviceInstalled()) {
-        await ctx.reply(r.ok ? "✓ Update complete. Restart to apply." : "⚠️ Update failed — check /logs.").catch(() => {});
+        await ctx.reply(r.ok ? t("cmd_update_done", lang) : t("cmd_update_failed", lang)).catch(() => {});
       }
     }).catch(() => {});
   });
 
   bot.command("restore", async (ctx) => {
+    const lang = langForChat(ctx.chat.id);
     const arg = ctx.message.text.split(/\s+/)[1]?.toLowerCase();
     if (isUpdating()) {
-      await ctx.reply("⏳ An update/restore is already running.");
+      await ctx.reply(t("cmd_restore_running", lang));
       return;
     }
     // Destructive: discards local code edits. Require an explicit confirm so it
     // can't fire by accident — this is the recovery path, not a routine action.
     if (arg !== "confirm" && arg !== "now") {
-      const busyNote = isActive()
-        ? "\n\n⚠️ <b>A task is currently running</b> — it will be stopped when the bot restarts."
-        : "";
+      const busyNote = isActive() ? t("cmd_update_busy_warn", lang) : "";
+      const restart = serviceInstalled() ? t("cmd_restore_confirm_restart", lang) : "";
       await ctx.replyWithHTML(
-        "♻️ <b>Restore system</b>\n" +
-          "Resets the code to the latest commit on this branch from GitHub. " +
-          "Local code changes are <b>discarded</b>; your data, secrets, config, and work.md are <b>kept</b>." +
-          busyNote +
-          `\n\nSend <code>/restore confirm</code> to proceed (fetch, rebuild${serviceInstalled() ? ", and restart" : ""}).`,
+        t("cmd_restore_info", lang) + busyNote + t("cmd_restore_confirm", lang, { restart }),
       );
       return;
     }
-    await ctx.replyWithHTML(
-      "♻️ <b>Restoring from GitHub…</b>\n" +
-        (serviceInstalled()
-          ? "The bot will restart when the build finishes."
-          : "Restart your manual run afterward to pick up the restored code."),
-    );
+    const restoreNote = serviceInstalled()
+      ? t("cmd_restore_starting_service", lang)
+      : t("cmd_restore_starting_manual", lang);
+    await ctx.replyWithHTML(t("cmd_restore_starting", lang, { note: restoreNote }));
     log.warn("Restore triggered from Telegram", { chatId: ctx.chat.id });
     // Fire-and-forget: on a serviced host this process is replaced mid-run.
     void runRestore((line) => log.info(`[restore] ${line}`)).then(async (r) => {
       if (!serviceInstalled()) {
-        await ctx.reply(r.ok ? "✓ Restore complete. Restart to apply." : "⚠️ Restore failed — check /logs.").catch(() => {});
+        await ctx.reply(r.ok ? t("cmd_restore_done", lang) : t("cmd_restore_failed", lang)).catch(() => {});
       }
     }).catch(() => {});
   });
 
   bot.command("stop", async (ctx) => {
+    const lang = langForChat(ctx.chat.id);
     const s = sessions.get(ctx.chat.id);
     if (s.busy && s.abort) {
       s.abort.abort();
       log.info("Command /stop: aborting turn", { chatId: ctx.chat.id });
-      await ctx.reply("⏹ Stopping…");
+      await ctx.reply(t("bot_stopping", lang));
     } else {
-      await ctx.reply("Nothing is running.");
+      await ctx.reply(t("bot_nothing_running", lang));
     }
   });
 
   bot.command("mode", async (ctx) => {
+    const lang = langForChat(ctx.chat.id);
     const s = sessions.get(ctx.chat.id);
     const raw = ctx.message.text.split(/\s+/)[1]?.toLowerCase();
     // Accept a few friendly aliases for the auto-until-error mode.
@@ -602,36 +569,34 @@ export function registerCommands(bot: Telegraf): void {
       s.escalation = undefined; // clear any stale escalation when switching modes
       sessions.save();
       log.info("Command /mode", { chatId: ctx.chat.id, autonomy: arg });
-      const msg: Record<string, string> = {
-        supervised: "🔒 Supervised: all tools require approval, no auto-allow.",
-        standard: "⚖️ Standard: safe tools auto-allowed, risky tools prompt.",
-        full: "⚠️ Full: all tools run without approval (autonomous).",
-        auto_until_error:
-          "🚦 Auto-until-error: Bash/Write/Edit auto-run until one fails, then the next few calls prompt before resuming.",
+      const modeKey: Record<string, TranslationKey> = {
+        supervised: "cmd_mode_supervised",
+        standard: "cmd_mode_standard",
+        full: "cmd_mode_full",
+        auto_until_error: "cmd_mode_auto_until_error",
       };
-      await ctx.reply(msg[arg]);
+      await ctx.reply(t(modeKey[arg], lang));
     } else if (arg === "safe") {
       s.autonomy = "standard";
       sessions.save();
-      await ctx.reply("⚖️ Standard mode (was: safe). Safe tools auto-allowed, risky tools prompt.");
+      await ctx.reply(t("cmd_mode_compat_safe", lang));
     } else if (arg === "auto") {
       s.autonomy = "full";
       sessions.save();
-      await ctx.reply("⚠️ Full mode (was: auto). Tools run without approval.");
+      await ctx.reply(t("cmd_mode_compat_auto", lang));
     } else {
-      await ctx.reply(
-        `Current autonomy: ${s.autonomy}. Usage: /mode supervised|standard|full|auto_until_error`,
-      );
+      await ctx.reply(t("cmd_mode_current", lang, { autonomy: s.autonomy }));
     }
   });
 
   bot.command("model", async (ctx) => {
+    const lang = langForChat(ctx.chat.id);
     const arg = ctx.message.text.split(/\s+/).slice(1).join(" ").trim();
     if (arg) {
       // /model <name> — set directly without opening the menu.
       setMainSettings({ model: arg, providerId: "" });
       log.info("Command /model set", { chatId: ctx.chat.id, model: arg });
-      await ctx.replyWithHTML(`🧠 Model set to <code>${escapeHtml(arg)}</code>. Takes effect on the next message.`);
+      await ctx.replyWithHTML(t("cmd_model_set", lang, { model: escapeHtml(arg) }));
     } else {
       log.info("Command /model", { chatId: ctx.chat.id });
       await sendModelMenu(ctx.telegram, ctx.chat.id);
@@ -641,6 +606,8 @@ export function registerCommands(bot: Telegraf): void {
   bot.command("lang", async (ctx) => {
     const s = sessions.get(ctx.chat.id);
     const arg = ctx.message.text.split(/\s+/)[1]?.toLowerCase();
+    // Use the current (pre-change) lang for error/list messages, new lang for confirmation.
+    const currentLang = langForChat(ctx.chat.id);
 
     if (!arg) {
       const current = s.language ?? config.DEFAULT_LANGUAGE;
@@ -648,28 +615,29 @@ export function registerCommands(bot: Telegraf): void {
         .map(([k, v]) => `<code>${k}</code> ${v}`)
         .join("  ·  ");
       await ctx.replyWithHTML(
-        `🌐 Current language: <b>${languageName(current)}</b> (<code>${current}</code>)\n\n` +
-          `Available:\n${list}\n\nUsage: <code>/lang hu</code>`,
+        t("cmd_lang_list", currentLang, { name: languageName(current), code: current, list }),
       );
       return;
     }
 
     if (!isValidLanguage(arg)) {
-      await ctx.reply(`Unknown language code: ${arg}. Send /lang to see available codes.`);
+      await ctx.reply(t("cmd_lang_unknown", currentLang, { code: arg }));
       return;
     }
 
     s.language = arg;
     sessions.save();
     log.info("Command /lang", { chatId: ctx.chat.id, language: arg });
+    // Confirm in the new language so the user immediately sees their choice worked.
     await ctx.reply(
       arg === "en"
-        ? `🌐 Language set to English.`
-        : `🌐 Language set to ${languageName(arg)}. The agent will respond in ${languageName(arg)} from now on.`,
+        ? t("cmd_lang_set_en", arg)
+        : t("cmd_lang_set", arg, { name: languageName(arg) }),
     );
   });
 
   bot.command("voice", async (ctx) => {
+    const lang = langForChat(ctx.chat.id);
     const s = sessions.get(ctx.chat.id);
     const arg = ctx.message.text.split(/\s+/)[1]?.toLowerCase();
     const want = arg === "on" ? true : arg === "off" ? false : !s.voiceReply;
@@ -677,13 +645,9 @@ export function registerCommands(bot: Telegraf): void {
     sessions.save();
     log.info("Command /voice", { chatId: ctx.chat.id, voiceReply: want });
     if (want && !ttsEnabled()) {
-      await ctx.reply(`🔊 Voice replies ON, but TTS isn't configured. ${ttsSetupHint()}`);
+      await ctx.reply(t("cmd_voice_on_no_tts", lang, { hint: ttsSetupHint() }));
     } else {
-      await ctx.reply(
-        want
-          ? "🔊 Voice replies ON — I'll also speak my answers as a voice message."
-          : "🔇 Voice replies OFF.",
-      );
+      await ctx.reply(want ? t("cmd_voice_on", lang) : t("cmd_voice_off", lang));
     }
   });
 
@@ -693,13 +657,14 @@ export function registerCommands(bot: Telegraf): void {
   });
 
   bot.command("council", async (ctx) => {
+    const lang = langForChat(ctx.chat.id);
     const proposal = ctx.message.text.replace(/^\/council(@\S+)?\s*/, "").trim();
     if (!proposal) {
-      await ctx.reply("Usage: /council <your idea or proposal>\nExample: /council Should we migrate the database to PostgreSQL?");
+      await ctx.reply(t("cmd_council_usage", lang));
       return;
     }
     log.info("Command /council", { chatId: ctx.chat.id, proposal: proposal.slice(0, 80) });
-    const ack = await ctx.replyWithHTML(`🗳 <b>Calling the council…</b>\n<i>${escapeHtml(proposal.slice(0, 120))}</i>`);
+    const ack = await ctx.replyWithHTML(t("cmd_council_ack", lang, { proposal: escapeHtml(proposal.slice(0, 120)) }));
     try {
       const session = await runCouncil(proposal);
       const msg = formatCouncilTelegram(session);
@@ -713,7 +678,7 @@ export function registerCommands(bot: Telegraf): void {
     } catch (err) {
       log.error("Council command failed", { chatId: ctx.chat.id, error: err instanceof Error ? err.message : String(err) });
       await ctx.telegram.deleteMessage(ctx.chat.id, ack.message_id).catch(() => {});
-      await ctx.reply("⚠️ Council vote failed. Check that you have enabled Lead workers configured.");
+      await ctx.reply(t("cmd_council_failed", lang));
     }
   });
 }

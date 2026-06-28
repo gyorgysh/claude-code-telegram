@@ -20,6 +20,7 @@ import { sendExpandableQuote, sendFormattedMarkdown } from "./send.js";
 import { normalizeAgentText, summarizeArg, summarizeInput, toolDiffMeta } from "./formatting.js";
 import { downloadIncomingFile, isViewableImage, readImageInput } from "./files.js";
 import { getLeadProtocol } from "../prompt.js";
+import { t, langForChat } from "./i18n/index.js";
 import { log } from "../logger.js";
 import { config } from "../config.js";
 import { agentUsage } from "../core/agentUsage.js";
@@ -61,12 +62,12 @@ export class LeadBot {
     const { lead, asks } = this;
     const s = sessions.get(chatId);
     if (s.busy) {
-      await tg.sendMessage(chatId, "Already working on something. /stop to cancel.").catch(() => {});
+      await tg.sendMessage(chatId, t("bot_busy", langForChat(chatId))).catch(() => {});
       return;
     }
     s.busy = true;
     s.abort = new AbortController();
-    const placeholder = await tg.sendMessage(chatId, "💭 Working on it…");
+    const placeholder = await tg.sendMessage(chatId, t("bot_working", langForChat(chatId)));
     const streamer = new TelegramStreamer(tg, chatId, placeholder.message_id);
 
     await tg.sendChatAction(chatId, "typing").catch(() => {});
@@ -158,7 +159,7 @@ export class LeadBot {
       }
     } catch (err) {
       log.error("LeadBot turn error", { leadId: lead.id, error: String(err) });
-      await tg.sendMessage(chatId, `Error: ${err instanceof Error ? err.message : String(err)}`).catch(() => {});
+      await tg.sendMessage(chatId, t("bot_action_failed", langForChat(chatId), { detail: err instanceof Error ? err.message : String(err) })).catch(() => {});
     } finally {
       clearInterval(typing);
       s.busy = false;
@@ -219,9 +220,9 @@ export class LeadBot {
       const s = sessions.get(ctx.chat.id);
       if (s.busy && s.abort) {
         s.abort.abort();
-        await ctx.reply("⏹ Stopping…");
+        await ctx.reply(t("bot_stopping", langForChat(ctx.chat.id)));
       } else {
-        await ctx.reply("Nothing is running.");
+        await ctx.reply(t("bot_nothing_running", langForChat(ctx.chat.id)));
       }
     });
 

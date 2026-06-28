@@ -55,6 +55,7 @@ import { chatBridge, mainChatId } from "./core/chatBridge.js";
 import type { ImageInput, RunResult } from "./claude/runner.js";
 import type { Autonomy } from "./session/manager.js";
 import { sessions, AUTO_UNTIL_ERROR_TOOLS } from "./session/manager.js";
+import { t, langForChat } from "./telegram/i18n/index.js";
 import { log, preview } from "./logger.js";
 import { loadProbeResult } from "./core/usageProbe.js";
 import { agentUsage } from "./core/agentUsage.js";
@@ -155,7 +156,7 @@ export function buildBot(): Telegraf {
       run();
     } catch (err) {
       log.error("File download failed", { chatId: ctx.chat.id, error: errText(err) });
-      await ctx.reply(`⚠️ Could not download file: ${errText(err)}`);
+      await ctx.reply(t("bot_dl_file_failed", langForChat(ctx.chat.id), { error: errText(err) }));
     }
   });
 
@@ -182,7 +183,7 @@ export function buildBot(): Telegraf {
       run();
     } catch (err) {
       log.error("Photo download failed", { chatId: ctx.chat.id, error: errText(err) });
-      await ctx.reply(`⚠️ Could not download image: ${errText(err)}`);
+      await ctx.reply(t("bot_dl_image_failed", langForChat(ctx.chat.id), { error: errText(err) }));
     }
   });
 
@@ -190,7 +191,7 @@ export function buildBot(): Telegraf {
   bot.on(message("voice"), async (ctx) => {
     const chatId = ctx.chat.id;
     if (!voiceEnabled()) {
-      await ctx.reply(voiceSetupHint());
+      await ctx.reply(voiceSetupHint(langForChat(chatId)));
       return;
     }
     const session = sessions.get(chatId);
@@ -205,7 +206,7 @@ export function buildBot(): Telegraf {
       await ctx.telegram.sendChatAction(chatId, "typing").catch(() => {});
       const text = await transcribeAudio(path);
       if (!text) {
-        await ctx.reply("🎤 Couldn't make out any speech in that note.");
+        await ctx.reply(t("bot_voice_no_speech", langForChat(chatId)));
         return;
       }
       log.info("Voice transcribed", { chatId, text: preview(text) });
@@ -215,7 +216,7 @@ export function buildBot(): Telegraf {
       run();
     } catch (err) {
       log.error("Voice handling failed", { chatId, error: errText(err) });
-      await ctx.reply(`⚠️ Voice transcription failed: ${errText(err)}`);
+      await ctx.reply(t("bot_voice_failed", langForChat(chatId), { error: errText(err) }));
     }
   });
 
@@ -252,7 +253,7 @@ export function buildBot(): Telegraf {
     if (sessions.get(s.chatId).busy) return false;
     log.info("Scheduled task firing", { chatId: s.chatId, id: s.id });
     await bot.telegram
-      .sendMessage(s.chatId, `⏰ <b>Scheduled task</b>\n<i>${escapeHtml(s.prompt)}</i>`, {
+      .sendMessage(s.chatId, t("bot_scheduled", langForChat(s.chatId), { prompt: escapeHtml(s.prompt) }), {
         parse_mode: "HTML",
       })
       .catch(() => {});
@@ -316,10 +317,11 @@ export function buildBot(): Telegraf {
       await sendSummaryReport(bot.telegram, chatId, r.res, `Task${by}: ${r.title}`).catch(() => {});
       return;
     }
+    const lang = langForChat(chatId);
     const notice =
       r.status === "stopped"
-        ? `⏹ Task stopped — ${r.title}${by}`
-        : `⚠️ Task failed — ${r.title}${by}${r.error ? `: ${r.error}` : ""}`;
+        ? t("bot_task_stopped", lang, { title: r.title, by })
+        : t("bot_task_failed", lang, { title: r.title, by, error: r.error ? `: ${r.error}` : "" });
     // On a genuine failure (not a manual stop), offer a one-tap Retry button
     // that resets the card to backlog and re-delegates.
     await bot.telegram
@@ -335,11 +337,13 @@ export function buildBot(): Telegraf {
   suggestions.onAdd(async (s) => {
     const n = suggestions.pendingCount();
     const cat = s.category ? ` [${s.category}]` : "";
-    const text =
-      `💡 New inbox suggestion from <b>${escapeHtml(s.fromAgentName)}</b>${escapeHtml(cat)}\n` +
-      `${escapeHtml(s.title)}\n\n` +
-      `${n} pending — review with /inbox`;
     for (const chatId of alertTargets) {
+      const text = t("bot_inbox_suggestion", langForChat(chatId), {
+        agent: escapeHtml(s.fromAgentName),
+        category: escapeHtml(cat),
+        title: escapeHtml(s.title),
+        count: n,
+      });
       await bot.telegram.sendMessage(chatId, text, { parse_mode: "HTML" }).catch(() => {});
     }
   });
@@ -380,7 +384,7 @@ function runUserPrompt(
     const session = sessions.get(chatId);
     session.busy = false;
     session.abort = undefined;
-    void tg.sendMessage(chatId, friendlyError(err)).catch(() => {});
+    void tg.sendMessage(chatId, friendlyError(err, langForChat(chatId))).catch(() => {});
     log.error("Turn failed", { chatId, error: errText(err) });
   });
 }
@@ -402,7 +406,7 @@ async function handleUserPrompt(
   if (autonomous) sessions.markSeen(chatId);
   if (session.busy) {
     log.info("Prompt rejected — chat busy", { chatId });
-    await tg.sendMessage(chatId, "⏳ Still working on the previous request. Send /stop to cancel.");
+    await tg.sendMessage(chatId, t("bot_busy", langForChat(chatId)));
     return;
   }
   // Per-chat turn rate limit (SEC): an allow-listed user mustn't be able to spawn
@@ -412,7 +416,7 @@ async function handleUserPrompt(
     const waitS = Math.ceil(turnLimiter.retryAfterMs(chatId) / 1000);
     log.info("Prompt rejected — rate limited", { chatId, retryAfterS: waitS });
     await tg
-      .sendMessage(chatId, `🐢 Slow down — I'm still catching up. Try again in ~${waitS}s.`)
+      .sendMessage(chatId, t("bot_rate_limited", langForChat(chatId), { seconds: waitS }))
       .catch(() => {});
     return;
   }
@@ -438,7 +442,7 @@ async function handleUserPrompt(
   session.busy = true;
   session.abort = new AbortController();
 
-  const ack = await tg.sendMessage(chatId, "💭 Working on it…").catch(() => undefined);
+  const ack = await tg.sendMessage(chatId, t("bot_working", langForChat(chatId))).catch(() => undefined);
   let placeholderId: number | undefined;
 
   let streamer: Streamer;
@@ -455,7 +459,7 @@ async function handleUserPrompt(
   } else if (ack) {
     streamer = new TelegramStreamer(tg, chatId, ack.message_id);
   } else {
-    const placeholder = await tg.sendMessage(chatId, "💭 Working on it…");
+    const placeholder = await tg.sendMessage(chatId, t("bot_working", langForChat(chatId)));
     streamer = new TelegramStreamer(tg, chatId, placeholder.message_id);
   }
 
@@ -811,13 +815,13 @@ async function handleUserPrompt(
       log.info("Turn aborted by loop guard", { chatId, ms: Date.now() - startedAt });
     } else if (stopped) {
       log.info("Turn stopped by user", { chatId, ms: Date.now() - startedAt });
-      await tg.sendMessage(chatId, "⏹ Stopped.").catch(() => {});
+      await tg.sendMessage(chatId, t("bot_stopped", langForChat(chatId))).catch(() => {});
     } else {
       log.error("Turn errored", { chatId, ms: Date.now() - startedAt, error: errText(err) });
-      await tg.sendMessage(chatId, friendlyError(err)).catch(() => {});
+      await tg.sendMessage(chatId, friendlyError(err, langForChat(chatId))).catch(() => {});
     }
     if (mirror) {
-      chatBridge.mirrorEnd(mirrorMsgId, mirrorText || (stopped ? "Stopped." : friendlyError(err)), {
+      chatBridge.mirrorEnd(mirrorMsgId, mirrorText || (stopped ? t("bot_stopped_plain", langForChat(chatId)) : friendlyError(err, langForChat(chatId))), {
         error: true,
       });
     }
@@ -865,13 +869,14 @@ async function sendSummaryReport(
   res: RunResult,
   heading?: string,
 ): Promise<void> {
-  const summary = (res.text ?? "").trim() || "Done.";
+  const lang = langForChat(chatId);
+  const summary = (res.text ?? "").trim() || t("bot_done", lang);
   const body = heading ? `**${heading}**\n\n${summary}` : summary;
   const parts: string[] = [];
   const tools = res.toolCalls?.length ?? 0;
-  if (tools > 0) parts.push(`${tools} tool call${tools === 1 ? "" : "s"}`);
+  if (tools > 0) parts.push(t(tools === 1 ? "bot_tool_calls_one" : "bot_tool_calls_many", lang, { n: tools }));
   if (typeof res.durationMs === "number") parts.push(fmtDuration(res.durationMs));
-  const footer = parts.length ? `✅ Report · ${parts.join(" · ")}` : "✅ Report";
+  const footer = parts.length ? t("bot_report_with", lang, { parts: parts.join(" · ") }) : t("bot_report", lang);
   // Render through the same path as the streamed reply so headings/lists/bold
   // look the way the transcript did (the HTML path leaves `#`/`-` literal).
   if (config.STREAM_MODE === "rich") {
@@ -920,48 +925,48 @@ function fmtCountdown(ms: number): string {
  * explain an otherwise-opaque process exit); the lenient form also surfaces the
  * soonest non-zero limit (used when the error text already says "limit").
  */
-function usageLimitMessage(strict: boolean): string | null {
+function usageLimitMessage(strict: boolean, lang?: string): string | null {
   const probe = loadProbeResult();
   const now = Date.now();
   const exhausted = (probe?.limits ?? []).filter((l) => l.percent >= 100);
   const nearest = exhausted.sort((a, b) => a.resetsInMs - b.resetsInMs)[0];
   if (nearest) {
     const msLeft = Math.max(0, new Date(nearest.resetsAt).getTime() - now);
-    return `📊 ${nearest.label} usage limit reached. Resets in ${fmtCountdown(msLeft)}.`;
+    return t("bot_usage_reached", lang, { label: nearest.label, countdown: fmtCountdown(msLeft) });
   }
   if (strict) return null;
   const soonest = (probe?.limits ?? []).filter((l) => l.percent > 0).sort((a, b) => a.resetsInMs - b.resetsInMs)[0];
   if (soonest) {
     const msLeft = Math.max(0, new Date(soonest.resetsAt).getTime() - now);
-    return `📊 Usage limit exhausted. ${soonest.label} resets in ${fmtCountdown(msLeft)}.`;
+    return t("bot_usage_exhausted_label", lang, { label: soonest.label, countdown: fmtCountdown(msLeft) });
   }
-  return "📊 Usage limit exhausted. Wait for the limit to reset, then retry.";
+  return t("bot_usage_exhausted", lang);
 }
 
-function friendlyError(err: unknown): string {
+function friendlyError(err: unknown, lang?: string): string {
   const raw = errText(err);
   const low = raw.toLowerCase();
   if (/\b429\b|rate.?limit/.test(low)) {
-    return "⏳ Rate limited by the API. Give it a moment and try again.";
+    return t("bot_err_rate_limited", lang);
   }
   if (/credit balance|insufficient|out of credit|quota|usage limit|limit reached|too low|daily.*limit|weekly.*limit|limit.*exceeded|reached.*limit/.test(low)) {
-    return usageLimitMessage(false)!;
+    return usageLimitMessage(false, lang)!;
   }
   if (/\b529\b|overloaded/.test(low)) {
-    return "🌀 The API is overloaded right now. Try again shortly.";
+    return t("bot_err_overloaded", lang);
   }
   if (/\b401\b|unauthorized|authentication|invalid.{0,12}api.?key|oauth|not logged in|login/.test(low)) {
-    return "🔑 Authentication failed. Check ANTHROPIC_API_KEY or re-run the `claude` CLI login, then restart.";
+    return t("bot_err_auth", lang);
   }
-  if (/abort/.test(low)) return "⏹ Stopped.";
+  if (/abort/.test(low)) return t("bot_stopped", lang);
   // A non-zero CLI exit ("process exited with code 1") is often an opaque proxy
   // for a usage limit the SDK didn't spell out. If the live probe shows a limit
   // sitting at 100%, that's almost certainly the cause — say so instead of the
   // generic failure, so the user knows to wait for the reset rather than retry.
   if (/exited with code|exit code|process (?:exited|failed)|non-?zero/.test(low)) {
-    const usage = usageLimitMessage(true);
+    const usage = usageLimitMessage(true, lang);
     if (usage) return usage;
   }
   const detail = raw.length > 600 ? raw.slice(0, 600) + "…" : raw;
-  return `⚠️ That action failed.\n\n${detail}`;
+  return t("bot_action_failed", lang, { detail });
 }

@@ -39,6 +39,8 @@ export interface PersistedSession {
   autonomy: Autonomy;
   /** BCP 47 language tag the agent will respond in (e.g. "en", "hu"). */
   language?: string;
+  /** When true, the final reply is also spoken back as a voice message. */
+  voiceReply?: boolean;
   /** Tools always allowed without prompting (persistent middle tier). */
   allowedTools: string[];
   /** Bash leading-commands always allowed without prompting (e.g. "git", "ls"). */
@@ -154,6 +156,7 @@ function normalize(s: PersistedSession & { mode?: string }): PersistedSession {
     cwd: s.cwd,
     autonomy,
     language: typeof s.language === "string" ? s.language : undefined,
+    voiceReply: s.voiceReply === true ? true : undefined,
     allowedTools: Array.isArray(s.allowedTools) ? s.allowedTools : [],
     allowedBashCmds: Array.isArray(s.allowedBashCmds) ? s.allowedBashCmds : [],
     projects: Array.isArray(s.projects) ? s.projects : [],

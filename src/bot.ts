@@ -32,6 +32,7 @@ import {
   maybeOfferResume,
 } from "./telegram/resumePrompt.js";
 import { transcribeAudio, voiceEnabled, voiceSetupHint } from "./telegram/voice.js";
+import { sendVoiceReply, ttsEnabled } from "./telegram/tts.js";
 import { schedules, type ScheduleRunner } from "./schedule/manager.js";
 import { heartbeat } from "./core/heartbeat.js";
 import { taskDelegator } from "./core/taskRunner.js";
@@ -758,16 +759,24 @@ async function handleUserPrompt(
       // (the full transcript as a log), then send the short reply line as a
       // normal chat message so the conversation stays clean.
       const splitIdx = res.text.lastIndexOf("\n---\n");
+      let spokenText = res.text;
       if (splitIdx !== -1) {
         const bulk = res.text.slice(0, splitIdx).trim();
         const reply = res.text.slice(splitIdx + 5).trim();
         if (bulk && reply) {
+          spokenText = reply; // speak only the closing line, not the work log
           for (const id of streamer.persistedMessageIds()) {
             await tg.deleteMessage(chatId, id).catch(() => {});
           }
           await sendExpandableQuote(tg, chatId, bulk).catch(() => {});
           await sendFormattedMarkdown(tg, chatId, reply).catch(() => {});
         }
+      }
+      // Spoken reply: if this chat opted into voice replies and TTS is
+      // configured, send the answer back as a Telegram voice message too.
+      if (!autonomous && session.voiceReply && ttsEnabled()) {
+        await tg.sendChatAction(chatId, "record_voice").catch(() => {});
+        await sendVoiceReply(tg, chatId, spokenText);
       }
     }
 

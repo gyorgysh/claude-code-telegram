@@ -125,6 +125,18 @@ const schema = z.object({
   VOSK_MODEL_PATH: z.string().optional(),
   // ffmpeg binary used to decode OGG/Opus voice notes to 16kHz mono PCM.
   FFMPEG_PATH: z.string().min(1).default("ffmpeg"),
+  // --- Text-to-speech (spoken replies) ---
+  // Provider for spoken voice replies:
+  //   openai = OpenAI-compatible /audio/speech (OpenAI, or any compatible proxy)
+  //   piper  = fully local, offline TTS (needs PIPER_PATH + PIPER_MODEL)
+  TTS_PROVIDER: z.enum(["openai", "piper"]).default("openai"),
+  // OpenAI TTS model + voice (reuses OPENAI_API_KEY / a TTS-specific base url).
+  TTS_MODEL: z.string().min(1).default("tts-1"),
+  TTS_VOICE: z.string().min(1).default("alloy"),
+  TTS_BASE_URL: z.string().url().default("https://api.openai.com/v1"),
+  // Local Piper: path to the piper binary and an .onnx voice model.
+  PIPER_PATH: z.string().min(1).default("piper"),
+  PIPER_MODEL: z.string().optional(),
   // --- Management panel (optional embedded web UI) ---
   // The panel can read/write/run anything on the host, same as the bot, so it
   // is off by default and refuses to start without a token (see refinement).

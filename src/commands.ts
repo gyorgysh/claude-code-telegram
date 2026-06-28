@@ -22,6 +22,7 @@ import { listProviders } from "./core/providers.js";
 import { fetchProviderModels } from "./core/providerModels.js";
 import { resolveSecret } from "./core/vault.js";
 import { tunnelManager } from "./core/tunnelManager.js";
+import { ttsEnabled, ttsSetupHint } from "./telegram/tts.js";
 import { log } from "./logger.js";
 
 // ---------------------------------------------------------------------------
@@ -179,6 +180,7 @@ function buildHelp(): string {
 /update [now]: check for a new version, or apply it with <code>/update now</code>
 /restore [confirm]: reset code to the latest GitHub commit, keeping your data &amp; config
 /lang [code]: show or set response language (e.g. <code>/lang hu</code>)
+/voice [on|off]: toggle spoken voice replies (TTS)
 /help: this message
 
 Send files or photos (seen inline as vision input), or voice notes (transcribed and run as prompts).`;
@@ -665,6 +667,24 @@ export function registerCommands(bot: Telegraf): void {
         ? `🌐 Language set to English.`
         : `🌐 Language set to ${languageName(arg)}. The agent will respond in ${languageName(arg)} from now on.`,
     );
+  });
+
+  bot.command("voice", async (ctx) => {
+    const s = sessions.get(ctx.chat.id);
+    const arg = ctx.message.text.split(/\s+/)[1]?.toLowerCase();
+    const want = arg === "on" ? true : arg === "off" ? false : !s.voiceReply;
+    s.voiceReply = want || undefined;
+    sessions.save();
+    log.info("Command /voice", { chatId: ctx.chat.id, voiceReply: want });
+    if (want && !ttsEnabled()) {
+      await ctx.reply(`🔊 Voice replies ON, but TTS isn't configured. ${ttsSetupHint()}`);
+    } else {
+      await ctx.reply(
+        want
+          ? "🔊 Voice replies ON — I'll also speak my answers as a voice message."
+          : "🔇 Voice replies OFF.",
+      );
+    }
   });
 
   bot.command("inbox", async (ctx) => {

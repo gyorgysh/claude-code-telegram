@@ -67,6 +67,8 @@ export interface Session {
   escalation?: Escalation;
   /** BCP 47 language code the agent responds in (undefined = server default). */
   language?: string;
+  /** When true, the final reply is also sent back as a spoken voice message. */
+  voiceReply?: boolean;
   /** Accumulated cost/duration/turn counters (lifetime + per day). */
   usage: Usage;
 }
@@ -99,6 +101,7 @@ export class SessionManager {
         projects: p.projects,
         autonomy: p.autonomy,
         language: p.language,
+        voiceReply: p.voiceReply,
         usage: p.usage,
       });
     }
@@ -228,6 +231,7 @@ function toPersisted(s: Session): PersistedSession {
     cwd: s.cwd,
     autonomy: s.autonomy,
     language: s.language,
+    voiceReply: s.voiceReply,
     allowedTools: [...s.sessionAllowedTools],
     allowedBashCmds: [...s.allowedBashCmds],
     projects: s.projects,

@@ -78,25 +78,27 @@ export function restartService(): void {
       // isn't on the service's PATH. An NSSM service is a real Windows service.
       let child;
       if (kind === "nssm") {
-        // The service runs as .\admin which does not hold SERVICE_STOP/START
-        // rights on its own service object, so sc.exe called directly from
-        // within the process is denied. Work around it with a one-shot
-        // scheduled task that runs as SYSTEM (which always has full service
-        // control rights). schtasks /create + /run + /delete as a chain:
-        //   - /F overwrites a leftover task from a previous crash
-        //   - /RU SYSTEM so the restart runs with full SCM rights
-        //   - /SC ONCE /ST 00:00 satisfies the required trigger fields
-        //   - the task deletes itself after running (/Z ... /ET 00:01)
-        //     but we also chain a /delete at the end for reliability
-        // All via cmd /c so we stay in one detached child process.
+        // The service runs as .\admin which lacks SERVICE_STOP/START rights on
+        // its own service object, so sc.exe called directly is denied.
+        // Strategy: create a one-shot schtasks entry running as SYSTEM (which
+        // always has full SCM rights). The task issues only `sc stop myhq` —
+        // NOT restart — because NSSM is configured with AppExit Default Restart
+        // and will bring the service back up automatically after the stop. This
+        // avoids the race where sc.exe restart kills our process before it can
+        // issue the start, leaving the service permanently stopped.
+        // The task waits 3 s (ping delay) before stopping so our process has
+        // time to finish the HTTP response, then NSSM restarts it ~5 s later.
         const taskName = "MyhqRestart";
         const cmdExe = join(sys32, "cmd.exe");
         const scPath = join(sys32, "sc.exe");
+        // /TR value: ping 3-second delay, then sc stop; SYSTEM has no interactive
+        // desktop so we keep it headless (no window, no stdin).
+        const tr = `cmd /c ping -n 3 127.0.0.1 >nul & "${scPath}" stop myhq`;
         child = spawn(
           cmdExe,
           [
             "/c",
-            `"${SCHTASKS_EXE}" /create /f /tn "${taskName}" /ru SYSTEM /sc ONCE /st 00:00 /tr "${scPath} restart myhq" && "${SCHTASKS_EXE}" /run /tn "${taskName}" && ping -n 4 127.0.0.1 >nul && "${SCHTASKS_EXE}" /delete /f /tn "${taskName}"`,
+            `"${SCHTASKS_EXE}" /create /f /tn "${taskName}" /ru SYSTEM /sc ONCE /st 00:00 /tr "${tr}" && "${SCHTASKS_EXE}" /run /tn "${taskName}"`,
           ],
           { detached: true, stdio: "ignore", windowsHide: true, shell: false },
         );

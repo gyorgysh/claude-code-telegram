@@ -440,6 +440,10 @@ export const en = {
   optional: "optional",
   none: "— none —",
 
+  // App layout
+  app_open_menu: "Open menu",
+  app_footer_made_with: "Made open source with Claude & Coffee ☕",
+
   // Login
   login_title: "Control Panel",
   login_desc: "Enter the panel token to continue.",
@@ -637,6 +641,7 @@ export const en = {
   tasks_select_cancel: "Cancel",
   tasks_select_all_col: "All",
   tasks_select_none_col: "None",
+  tasks_bulk_selected: "{n} selected",
   tasks_bulk_delete: "Delete {n}",
   tasks_bulk_delete_confirm: "Delete {n} selected cards?",
   tasks_bulk_delegate: "Delegate {n}",

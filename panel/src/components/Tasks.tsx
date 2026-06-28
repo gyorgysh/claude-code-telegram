@@ -438,7 +438,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
       {selectMode ? (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-accent/30 bg-accent/5 px-3 py-2">
           <span className="text-xs text-fg-dim">
-            {selected.size} selected
+            {t("tasks_bulk_selected").replace("{n}", String(selected.size))}
           </span>
           <button
             onClick={bulkDelete}

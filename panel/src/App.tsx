@@ -193,7 +193,7 @@ export function App() {
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-surface px-4 md:hidden">
           <button
             onClick={() => setDrawer(true)}
-            aria-label="Open menu"
+            aria-label={t("app_open_menu")}
             className="text-lg text-fg-muted"
           >
             ☰
@@ -245,7 +245,7 @@ export function App() {
 
           {tab !== "chat" && tab !== "terminal" && (
           <footer className="mt-10 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-xs text-fg-faint">
-            <span>Made open source with Claude &amp; Coffee ☕</span>
+            <span>{t("app_footer_made_with")}</span>
             <span className="text-fg-faint/50">·</span>
             <a
               href="https://gyorgy.sh"

@@ -443,6 +443,10 @@ export const hu: Translations = {
   optional: "opcionális",
   none: "— nincs —",
 
+  // App elrendezés
+  app_open_menu: "Menü megnyitása",
+  app_footer_made_with: "Nyílt forráskóddal készült Claude-dal és kávéval ☕",
+
   // Bejelentkezés
   login_title: "Vezérlőpult",
   login_desc: "Add meg a panel tokent a folytatáshoz.",
@@ -641,6 +645,7 @@ export const hu: Translations = {
   tasks_select_cancel: "Mégse",
   tasks_select_all_col: "Mind",
   tasks_select_none_col: "Egyik sem",
+  tasks_bulk_selected: "{n} kijelölve",
   tasks_bulk_delete: "{n} törlése",
   tasks_bulk_delete_confirm: "Törlöd a(z) {n} kijelölt kártyát?",
   tasks_bulk_delegate: "{n} delegálása",

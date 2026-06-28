@@ -99,11 +99,25 @@ Step "npm install" { npm.cmd install --include=dev }
 Say "Building (panel UI + bot) ..."
 Step "npm run build" { npm.cmd run build }
 
-# Restart the service if one is installed. The bot process IS the service, so this
-# kills the current run near the end; the service manager completes the restart.
-# Use the built-in Get-Service/Restart-Service (an NSSM service is a real Windows
-# service) instead of the `nssm` CLI - nssm is usually NOT on the service's
-# restricted PATH, which is why this step used to silently no-op.
+# Restart the service if one is installed.
+#
+# IMPORTANT: when launched by the in-panel updater (MYHQ_INPANEL=1) this script
+# runs AS the service account (.\admin), which does NOT hold service-control
+# rights on its own service object — so Restart-Service / sc.exe are denied
+# ("The system cannot find the file specified." / access denied). In that case
+# we do NOT restart here. The bot process self-exits after we return, and the
+# service manager (NSSM AppExit Default Restart, or the task's RestartCount)
+# relaunches it with the new code. This is the privilege-free path.
+#
+# When run by hand from an elevated terminal (MYHQ_INPANEL unset) Restart-Service
+# works, so we do it here for convenience.
+$inPanel = $env:MYHQ_INPANEL -eq "1"
+
+if ($inPanel) {
+    Ok "Build complete. The bot will exit so the service manager relaunches it."
+    exit 0
+}
+
 $restarted = $false
 if (Get-Service -Name "myhq" -ErrorAction SilentlyContinue) {
     Say "Restarting the 'myhq' service ..."

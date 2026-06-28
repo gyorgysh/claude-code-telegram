@@ -1,4 +1,4 @@
-import { execFile, execFileSync, spawn } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -72,48 +72,26 @@ export function restartService(): void {
   setTimeout(() => {
     if (process.platform === "win32") {
       const kind = windowsServiceKind();
-      // Restart detached so the command survives our process being killed mid-
-      // restart; the service manager brings us back up. Use built-in service
-      // control (Restart-Service / schtasks) — NOT the `nssm` CLI, which usually
-      // isn't on the service's PATH. An NSSM service is a real Windows service.
-      let child;
+      // The service runs as .\admin, which does NOT hold SERVICE_STOP/START
+      // rights on its own service object — so every sc.exe / Restart-Service /
+      // SYSTEM-scheduled-task approach we tried was denied or raced.
+      //
+      // The robust path needs zero privileges: a process is always allowed to
+      // terminate itself, and both service managers are configured to relaunch
+      // it on exit. So we just exit, and the manager brings us back up.
       if (kind === "nssm") {
-        // The service runs as .\admin which lacks SERVICE_STOP/START rights on
-        // its own service object, so sc.exe called directly is denied.
-        // Strategy: create a one-shot schtasks entry running as SYSTEM (which
-        // always has full SCM rights). The task issues only `sc stop myhq` —
-        // NOT restart — because NSSM is configured with AppExit Default Restart
-        // and will bring the service back up automatically after the stop. This
-        // avoids the race where sc.exe restart kills our process before it can
-        // issue the start, leaving the service permanently stopped.
-        // The task waits 3 s (ping delay) before stopping so our process has
-        // time to finish the HTTP response, then NSSM restarts it ~5 s later.
-        const taskName = "MyhqRestart";
-        const cmdExe = join(sys32, "cmd.exe");
-        const scPath = join(sys32, "sc.exe");
-        // /TR value: ping 3-second delay, then sc stop; SYSTEM has no interactive
-        // desktop so we keep it headless (no window, no stdin).
-        const tr = `cmd /c ping -n 3 127.0.0.1 >nul & "${scPath}" stop myhq`;
-        child = spawn(
-          cmdExe,
-          [
-            "/c",
-            `"${SCHTASKS_EXE}" /create /f /tn "${taskName}" /ru SYSTEM /sc ONCE /st 00:00 /tr "${tr}" && "${SCHTASKS_EXE}" /run /tn "${taskName}"`,
-          ],
-          { detached: true, stdio: "ignore", windowsHide: true, shell: false },
-        );
+        // NSSM is set up with `AppExit Default Restart` (+ SCM failure actions),
+        // so a clean exit(0) is relaunched after AppRestartDelay (~5 s).
+        log.warn("Exiting for NSSM to relaunch the service");
+        process.exit(0);
       } else if (kind === "task") {
-        const cmdExe = join(sys32, "cmd.exe");
-        child = spawn(
-          cmdExe,
-          ["/c", `"${SCHTASKS_EXE}" /end /tn "MyHQ Bot" & "${SCHTASKS_EXE}" /run /tn "MyHQ Bot"`],
-          { detached: true, stdio: "ignore", windowsHide: true, shell: false },
-        );
+        // A Task Scheduler entry only auto-restarts on *failure* (RestartCount/
+        // RestartInterval), not on a clean exit — so exit non-zero to trigger it.
+        log.warn("Exiting non-zero for Task Scheduler to relaunch the task");
+        process.exit(1);
       } else {
         log.error("Service restart failed: no Windows service or scheduled task found");
-        return;
       }
-      child.unref();
       return;
     }
     const child = execFile(AGENTCTL, ["restart"], (err) => {

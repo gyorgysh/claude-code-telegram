@@ -5,6 +5,7 @@ import { repoRoot } from "../config.js";
 import { log } from "../logger.js";
 import { audit } from "./audit.js";
 import { loadJson, saveJson } from "./jsonStore.js";
+import { serviceInstalled, restartService } from "./agentControl.js";
 
 const pexec = promisify(execFile);
 const UPDATE_SH = join(repoRoot, "scripts", "update.sh");
@@ -141,12 +142,15 @@ async function runScript(
     // SIGTERM that the restart step sends to this process near the end.
     // On Windows: omit detached — Node.js 24 on Windows silently breaks the
     // stdout pipe when detached:true is set, causing zero data events and
-    // making the panel show no output. It's fine without it: update.ps1 ends
-    // with Restart-Service which kills us; NSSM (AppExit Default: Restart)
-    // brings us back, so the script doesn't need to outlive the parent.
+    // making the panel show no output. It's fine without it: the script does
+    // NOT restart the service when MYHQ_INPANEL=1 (it can't — the service
+    // account .\admin lacks service-control rights). Instead, on a successful
+    // update we self-exit below, and NSSM (AppExit Default: Restart) relaunches
+    // us with the new code, so the script doesn't need to outlive the parent.
     const child = isWin
       ? spawn(psExe, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", UPDATE_PS1], {
           cwd: repoRoot,
+          env: { ...process.env, MYHQ_INPANEL: "1" },
         })
       : spawn("bash", [UPDATE_SH], { cwd: repoRoot, detached: true });
     if (!isWin) child.unref();
@@ -167,8 +171,17 @@ async function runScript(
     });
     child.on("close", (code) => {
       updating = false;
-      onLine(code === 0 ? "✓ Update complete." : `Update exited with code ${code}.`);
-      resolve({ ok: code === 0 });
+      const ok = code === 0;
+      onLine(ok ? "✓ Update complete." : `Update exited with code ${code}.`);
+      resolve({ ok });
+      // On Windows the script no longer restarts the service itself (the service
+      // account can't), so trigger the relaunch here: restartService() exits the
+      // process and NSSM/the task brings it back up with the freshly built code.
+      // Unix already restarts inside the script, so skip it there.
+      if (ok && isWin && serviceInstalled()) {
+        onLine("Restarting to apply the update …");
+        restartService();
+      }
     });
   });
 }

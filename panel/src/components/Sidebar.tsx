@@ -33,19 +33,8 @@ type Item = { id: Tab; labelKey: TranslationKey; icon: string; hintKey?: Transla
 type Group = { headingKey: TranslationKey; items: Item[] };
 
 /**
- * Primary navigation — the 7-8 high-traffic destinations that are always
- * visible (both on the desktop sidebar and the tablet icon rail). The old
- * 22-item flat list collapsed into a 3-tier progressive-disclosure model:
- *
- *   1. PRIMARY  — always visible (this array).
- *   2. MORE     — behind the collapsible "More" expander on desktop; the
- *                 tablet icon rail hides it entirely.
- *   3. Settings — the unified Configure screen (footer), which now also hosts
- *                 Vault / Connectors / Prompt / Skills as accordion sections.
- *
- * "Command" is the merged Command Hub: a single tab whose sub-tabs are Chat and
- * Terminal (see App.tsx). Crew / Agents / Inbox keep their own entries so they
- * stay one click away.
+ * Primary navigation items surfaced in the mobile bottom bar (high-traffic,
+ * always one tap away on phones).
  */
 export const PRIMARY_NAV: Item[] = [
   { id: "health", labelKey: "nav_health", icon: "▦", hintKey: "nav_health_hint" },
@@ -57,9 +46,7 @@ export const PRIMARY_NAV: Item[] = [
 ];
 
 /**
- * Secondary navigation — lower-traffic destinations tucked behind the "More"
- * expander on the desktop sidebar (and reachable on the tablet rail / mobile
- * via the command palette and the More drawer).
+ * @deprecated Use NAV groups directly. Kept for mobile More drawer compatibility.
  */
 export const MORE_NAV: Item[] = [
   { id: "workers", labelKey: "nav_workers", icon: "◈", hintKey: "nav_workers_hint" },
@@ -72,14 +59,34 @@ export const MORE_NAV: Item[] = [
 ];
 
 /**
- * Grouped view of every nav destination, for search surfaces (command palette,
- * mobile More drawer) that want section headings. The Configure group lists the
- * settings-hosted destinations so they remain discoverable by name even though
- * they now live as accordion sections inside the unified Settings screen.
+ * Canonical three-group nav structure: Monitor / Operate / Configure.
+ * On desktop the sidebar renders all three groups with section headings.
+ * On mobile these groups feed the searchable More drawer.
  */
 export const NAV: Group[] = [
-  { headingKey: "nav_monitor", items: PRIMARY_NAV },
-  { headingKey: "nav_operate", items: MORE_NAV },
+  {
+    headingKey: "nav_monitor",
+    items: [
+      { id: "health", labelKey: "nav_health", icon: "▦", hintKey: "nav_health_hint" },
+      { id: "command", labelKey: "nav_command", icon: "❯", hintKey: "nav_command_hint" },
+      { id: "tasks", labelKey: "nav_tasks", icon: "▤", hintKey: "nav_tasks_hint" },
+      { id: "crew", labelKey: "nav_crew", icon: "⬡", hintKey: "nav_crew_hint" },
+      { id: "inbox", labelKey: "nav_inbox", icon: "✉", hintKey: "nav_inbox_hint" },
+      { id: "memory", labelKey: "nav_memory", icon: "❋", hintKey: "nav_memory_hint" },
+    ],
+  },
+  {
+    headingKey: "nav_operate",
+    items: [
+      { id: "workers", labelKey: "nav_workers", icon: "◈", hintKey: "nav_workers_hint" },
+      { id: "schedules", labelKey: "nav_schedules", icon: "◷", hintKey: "nav_schedules_hint" },
+      { id: "heartbeat", labelKey: "nav_heartbeat", icon: "♡", hintKey: "nav_heartbeat_hint" },
+      { id: "sessions", labelKey: "nav_sessions", icon: "◇", hintKey: "nav_sessions_hint" },
+      { id: "usage", labelKey: "nav_usage", icon: "↗", hintKey: "nav_usage_hint" },
+      { id: "logs", labelKey: "nav_logs", icon: "≣", hintKey: "nav_logs_hint" },
+      { id: "setup", labelKey: "nav_setup", icon: "✎", hintKey: "nav_setup_hint" },
+    ],
+  },
   {
     headingKey: "nav_configure",
     items: [
@@ -411,22 +418,7 @@ export function Sidebar({
   void chatEnabled; // Command Hub stays visible regardless; see App.tsx routing.
   const labelCls = expanded ? "inline" : "hidden lg:inline";
 
-  // "More" expander state. Persisted so the user's preference sticks, and
-  // force-open whenever the active tab lives in the secondary set so the
-  // highlighted item is never hidden behind a collapsed expander.
-  const activeInMore = MORE_NAV.some((i) => i.id === tab);
-  const [moreOpen, setMoreOpen] = useState(
-    () => localStorage.getItem("cct.nav.more") === "1",
-  );
-  useEffect(() => {
-    if (activeInMore) setMoreOpen(true);
-  }, [activeInMore]);
-  const toggleMore = () =>
-    setMoreOpen((o) => {
-      const next = !o;
-      localStorage.setItem("cct.nav.more", next ? "1" : "0");
-      return next;
-    });
+  // No More/Less toggle on desktop — all groups are always visible.
 
   // One nav row. `active` highlights the current tab; the Command Hub also
   // highlights when one of its legacy children (chat/terminal) is the route.
@@ -477,26 +469,21 @@ export function Sidebar({
         </span>
       </div>
 
-      {/* Nav — 3-tier progressive disclosure: primary items always visible,
-          secondary items behind a "More" expander. The expander itself is
-          hidden on the tablet icon rail (md, not expanded), which shows only
-          the primary set; the full set is reachable there via the palette. */}
-      <nav className="flex-1 overflow-y-auto px-2 py-4">
-        <div className="space-y-0.5">{PRIMARY_NAV.map(navButton)}</div>
-
-        <div className={expanded ? "mt-2" : "mt-2 hidden lg:block"}>
-          <button
-            onClick={toggleMore}
-            aria-expanded={moreOpen}
-            className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-fg-dim transition-colors hover:bg-surface-2 hover:text-fg"
-          >
-            <span className="w-4 shrink-0 text-center">{moreOpen ? "▾" : "▸"}</span>
-            <span className={`flex-1 text-left ${labelCls}`}>
-              {moreOpen ? t("nav_more_collapse") : t("nav_more_expand")}
-            </span>
-          </button>
-          {moreOpen && <div className="mt-0.5 space-y-0.5">{MORE_NAV.map(navButton)}</div>}
-        </div>
+      {/* Nav — all three groups always visible on desktop with section
+          headings. On the narrow tablet icon rail (md, not expanded) only
+          icons render; labels are hidden via labelCls. Mobile uses the
+          bottom nav + More drawer instead. */}
+      <nav className="flex-1 overflow-y-auto px-2 py-3">
+        {NAV.map((group, gi) => (
+          <div key={group.headingKey} className={gi > 0 ? "mt-4" : ""}>
+            <div
+              className={`mono mb-1 px-2.5 text-[10px] font-medium uppercase tracking-widest text-fg-faint ${labelCls}`}
+            >
+              {t(group.headingKey)}
+            </div>
+            <div className="space-y-0.5">{group.items.map(navButton)}</div>
+          </div>
+        ))}
       </nav>
 
       {/* Footer controls */}

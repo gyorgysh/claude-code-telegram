@@ -306,6 +306,11 @@ const SECRET_PATTERNS: Array<[RegExp, string]> = [
   [/\b(bearer)\s+[A-Za-z0-9._~+/=-]{8,}/gi, `$1 ${REDACTED}`],
   // Known key prefixes (Anthropic, OpenAI, generic sk-/pk-).
   [/\b(sk-ant-|sk-|pk-)[A-Za-z0-9._-]{8,}/gi, `$1${REDACTED}`],
+  // GitHub tokens (personal/oauth/server/refresh/fine-grained) and npm tokens.
+  [/\b(gh[pousr]_|github_pat_)[A-Za-z0-9_]{16,}/g, `$1${REDACTED}`],
+  [/\b(npm_)[A-Za-z0-9]{16,}/g, `$1${REDACTED}`],
+  // JWTs (header.payload.signature, base64url) — e.g. a Bearer eyJ… token.
+  [/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, REDACTED],
   [/\b\d{6,}:[A-Za-z0-9_-]{30,}\b/g, REDACTED], // telegram bot token id:secret
   // key/value pairs: token=…, "api_key":"…", password: "…". Optional quotes around
   // the key and (independently) the value, so it catches both shell and JSON forms.

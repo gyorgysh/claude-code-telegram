@@ -180,7 +180,7 @@ export function TerminalView({ onAuthError }: { onAuthError: () => void }) {
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col overflow-hidden rounded-xl border border-line bg-base">
+    <div className="flex h-[calc(100dvh-8rem)] flex-col overflow-hidden rounded-xl border border-line bg-base">
       {/* Header bar */}
       <div className="flex items-center gap-2 border-b border-line px-3 py-1.5">
         <span className="mono text-xs text-fg-dim">{status.shell}</span>
@@ -213,7 +213,7 @@ function LockedTerminal({ shell, label }: { shell: string; label: string }) {
     "$ ▍",
   ];
   return (
-    <div className="relative h-[calc(100vh-16rem)] min-h-64 overflow-hidden rounded-xl border border-line bg-base">
+    <div className="relative h-[calc(100dvh-16rem)] min-h-64 overflow-hidden rounded-xl border border-line bg-base">
       {/* Header bar mirrors the live terminal's */}
       <div className="flex items-center gap-2 border-b border-line px-3 py-1.5">
         <span className="mono text-xs text-fg-faint">{shell}</span>

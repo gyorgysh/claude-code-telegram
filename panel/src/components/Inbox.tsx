@@ -4,6 +4,7 @@ import { useI18n } from "../lib/useI18n.ts";
 import type { TranslationKey } from "../i18n/en.ts";
 import { relTime } from "../lib/format.ts";
 import { useSuggestionEvents } from "../lib/useSuggestionEvents.ts";
+import { useListAnimate } from "../lib/useListAnimate.ts";
 import { Badge, Button, Card, Empty, InfoCard } from "./ui.tsx";
 import { InboxArt } from "./onboarding.tsx";
 
@@ -24,6 +25,7 @@ export function InboxView({ onAuthError }: { onAuthError: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [listRef] = useListAnimate();
 
   const load = () =>
     api
@@ -87,7 +89,6 @@ export function InboxView({ onAuthError }: { onAuthError: () => void }) {
   if (error) return <Empty>Failed to load: {error}</Empty>;
 
   const items = all.filter((s) => s.status === filter);
-  const pendingCount = all.filter((s) => s.status === "pending").length;
 
   return (
     <div className="space-y-6">
@@ -135,16 +136,17 @@ export function InboxView({ onAuthError }: { onAuthError: () => void }) {
         })}
       </div>
 
-      {filter === "pending" && pendingCount === 0 ? (
+      {items.length === 0 ? (
         <Card>
-          <Empty icon={<InboxArt />} title={t("inbox_empty_pending")} />
-        </Card>
-      ) : items.length === 0 ? (
-        <Card>
-          <Empty>{t("inbox_empty")}</Empty>
+          <Empty
+            icon={<InboxArt />}
+            title={t(`inbox_empty_${filter}` as TranslationKey)}
+          >
+            {t(`inbox_empty_${filter}_desc` as TranslationKey)}
+          </Empty>
         </Card>
       ) : (
-        <div className="space-y-2">
+        <div ref={listRef} className="space-y-2">
           {items.map((s) => (
             <SuggestionCard
               key={s.id}

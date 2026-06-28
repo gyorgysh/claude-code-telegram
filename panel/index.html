@@ -2,21 +2,18 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#5d62d1" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MyHQ" />
     <title>MyHQ</title>
-    <script>
-      // Apply the saved theme before first paint to avoid a flash.
-      // Defaults to dark when nothing is stored.
-      (function () {
-        var t = "dark";
-        try {
-          var s = localStorage.getItem("cct.panel.theme");
-          if (s === "light" || s === "dark" || s === "matrix") t = s;
-        } catch (e) {}
-        document.documentElement.setAttribute("data-theme", t);
-      })();
-    </script>
+    <!-- Theme is applied by an external script (not inline) so the panel can
+         enforce a strict CSP without script-src 'unsafe-inline'. -->
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

@@ -25,8 +25,10 @@ import { WorkersView } from "./components/Workers.tsx";
 import { LogsView } from "./components/Logs.tsx";
 import { HeartbeatView_ } from "./components/Heartbeat.tsx";
 import { SettingsView } from "./components/Settings.tsx";
+import { SetupView } from "./components/Setup.tsx";
 import { TerminalView } from "./components/Terminal.tsx";
 import { RemoteAccessView } from "./components/RemoteAccess.tsx";
+import { ToastViewport } from "./components/ui.tsx";
 
 /** Tab from the URL path (e.g. /status), falling back to health. */
 function tabFromPath(): Tab | "settings" {
@@ -117,7 +119,7 @@ export function App() {
   return (
     <div className="flex min-h-full">
       {/* Desktop / tablet sidebar — icon rail on md, full on lg. */}
-      <aside className="sticky top-0 hidden h-screen w-16 shrink-0 border-r border-line md:block lg:w-60">
+      <aside className="sticky top-0 hidden h-dvh w-16 shrink-0 border-r border-line md:block lg:w-60">
         <Sidebar
           tab={tab}
           onSelect={select}
@@ -175,6 +177,7 @@ export function App() {
         </header>
 
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-24 pt-6 sm:px-6 md:pb-6">
+          {tab === "setup" && <SetupView onAuthError={onAuthError} onGoto={select} />}
           {tab === "chat" && <ChatView onAuthError={onAuthError} />}
           {tab === "terminal" && <TerminalView onAuthError={onAuthError} />}
           {tab === "crew" && <CrewView onAuthError={onAuthError} />}
@@ -231,6 +234,9 @@ export function App() {
         chatEnabled={chatEnabled}
         inboxPending={inboxPending}
       />
+
+      {/* Global toast stack (success / error / info), shared across all views. */}
+      <ToastViewport />
     </div>
   );
 }

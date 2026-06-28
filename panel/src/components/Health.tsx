@@ -13,7 +13,7 @@ import { Bar, Card, Button, Empty, Metric } from "./ui.tsx";
 import { bytes, bytesPerSec, duration, relTime, friendlyProbeError } from "../lib/format.ts";
 import { useI18n } from "../lib/useI18n.ts";
 import type { TranslationKey } from "../i18n/en.ts";
-import { GettingStarted } from "./onboarding.tsx";
+import { GettingStarted, HowItConnects } from "./onboarding.tsx";
 import type { Tab } from "./Sidebar.tsx";
 
 type ConnStatus = "connecting" | "live" | "down";
@@ -70,6 +70,10 @@ export function HealthView({ onGoto }: { onGoto?: (t: Tab) => void }) {
     <div className="space-y-4">
       {/* First-run getting-started checklist (self-dismisses once configured) */}
       {onGoto && <GettingStarted onGoto={onGoto} />}
+
+      {/* Orientation: how a message flows through Atlas and where Leads/Skills/Memory plug in.
+          Persists (collapsed) as a "?" help panel even after onboarding is done. */}
+      <HowItConnects />
 
       {/* Host info bar */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg-muted">

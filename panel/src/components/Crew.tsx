@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type Worker, type MainAgent, type DelegationRecord } from "../api.ts";
-import { Card, Empty, Badge, InfoCard } from "./ui.tsx";
+import { Card, Empty, Badge, InfoCard, Skeleton } from "./ui.tsx";
+import { CrewArt } from "./onboarding.tsx";
 import { relTime } from "../lib/format.ts";
 import { useI18n } from "../lib/useI18n.ts";
 
@@ -35,6 +36,7 @@ export function CrewView({ onAuthError }: { onAuthError: () => void }) {
   const [voteElapsed, setVoteElapsed] = useState(0);
   const [voteError, setVoteError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -49,7 +51,8 @@ export function CrewView({ onAuthError }: { onAuthError: () => void }) {
         setDelegations(d.delegations);
         setCouncil(c.sessions as unknown as CouncilSession[]);
       })
-      .catch((e) => setError(String(e)));
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoaded(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -155,6 +158,22 @@ export function CrewView({ onAuthError }: { onAuthError: () => void }) {
         extra={t("crew_listening")}
         extraHref={atlas?.botUsername ? `https://t.me/${atlas.botUsername}` : undefined}
       />
+
+      {/* Skeleton lead rows while the initial fetch is in flight */}
+      {!loaded &&
+        Array.from({ length: 3 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-3"
+            style={{ marginLeft: "calc(2 * var(--crew-indent))" }}
+          >
+            <Skeleton className="h-4 w-4 shrink-0 rounded-full" />
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-3 w-48" />
+            </div>
+          </div>
+        ))}
 
       {/* Leads and their Assistants */}
       {leads.length > 0 && (
@@ -290,7 +309,9 @@ export function CrewView({ onAuthError }: { onAuthError: () => void }) {
         </div>
 
         {council.length === 0 ? (
-          <Empty>{t("crew_council_empty")}</Empty>
+          <Empty icon={<CrewArt />} title={t("crew_council_empty")}>
+            {t("crew_council_empty_desc")}
+          </Empty>
         ) : (
           <div className="space-y-4">
             {council.map((session) => (
@@ -313,7 +334,9 @@ export function CrewView({ onAuthError }: { onAuthError: () => void }) {
       <Card title={t("crew_delegations")}>
         <p className="mb-3 text-sm text-fg-dim">{t("crew_delegations_desc")}</p>
         {delegations.length === 0 ? (
-          <Empty>{t("crew_delegations_empty")}</Empty>
+          <Empty icon={<CrewArt />} title={t("crew_delegations_empty")}>
+            {t("crew_delegations_empty_desc")}
+          </Empty>
         ) : (
           <div className="space-y-2">
             {delegations.map((d, i) => (
@@ -333,19 +356,37 @@ function DelegationCard({
   d: DelegationRecord;
   resolveAgent: (id: string | undefined, hint?: string) => string;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   // Expandable when any field carries more than fits on a single truncated line.
   const expandable =
     (d.task?.length ?? 0) > 80 ||
     (d.summary?.length ?? 0) > 80 ||
     (d.outputTail?.length ?? 0) > 120;
+  const toggle = () => setOpen((o) => !o);
 
   return (
     <div
       className={`rounded-lg border border-line p-2.5 text-xs ${
-        expandable ? "cursor-pointer hover:bg-surface-2 transition-colors" : ""
+        expandable
+          ? "cursor-pointer transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-page focus-visible:ring-accent"
+          : ""
       }`}
-      onClick={expandable ? () => setOpen((o) => !o) : undefined}
+      onClick={expandable ? toggle : undefined}
+      {...(expandable
+        ? {
+            role: "button",
+            tabIndex: 0,
+            "aria-expanded": open,
+            "aria-label": t("crew_delegation_toggle"),
+            onKeyDown: (e: React.KeyboardEvent) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                toggle();
+              }
+            },
+          }
+        : {})}
     >
       <div className="flex items-center gap-2 text-fg-dim">
         <span className="tabular">{relTime(d.ts)}</span>
@@ -363,7 +404,10 @@ function DelegationCard({
           <span className="tabular text-fg-faint">${d.costUsd.toFixed(4)}</span>
         )}
         {expandable && (
-          <span className={`shrink-0 text-fg-dim ${d.durationMs == null && d.costUsd == null ? "ml-auto" : ""}`}>
+          <span
+            aria-hidden
+            className={`shrink-0 text-fg-dim ${d.durationMs == null && d.costUsd == null ? "ml-auto" : ""}`}
+          >
             {open ? "▴" : "▾"}
           </span>
         )}

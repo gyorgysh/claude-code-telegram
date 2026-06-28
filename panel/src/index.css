@@ -93,6 +93,15 @@ body,
   height: 100%;
 }
 
+/* Shared chrome offsets for full-height views (Chat, Logs, …). Mobile subtracts
+   the sticky top bar + main padding + bottom nav; desktop only the main padding.
+   Defined as custom properties so every full-height container stays in sync —
+   change the offset here, not in a dozen `calc()`s. */
+:root {
+  --nav-h-mobile: 9rem;
+  --nav-h-desktop: 6rem;
+}
+
 body {
   margin: 0;
   background: var(--page);
@@ -106,10 +115,14 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Bottom padding that clears the iOS home-indicator / notch safe area. Used by
-   full-height views (Logs) that butt up against the mobile bottom nav. */
+/* Padding that clears the iOS home-indicator / notch safe areas. Used by
+   full-height views (Chat, Logs, …) that butt up against the mobile bottom nav
+   or the top notch. */
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 /* Terminal wordmark / mono kickers. */

@@ -3,6 +3,7 @@ import { useI18n } from "../lib/useI18n.ts";
 import type { TranslationKey } from "../i18n/en.ts";
 
 export type Tab =
+  | "setup"
   | "chat"
   | "terminal"
   | "crew"
@@ -24,48 +25,49 @@ export type Tab =
   | "remote"
   | "usage";
 
-type Item = { id: Tab; labelKey: TranslationKey; icon: string };
+type Item = { id: Tab; labelKey: TranslationKey; icon: string; hintKey?: TranslationKey };
 type Group = { headingKey: TranslationKey; items: Item[] };
 
 export const NAV: Group[] = [
   {
     headingKey: "nav_monitor",
     items: [
-      { id: "health", labelKey: "nav_health", icon: "▦" },
-      { id: "sessions", labelKey: "nav_sessions", icon: "◇" },
-      { id: "usage", labelKey: "nav_usage", icon: "↗" },
-      { id: "logs", labelKey: "nav_logs", icon: "≣" },
+      { id: "health", labelKey: "nav_health", icon: "▦", hintKey: "nav_health_hint" },
+      { id: "sessions", labelKey: "nav_sessions", icon: "◇", hintKey: "nav_sessions_hint" },
+      { id: "usage", labelKey: "nav_usage", icon: "↗", hintKey: "nav_usage_hint" },
+      { id: "logs", labelKey: "nav_logs", icon: "≣", hintKey: "nav_logs_hint" },
     ],
   },
   {
     headingKey: "nav_operate",
     items: [
-      { id: "chat", labelKey: "nav_chat", icon: "❯" },
-      { id: "terminal", labelKey: "nav_terminal", icon: "▸" },
-      { id: "crew", labelKey: "nav_crew", icon: "⬡" },
-      { id: "workers", labelKey: "nav_workers", icon: "◈" },
-      { id: "inbox", labelKey: "nav_inbox", icon: "✉" },
-      { id: "tasks", labelKey: "nav_tasks", icon: "▤" },
-      { id: "schedules", labelKey: "nav_schedules", icon: "◷" },
-      { id: "heartbeat", labelKey: "nav_heartbeat", icon: "♡" },
+      { id: "chat", labelKey: "nav_chat", icon: "❯", hintKey: "nav_chat_hint" },
+      { id: "terminal", labelKey: "nav_terminal", icon: "▸", hintKey: "nav_terminal_hint" },
+      { id: "crew", labelKey: "nav_crew", icon: "⬡", hintKey: "nav_crew_hint" },
+      { id: "workers", labelKey: "nav_workers", icon: "◈", hintKey: "nav_workers_hint" },
+      { id: "inbox", labelKey: "nav_inbox", icon: "✉", hintKey: "nav_inbox_hint" },
+      { id: "tasks", labelKey: "nav_tasks", icon: "▤", hintKey: "nav_tasks_hint" },
+      { id: "schedules", labelKey: "nav_schedules", icon: "◷", hintKey: "nav_schedules_hint" },
+      { id: "heartbeat", labelKey: "nav_heartbeat", icon: "♡", hintKey: "nav_heartbeat_hint" },
     ],
   },
   {
     headingKey: "nav_configure",
     items: [
-      { id: "skills", labelKey: "nav_skills", icon: "✦" },
-      { id: "memory", labelKey: "nav_memory", icon: "❋" },
-      { id: "vault", labelKey: "nav_vault", icon: "⚷" },
-      { id: "connectors", labelKey: "nav_connectors", icon: "⊹" },
-      { id: "prompt", labelKey: "nav_prompt", icon: "❝" },
+      { id: "setup", labelKey: "nav_setup", icon: "✎", hintKey: "nav_setup_hint" },
+      { id: "skills", labelKey: "nav_skills", icon: "✦", hintKey: "nav_skills_hint" },
+      { id: "memory", labelKey: "nav_memory", icon: "❋", hintKey: "nav_memory_hint" },
+      { id: "vault", labelKey: "nav_vault", icon: "⚷", hintKey: "nav_vault_hint" },
+      { id: "connectors", labelKey: "nav_connectors", icon: "⊹", hintKey: "nav_connectors_hint" },
+      { id: "prompt", labelKey: "nav_prompt", icon: "❝", hintKey: "nav_prompt_hint" },
     ],
   },
   {
     headingKey: "nav_others",
     items: [
-      { id: "status", labelKey: "nav_status", icon: "◉" },
-      { id: "updates", labelKey: "nav_updates", icon: "⤓" },
-      { id: "remote", labelKey: "nav_remote", icon: "⇆" },
+      { id: "status", labelKey: "nav_status", icon: "◉", hintKey: "nav_status_hint" },
+      { id: "updates", labelKey: "nav_updates", icon: "⤓", hintKey: "nav_updates_hint" },
+      { id: "remote", labelKey: "nav_remote", icon: "⇆", hintKey: "nav_remote_hint" },
     ],
   },
 ];
@@ -201,8 +203,8 @@ export function Sidebar({
                 <button
                   key={it.id}
                   onClick={() => onSelect(it.id)}
-                  title={t(it.labelKey)}
-                  aria-label={t(it.labelKey)}
+                  title={it.hintKey ? `${t(it.labelKey)} — ${t(it.hintKey)}` : t(it.labelKey)}
+                  aria-label={it.hintKey ? `${t(it.labelKey)}: ${t(it.hintKey)}` : t(it.labelKey)}
                   aria-current={active ? "page" : undefined}
                   className={`flex w-full items-center gap-3 rounded-lg border-l-2 px-2.5 py-2 text-sm transition-colors ${
                     active

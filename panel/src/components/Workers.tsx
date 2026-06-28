@@ -251,7 +251,14 @@ function WorkerRow({
         <span className="font-medium text-fg">{worker.name}</span>
         {worker.role === "lead" && <Badge tone="blue">{t("workers_lead")}</Badge>}
         {worker.role === "assistant" && <Badge tone="zinc">{t("workers_assistant")}</Badge>}
-        {worker.portfolio && <Badge>{worker.portfolio}</Badge>}
+        {worker.portfolio && (
+          <span title={worker.portfolio}>
+            <Badge>
+              {worker.portfolio.split(/[\s,]+/).slice(0, 3).join(" ")}
+              {worker.portfolio.split(/[\s,]+/).length > 3 ? "…" : ""}
+            </Badge>
+          </span>
+        )}
         {worker.schedule && worker.schedule !== "manual" && (
           <Badge tone="blue">{worker.schedule}</Badge>
         )}
@@ -281,7 +288,7 @@ function WorkerRow({
               {t("stop")}
             </Button>
           ) : (
-            <Button variant="primary" onClick={run}>
+            <Button variant="primary" onClick={run} title={t("workers_try_agent_tooltip")}>
               {t("workers_run_now")}
             </Button>
           )}
@@ -297,6 +304,10 @@ function WorkerRow({
         {worker.cwd || t("workers_no_cwd")}
         {worker.nextRunAt && ` · ${t("workers_next").replace("{time}", relTime(worker.nextRunAt))}`}
       </div>
+
+      {worker.role === "lead" && (
+        <div className="mt-1 text-xs text-fg-faint">{t("workers_interact_hint")}</div>
+      )}
 
       {editing && (
         <div className="mt-3 border-t border-line pt-3">
@@ -417,14 +428,6 @@ function WorkerWizard({
   const [created, setCreated] = useState<Set<number>>(new Set());
   const [genError, setGenError] = useState<string | null>(null);
 
-  // Prefill the working directory with the panel's default so generated configs
-  // (and the editable review step) have a valid cwd out of the box.
-  useEffect(() => {
-    api
-      .me()
-      .then((m) => setAnswers((a) => (a.cwd.trim() ? a : { ...a, cwd: m.defaultWorkdir })))
-      .catch(() => {});
-  }, []);
 
   const generate = async () => {
     if (!answers.goal.trim()) return;

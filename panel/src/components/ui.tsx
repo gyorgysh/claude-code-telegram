@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useI18n } from "../lib/useI18n";
+import { actOnToast, dismissToast, useToasts, type ToastVariant } from "../lib/useToast.ts";
 
 export function Card({
   title,
@@ -126,13 +127,13 @@ export function Button({ variant = "ghost", className = "", ...props }: ButtonPr
   return (
     <button
       {...props}
-      className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 ${styles[variant]} ${className}`}
+      className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-page focus-visible:ring-accent disabled:opacity-50 ${styles[variant]} ${className}`}
     />
   );
 }
 
 const fieldClass =
-  "w-full rounded-lg border border-line bg-input px-3 py-2 text-sm text-fg outline-none focus:border-accent";
+  "w-full rounded-lg border border-line bg-input px-3 py-2 text-sm text-fg outline-none focus:border-accent focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-page focus-visible:ring-accent";
 
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${fieldClass} ${props.className ?? ""}`} />;
@@ -286,6 +287,18 @@ export function Accordion({
   );
 }
 
+/** An animated grey placeholder bone for loading states. Pulses via Tailwind's
+ *  `animate-pulse` and tints with the `bg-surface-2` theme token so it tracks
+ *  light/dark/matrix themes. Pass width/height/rounding through `className`. */
+export function Skeleton({ className = "" }: { className?: string }) {
+  return (
+    <div
+      aria-hidden
+      className={`animate-pulse rounded bg-surface-2 ${className}`}
+    />
+  );
+}
+
 /** An info callout. Pass `dismissId` to make it dismissible (remembered in
  *  localStorage) — for "good to keep in mind" style tips. */
 export function Callout({
@@ -323,6 +336,60 @@ export function Callout({
         )}
       </div>
       <div className="text-fg-dim">{children}</div>
+    </div>
+  );
+}
+
+/** Per-variant accent (icon glyph, left-border colour, icon text colour),
+ *  reusing the emerald/red/accent palette already used by Badge/Bar so
+ *  light/dark/matrix all stay coherent. */
+const TOAST_STYLES: Record<
+  ToastVariant,
+  { icon: string; border: string; text: string }
+> = {
+  success: { icon: "✓", border: "border-l-emerald-500", text: "text-emerald-400" },
+  error: { icon: "✕", border: "border-l-red-500", text: "text-red-400" },
+  info: { icon: "ⓘ", border: "border-l-accent", text: "text-accent" },
+};
+
+/** Single global toast stack. Mount once near the app root; it subscribes to
+ *  the shared queue (`useToasts`) and renders fixed in the corner above all
+ *  content. Each toast auto-dismisses (handled by the store) and has a manual
+ *  close button. Up to 3 are shown at once (capped in the store). */
+export function ToastViewport() {
+  const { t } = useI18n();
+  const toasts = useToasts();
+  if (toasts.length === 0) return null;
+  return (
+    <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2">
+      {toasts.map((toast) => {
+        const style = TOAST_STYLES[toast.variant];
+        return (
+          <div
+            key={toast.id}
+            role="status"
+            className={`pointer-events-auto flex items-start gap-2 rounded-lg border border-l-4 border-line bg-surface px-3 py-2 shadow-lg ${style.border}`}
+          >
+            <span className={`mt-0.5 shrink-0 text-sm ${style.text}`}>{style.icon}</span>
+            <p className="min-w-0 flex-1 break-words text-sm text-fg">{toast.message}</p>
+            {toast.action && (
+              <button
+                onClick={() => actOnToast(toast.id)}
+                className="shrink-0 rounded px-1.5 py-0.5 text-xs font-medium text-accent transition-colors hover:bg-accent/10"
+              >
+                {toast.action.label}
+              </button>
+            )}
+            <button
+              onClick={() => dismissToast(toast.id)}
+              aria-label={t("toast_dismiss")}
+              className="shrink-0 text-xs text-fg-faint transition-colors hover:text-fg-muted"
+            >
+              ✕
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }

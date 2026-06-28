@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.ts";
 import { useI18n } from "../lib/useI18n.ts";
+import { InfoCard } from "./ui.tsx";
 import type { TranslationKey } from "../i18n/en.ts";
 import type { Tab } from "./Sidebar.tsx";
 
@@ -97,6 +98,139 @@ export function SessionsArt() {
       <path d="M9 12a3 3 0 013-3h24a3 3 0 013 3v16a3 3 0 01-3 3H20l-8 7v-7h-0a3 3 0 01-3-3z" />
       <path d="M16 17h16M16 22h10" />
     </svg>
+  );
+}
+
+/** Tasks — a kanban board with three columns. */
+export function TasksArt() {
+  return (
+    <svg {...svgProps} aria-hidden>
+      <rect x="8" y="10" width="9" height="28" rx="2" />
+      <rect x="20" y="10" width="9" height="20" rx="2" />
+      <rect x="32" y="10" width="9" height="24" rx="2" />
+    </svg>
+  );
+}
+
+/** Logs — stacked log lines. */
+export function LogsArt() {
+  return (
+    <svg {...svgProps} aria-hidden>
+      <rect x="9" y="11" width="30" height="26" rx="3" />
+      <path d="M14 18h6M24 18h10M14 24h12M14 30h8" />
+    </svg>
+  );
+}
+
+/** Heartbeat — a steady pulse line, "all clear". */
+export function HeartbeatArt() {
+  return (
+    <svg {...svgProps} aria-hidden>
+      <path d="M6 24h7l4-9 6 18 4-12 3 5h12" />
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// "How it all connects" visual map
+//
+// A code-light, theme-aware diagram that orients a brand-new user: it shows the
+// path a message takes (You → Atlas → a tool → the result), and how the three
+// concepts that otherwise feel disconnected — Leads, Skills, Memory — plug into
+// Atlas. Built from flexbox boxes + tiny SVG connectors (no <text>, so every
+// label is translatable), it lives inside a collapsible InfoCard so it doubles
+// as a persistent "?" help panel after onboarding is dismissed.
+// ---------------------------------------------------------------------------
+
+/** A single labelled node in the flow map. */
+function FlowNode({
+  label,
+  sub,
+  variant = "plain",
+}: {
+  label: string;
+  sub?: string;
+  variant?: "plain" | "accent";
+}) {
+  const accent = variant === "accent";
+  return (
+    <div
+      className={`flex flex-col items-center justify-center rounded-lg border px-3 py-2 text-center ${
+        accent ? "border-accent/40 bg-accent/10" : "border-line bg-surface-2"
+      }`}
+    >
+      <span className={`text-xs font-semibold ${accent ? "text-accent" : "text-fg"}`}>{label}</span>
+      {sub && <span className="mt-0.5 text-[10px] leading-tight text-fg-faint">{sub}</span>}
+    </div>
+  );
+}
+
+/** A horizontal arrow connector between two nodes in the main flow. */
+function FlowArrow() {
+  return (
+    <svg
+      width="22"
+      height="12"
+      viewBox="0 0 22 12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="shrink-0 text-fg-faint"
+      aria-hidden
+    >
+      <path d="M2 6h17M14 1l5 5-5 5" />
+    </svg>
+  );
+}
+
+/** The orient-yourself flow map, rendered inside a collapsible InfoCard. */
+export function HowItConnects() {
+  const { t } = useI18n();
+  return (
+    <InfoCard id="how-it-connects" title={t("how_show")} openTitle={t("how_title")}>
+      <p>{t("how_intro")}</p>
+
+      {/* Main flow: You → Atlas → Tool → Result */}
+      <div className="my-1 flex items-stretch justify-center gap-1.5 sm:gap-2">
+        <FlowNode label={t("how_you")} sub={t("how_you_sub")} />
+        <div className="flex items-center">
+          <FlowArrow />
+        </div>
+        <FlowNode label={t("how_atlas")} sub={t("how_atlas_sub")} variant="accent" />
+        <div className="flex items-center">
+          <FlowArrow />
+        </div>
+        <FlowNode label={t("how_tool")} sub={t("how_tool_sub")} />
+        <div className="flex items-center">
+          <FlowArrow />
+        </div>
+        <FlowNode label={t("how_result")} sub={t("how_result_sub")} />
+      </div>
+
+      {/* Connector line down from Atlas to its plug-ins */}
+      <div className="flex justify-center">
+        <svg
+          width="2"
+          height="16"
+          viewBox="0 0 2 16"
+          className="text-line"
+          aria-hidden
+        >
+          <path d="M1 0v16" stroke="currentColor" strokeWidth={1.5} strokeDasharray="3 3" />
+        </svg>
+      </div>
+
+      {/* Plug-ins that feed Atlas: Leads, Skills, Memory */}
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+        <FlowNode label={t("how_leads")} sub={t("how_leads_sub")} />
+        <FlowNode label={t("how_skills")} sub={t("how_skills_sub")} />
+        <FlowNode label={t("how_memory")} sub={t("how_memory_sub")} />
+      </div>
+
+      <p className="text-fg-faint">{t("how_outro")}</p>
+    </InfoCard>
   );
 }
 

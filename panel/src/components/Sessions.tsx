@@ -22,7 +22,11 @@ export function SessionsView({ onAuthError }: { onAuthError: () => void }) {
         {t("sessions_desc_4")}
       </p>
 
-      {sessions.length === 0 && <Empty icon={<SessionsArt />}>{t("sessions_empty")}</Empty>}
+      {sessions.length === 0 && (
+        <Empty icon={<SessionsArt />} title={t("sessions_empty")}>
+          {t("sessions_empty_desc")}
+        </Empty>
+      )}
 
       {sessions.map((s) => (
         <Card key={s.chatId}>

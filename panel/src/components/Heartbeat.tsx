@@ -3,7 +3,9 @@ import { api, AuthError, type HeartbeatConfig, type HeartbeatMode, type Heartbea
 import { Badge, Button, Card, Empty, InfoCard, Label } from "./ui.tsx";
 import { relTime } from "../lib/format.ts";
 import { useI18n } from "../lib/useI18n.ts";
+import { toast } from "../lib/useToast.ts";
 import type { TranslationKey } from "../i18n/en.ts";
+import { HeartbeatArt } from "./onboarding.tsx";
 
 const MODES: Array<{ id: HeartbeatMode; label: TranslationKey; desc: TranslationKey }> = [
   { id: "off", label: "hb_mode_off", desc: "hb_mode_off_desc" },
@@ -23,7 +25,6 @@ export function HeartbeatView_({ onAuthError }: { onAuthError: () => void }) {
   const { t } = useI18n();
   const [view, setView] = useState<HeartbeatView | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
 
   const load = () =>
     api
@@ -41,14 +42,13 @@ export function HeartbeatView_({ onAuthError }: { onAuthError: () => void }) {
       setView(await api.saveHeartbeat(patch));
     } catch (e) {
       if (e instanceof AuthError) return onAuthError();
-      setError(String(e));
+      toast.error(String(e));
     }
   };
 
   const runNow = async () => {
     const { signals } = await api.runHeartbeat();
-    setStatus(signals ? t("hb_found_signals").replace("{n}", String(signals)) : t("hb_no_signals"));
-    setTimeout(() => setStatus(null), 4000);
+    toast.success(signals ? t("hb_found_signals").replace("{n}", String(signals)) : t("hb_no_signals"));
     await load();
   };
 
@@ -74,9 +74,6 @@ export function HeartbeatView_({ onAuthError }: { onAuthError: () => void }) {
             </ul>
           </InfoCard>
         </div>
-        {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
-        {status && <p className="mb-2 text-sm text-emerald-400">{status}</p>}
-
         <Label>{t("hb_mode")}</Label>
         <div className="mb-4 grid gap-2 sm:grid-cols-3">
           {MODES.map((m) => (
@@ -158,7 +155,9 @@ export function HeartbeatView_({ onAuthError }: { onAuthError: () => void }) {
 
       <Card title={t("hb_recent_alerts")}>
         {view.alerts.length === 0 ? (
-          <Empty>{t("hb_no_alerts")}</Empty>
+          <Empty icon={<HeartbeatArt />} title={t("hb_no_alerts")}>
+            {t("hb_no_alerts_desc")}
+          </Empty>
         ) : (
           <div className="space-y-2">
             {view.alerts.map((a, i) => (

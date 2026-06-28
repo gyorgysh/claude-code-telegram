@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { api, AuthError, type MemoryEntry, type MemoryStats, type MemoryTier } from "../api.ts";
 import { useI18n } from "../lib/useI18n.ts";
+import { toast } from "../lib/useToast.ts";
+import { useListAnimate } from "../lib/useListAnimate.ts";
 import { relTime } from "../lib/format.ts";
-import { Badge, Button, Callout, Card, Empty, InfoCard, Input, Label, TextArea } from "./ui.tsx";
+import { Badge, Button, Callout, Card, Empty, InfoCard, Input, Label, Skeleton, TextArea } from "./ui.tsx";
 import { MemoryArt } from "./onboarding.tsx";
 
 const blank = { text: "", tags: "", salience: 0.5, tier: "warm" as MemoryTier };
@@ -21,18 +23,25 @@ export function MemoryView({ onAuthError }: { onAuthError: () => void }) {
   const { t } = useI18n();
   const [entries, setEntries] = useState<MemoryEntry[]>([]);
   const [stats, setStats] = useState<MemoryStats | null>(null);
+  const [statsLoaded, setStatsLoaded] = useState(false);
   const [query, setQuery] = useState("");
   const [tierFilter, setTierFilter] = useState<TierFilter>("all");
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [form, setForm] = useState<typeof blank>(blank);
   const [error, setError] = useState<string | null>(null);
+  const [listRef] = useListAnimate();
 
   // The unfiltered list endpoint already returns every tier (incl. cold); the
   // `all` flag only widens *search* to cold entries. So only ask for cold when
   // searching and the active filter could include cold.
   const wantCold = tierFilter === "cold" || tierFilter === "all";
 
-  const loadStats = () => api.memoryStats().then(setStats).catch(() => {});
+  const loadStats = () =>
+    api
+      .memoryStats()
+      .then(setStats)
+      .catch(() => {})
+      .finally(() => setStatsLoaded(true));
 
   const load = (q?: string) =>
     api
@@ -57,11 +66,6 @@ export function MemoryView({ onAuthError }: { onAuthError: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, tierFilter]);
 
-  const reload = async () => {
-    await load(query.trim() || undefined);
-    await loadStats();
-  };
-
   const startNew = () => {
     setForm(blank);
     setEditing("new");
@@ -71,6 +75,20 @@ export function MemoryView({ onAuthError }: { onAuthError: () => void }) {
     setEditing(m.id);
   };
 
+  // Insert/update a single entry into local state, honouring the active tier
+  // filter and search query (drop it if it no longer matches the filter).
+  const reconcile = (saved: MemoryEntry) => {
+    setEntries((prev) => {
+      const matches = tierFilter === "all" || saved.tier === tierFilter;
+      const idx = prev.findIndex((m) => m.id === saved.id);
+      if (idx === -1) return matches ? [saved, ...prev] : prev;
+      if (!matches) return prev.filter((m) => m.id !== saved.id);
+      const next = [...prev];
+      next[idx] = saved;
+      return next;
+    });
+  };
+
   const save = async () => {
     const payload = {
       text: form.text,
@@ -78,11 +96,16 @@ export function MemoryView({ onAuthError }: { onAuthError: () => void }) {
       salience: form.salience,
       tier: form.tier,
     };
+    const wasEditing = editing;
     try {
-      if (editing === "new") await api.createMemory(payload);
-      else if (editing) await api.updateMemory(editing, payload);
+      const saved =
+        wasEditing === "new"
+          ? await api.createMemory(payload)
+          : await api.updateMemory(wasEditing!, payload);
+      reconcile(saved);
       setEditing(null);
-      await reload();
+      // Stats (counts/tier distribution) can shift on save; refresh quietly.
+      void loadStats();
     } catch (e) {
       if (e instanceof AuthError) return onAuthError();
       setError(String(e));
@@ -90,18 +113,67 @@ export function MemoryView({ onAuthError }: { onAuthError: () => void }) {
   };
 
   const setTier = async (id: string, tier: MemoryTier) => {
+    const prev = entries;
+    const entry = entries.find((m) => m.id === id);
+    if (!entry) return;
+    const oldTier = entry.tier;
+    // Optimistically move the entry to its new tier; if the active filter no
+    // longer matches, drop it from the visible list.
+    setEntries((cur) => {
+      const updated = cur.map((m) => (m.id === id ? { ...m, tier } : m));
+      return tierFilter === "all" ? updated : updated.filter((m) => m.tier === tierFilter);
+    });
+    setStats((s) =>
+      s
+        ? { ...s, byTier: { ...s.byTier, [oldTier]: s.byTier[oldTier] - 1, [tier]: s.byTier[tier] + 1 } }
+        : s,
+    );
     try {
       await api.setMemoryTier(id, tier);
-      await reload();
     } catch (e) {
+      setEntries(prev);
+      setStats((s) =>
+        s
+          ? { ...s, byTier: { ...s.byTier, [oldTier]: s.byTier[oldTier] + 1, [tier]: s.byTier[tier] - 1 } }
+          : s,
+      );
       if (e instanceof AuthError) onAuthError();
     }
   };
 
-  const del = async (id: string) => {
-    if (!confirm(t("memory_forget"))) return;
-    await api.deleteMemory(id);
-    await reload();
+  const del = (id: string) => {
+    const prev = entries;
+    const prevStats = stats;
+    const entry = entries.find((m) => m.id === id);
+    // Optimistically remove the row and adjust the counters, then open a 5s
+    // undo window. The server delete only fires once the window closes; undo
+    // restores the prior list + stats. Nothing is deleted server-side yet.
+    setEntries((cur) => cur.filter((m) => m.id !== id));
+    if (entry) {
+      setStats((s) =>
+        s
+          ? { ...s, total: s.total - 1, byTier: { ...s.byTier, [entry.tier]: s.byTier[entry.tier] - 1 } }
+          : s,
+      );
+    }
+    toast.undo(t("deleted"), {
+      undoLabel: t("toast_undo"),
+      onUndo: () => {
+        setEntries(prev);
+        setStats(prevStats);
+      },
+      onCommit: async () => {
+        try {
+          await api.deleteMemory(id);
+        } catch (e) {
+          // Commit failed: restore the row + stats and surface the error.
+          setEntries(prev);
+          setStats(prevStats);
+          if (e instanceof AuthError) return onAuthError();
+          setError(String(e));
+        }
+      },
+    });
   };
 
   return (
@@ -128,6 +200,19 @@ export function MemoryView({ onAuthError }: { onAuthError: () => void }) {
           {t("memory_tip_body")}
         </Callout>
       </div>
+
+      {!statsLoaded && (
+        <div className="mb-4 overflow-hidden rounded-lg border border-line bg-line">
+          <div className="grid grid-cols-2 gap-px sm:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex flex-col gap-1.5 bg-input px-3 py-2.5">
+                <Skeleton className="h-5 w-10" />
+                <Skeleton className="h-2.5 w-16" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {stats && stats.total > 0 && (
         <div className="mb-4">
@@ -203,7 +288,7 @@ export function MemoryView({ onAuthError }: { onAuthError: () => void }) {
                 <button
                   key={tier}
                   onClick={() => setForm({ ...form, tier })}
-                  className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                  className={`inline-flex min-h-[44px] items-center rounded px-2.5 text-xs font-medium transition-colors ${
                     form.tier === tier
                       ? "bg-[var(--accent)] text-white"
                       : "border border-line text-fg-dim hover:text-fg"
@@ -239,7 +324,7 @@ export function MemoryView({ onAuthError }: { onAuthError: () => void }) {
               <button
                 key={f}
                 onClick={() => setTierFilter(f)}
-                className={`rounded px-2.5 py-1 text-xs border border-line transition-colors ${
+                className={`inline-flex min-h-[44px] items-center rounded px-2.5 text-xs border border-line transition-colors ${
                   tierFilter === f
                     ? "bg-[var(--accent)] text-white"
                     : "text-fg-dim hover:text-fg"
@@ -257,10 +342,20 @@ export function MemoryView({ onAuthError }: { onAuthError: () => void }) {
         query ? (
           <Empty>{t("memory_empty_query")}</Empty>
         ) : (
-          <Empty icon={<MemoryArt />}>{t("memory_empty")}</Empty>
+          <Empty
+            icon={<MemoryArt />}
+            title={t("memory_empty")}
+            action={
+              <Button variant="primary" onClick={startNew}>
+                {t("memory_new")}
+              </Button>
+            }
+          >
+            {t("memory_empty_desc")}
+          </Empty>
         )
       ) : (
-        <div className="space-y-2">
+        <div ref={listRef} className="space-y-2">
           {entries.map((m) => (
             <div
               key={m.id}
@@ -287,7 +382,7 @@ export function MemoryView({ onAuthError }: { onAuthError: () => void }) {
                         key={tier}
                         onClick={() => setTier(m.id, tier)}
                         aria-label={t("memory_move_to_tier").replace("{tier}", t(TIER_KEY[tier]))}
-                        className="rounded-full border border-line px-2 py-0.5 text-xs font-medium text-fg-dim hover:border-accent/40 hover:bg-accent/5 hover:text-accent transition-colors"
+                        className="inline-flex min-h-[44px] items-center rounded-full border border-line px-2 text-xs font-medium text-fg-dim hover:border-accent/40 hover:bg-accent/5 hover:text-accent transition-colors"
                       >
                         {t(TIER_KEY[tier])}
                       </button>

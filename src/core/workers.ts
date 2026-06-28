@@ -347,6 +347,7 @@ export class WorkerManager {
         persona: w.persona,
         language: w.language,
         permissionMode,
+        settingSources: ["user"],
         abortController: abort,
         mcpServers: { memory: memoryMcp, tasks: createTasksMcp({ createdBy: w.id }), skills: skillsMcp, self_update: selfUpdateMcp, crew: crewMcp },
         canUseTool: async (toolName, input) => {

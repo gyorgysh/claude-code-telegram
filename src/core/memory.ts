@@ -455,10 +455,25 @@ function dedupeTags(tags: string[]): string[] {
   return [...new Set(tags.map((t) => t.trim().toLowerCase()).filter(Boolean))];
 }
 
+/**
+ * Neutralise a memory entry for safe injection into the system prompt. Memory
+ * text is writable by any agent (memory_write) or via POST /api/memories, so an
+ * adversarial entry could try prompt injection — e.g. a fake "# New instructions"
+ * heading or a multi-line block that mimics a real prompt section. Collapse all
+ * whitespace/newlines to single spaces (so it can only ever be one bullet line,
+ * never its own block) and defang leading markdown markers.
+ */
+function sanitizeMemoryText(text: string): string {
+  return text
+    .replace(/\s+/g, " ")
+    .replace(/^[#>*\-\s]+/, "") // strip leading heading/quote/list markers
+    .trim();
+}
+
 /** Render entries as a compact bullet list for the system prompt. */
 export function formatMemories(entries: MemoryEntry[]): string {
   return entries
-    .map((e) => `- ${e.text}${e.tags.length ? ` [${e.tags.join(", ")}]` : ""}`)
+    .map((e) => `- ${sanitizeMemoryText(e.text)}${e.tags.length ? ` [${e.tags.join(", ")}]` : ""}`)
     .join("\n");
 }
 

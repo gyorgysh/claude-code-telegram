@@ -47,7 +47,7 @@ export function ChatView({ onAuthError }: { onAuthError: () => void }) {
   };
 
   return (
-    <div className="flex h-[calc(100vh-9rem)] flex-col md:h-[calc(100vh-6rem)]">
+    <div className="flex h-[calc(100dvh-var(--nav-h-mobile))] flex-col pb-safe md:h-[calc(100dvh-var(--nav-h-desktop))] md:pb-0">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
         <div className="min-w-0">

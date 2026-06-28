@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { api, AuthError, type SecretView } from "../api.ts";
 import { useI18n } from "../lib/useI18n.ts";
+import { toast } from "../lib/useToast.ts";
+import { useListAnimate } from "../lib/useListAnimate.ts";
 import { Badge, Button, Callout, Card, Empty, Input, Label } from "./ui.tsx";
 import { VaultArt } from "./onboarding.tsx";
 
@@ -15,20 +17,19 @@ export function VaultView({ onAuthError }: { onAuthError: () => void }) {
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [form, setForm] = useState<typeof blank>(blank);
   const [revealed, setRevealed] = useState<Record<string, string>>({});
-  const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
   const [keyRotatedAt, setKeyRotatedAt] = useState<number | undefined>(undefined);
   const [exportPass, setExportPass] = useState("");
   const [exportBlob, setExportBlob] = useState<string | null>(null);
   const [importBlob, setImportBlob] = useState("");
   const [importPass, setImportPass] = useState("");
   const [busy, setBusy] = useState(false);
+  const [listRef] = useListAnimate();
 
   const load = () =>
     api
       .vault()
       .then((r) => { setSecrets(r.secrets); setUsages(r.usages ?? {}); setKeyRotatedAt(r.keyRotatedAt); })
-      .catch((e) => (e instanceof AuthError ? onAuthError() : setError(String(e))));
+      .catch((e) => (e instanceof AuthError ? onAuthError() : toast.error(String(e))));
 
   useEffect(() => {
     void load();
@@ -45,14 +46,26 @@ export function VaultView({ onAuthError }: { onAuthError: () => void }) {
   };
 
   const save = async () => {
+    const wasEditing = editing;
     try {
-      if (editing === "new") await api.createSecret(form);
-      else if (editing) await api.updateSecret(editing, form); // empty value = keep existing
+      const saved =
+        wasEditing === "new"
+          ? await api.createSecret(form)
+          : await api.updateSecret(wasEditing!, form); // empty value = keep existing
+      // Reconcile the single returned secret into local state instead of
+      // re-fetching the whole list (avoids the flash + layout shift).
+      setSecrets((prev) => {
+        const idx = prev.findIndex((s) => s.id === saved.id);
+        if (idx === -1) return [...prev, saved];
+        const next = [...prev];
+        next[idx] = saved;
+        return next;
+      });
       setEditing(null);
-      await load();
+      toast.success(t("saved"));
     } catch (e) {
       if (e instanceof AuthError) return onAuthError();
-      setError(String(e));
+      toast.error(String(e));
     }
   };
 
@@ -69,35 +82,48 @@ export function VaultView({ onAuthError }: { onAuthError: () => void }) {
     setRevealed((r) => ({ ...r, [id]: value }));
   };
 
-  const del = async (id: string) => {
-    if (!confirm(t("vault_delete_confirm"))) return;
-    await api.deleteSecret(id);
-    await load();
+  const del = (id: string) => {
+    // Optimistically remove the row and open a 5s undo window. The server
+    // delete only fires once the window closes; undo restores the row.
+    const prev = secrets;
+    setSecrets((cur) => cur.filter((s) => s.id !== id));
+    toast.undo(t("deleted"), {
+      undoLabel: t("toast_undo"),
+      onUndo: () => setSecrets(prev),
+      onCommit: async () => {
+        try {
+          await api.deleteSecret(id);
+        } catch (e) {
+          setSecrets(prev);
+          if (e instanceof AuthError) return onAuthError();
+          toast.error(String(e));
+        }
+      },
+    });
   };
 
   const importProviders = async () => {
-    const { imported } = await api.importSecrets();
-    setStatus(imported ? t("vault_imported").replace("{n}", String(imported)) : t("vault_no_import"));
-    setTimeout(() => setStatus(null), 4000);
-    await load();
-  };
-
-  const flash = (msg: string) => {
-    setStatus(msg);
-    setTimeout(() => setStatus(null), 5000);
+    try {
+      const { imported } = await api.importSecrets();
+      if (imported) toast.success(t("vault_imported").replace("{n}", String(imported)));
+      else toast.info(t("vault_no_import"));
+      await load();
+    } catch (e) {
+      if (e instanceof AuthError) return onAuthError();
+      toast.error(String(e));
+    }
   };
 
   const rotate = async () => {
     if (!confirm(t("vault_rotate_confirm"))) return;
     setBusy(true);
-    setError(null);
     try {
       const { rotated } = await api.rotateVaultKey();
-      flash(t("vault_rotated").replace("{n}", String(rotated)));
+      toast.success(t("vault_rotated").replace("{n}", String(rotated)));
       await load();
     } catch (e) {
       if (e instanceof AuthError) return onAuthError();
-      setError(String(e));
+      toast.error(String(e));
     } finally {
       setBusy(false);
     }
@@ -105,13 +131,12 @@ export function VaultView({ onAuthError }: { onAuthError: () => void }) {
 
   const doExport = async () => {
     setBusy(true);
-    setError(null);
     try {
       const { blob } = await api.exportVault(exportPass);
       setExportBlob(blob);
     } catch (e) {
       if (e instanceof AuthError) return onAuthError();
-      setError(String(e));
+      toast.error(String(e));
     } finally {
       setBusy(false);
     }
@@ -120,22 +145,21 @@ export function VaultView({ onAuthError }: { onAuthError: () => void }) {
   const copyExport = async () => {
     if (exportBlob) {
       await navigator.clipboard.writeText(exportBlob).catch(() => {});
-      flash(t("vault_copied"));
+      toast.success(t("vault_copied"));
     }
   };
 
   const doImport = async () => {
     setBusy(true);
-    setError(null);
     try {
       const { imported } = await api.importVaultBackup(importBlob.trim(), importPass);
-      flash(t("vault_imported").replace("{n}", String(imported)));
+      toast.success(t("vault_imported").replace("{n}", String(imported)));
       setImportBlob("");
       setImportPass("");
       await load();
     } catch (e) {
       if (e instanceof AuthError) return onAuthError();
-      setError(String(e));
+      toast.error(String(e));
     } finally {
       setBusy(false);
     }
@@ -158,11 +182,8 @@ export function VaultView({ onAuthError }: { onAuthError: () => void }) {
         {t("vault_migrate_desc")}
         <div className="mt-2">
           <Button onClick={importProviders}>{t("vault_scan_import")}</Button>
-          {status && <span className="ml-2 text-xs text-emerald-400">{status}</span>}
         </div>
       </Callout>
-
-      {error && <p className="my-2 text-sm text-red-400">{error}</p>}
 
       {editing && (
         <div className="my-4 space-y-3 rounded-lg border border-line bg-input p-3">
@@ -218,7 +239,7 @@ export function VaultView({ onAuthError }: { onAuthError: () => void }) {
           {t("onb_step_vault_desc")}
         </Empty>
       ) : (
-        <div className="mt-3 space-y-2">
+        <div ref={listRef} className="mt-3 space-y-2">
           {secrets.map((s) => {
             const uses = usages[s.id] ?? [];
             return (

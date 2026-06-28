@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, AuthError, type ClaudeRoot, type Skill } from "../api.ts";
 import { useI18n } from "../lib/useI18n.ts";
+import { toast } from "../lib/useToast.ts";
 import { Badge, Button, Card, Empty, Input, Label, TextArea } from "./ui.tsx";
 import { SkillsArt } from "./onboarding.tsx";
 
@@ -20,13 +21,12 @@ function PromptLibrary({ onAuthError }: { onAuthError: () => void }) {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [form, setForm] = useState<typeof blank>(blank);
-  const [error, setError] = useState<string | null>(null);
 
   const load = () =>
     api
       .skills()
       .then((r) => setSkills(r.skills))
-      .catch((e) => (e instanceof AuthError ? onAuthError() : setError(String(e))));
+      .catch((e) => (e instanceof AuthError ? onAuthError() : toast.error(String(e))));
 
   useEffect(() => {
     void load();
@@ -48,16 +48,23 @@ function PromptLibrary({ onAuthError }: { onAuthError: () => void }) {
       else if (editing) await api.updateSkill(editing, form);
       setEditing(null);
       await load();
+      toast.success(t("saved"));
     } catch (e) {
       if (e instanceof AuthError) return onAuthError();
-      setError(String(e));
+      toast.error(String(e));
     }
   };
 
   const del = async (id: string) => {
     if (!confirm(t("skills_delete_confirm"))) return;
-    await api.deleteSkill(id);
-    await load();
+    try {
+      await api.deleteSkill(id);
+      await load();
+      toast.success(t("deleted"));
+    } catch (e) {
+      if (e instanceof AuthError) return onAuthError();
+      toast.error(String(e));
+    }
   };
 
   return (
@@ -71,8 +78,6 @@ function PromptLibrary({ onAuthError }: { onAuthError: () => void }) {
         )
       }
     >
-      {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
-
       {editing && (
         <div className="mb-4 space-y-3 rounded-lg border border-line bg-input p-3">
           <div className="grid gap-3 sm:grid-cols-2">
@@ -119,7 +124,17 @@ function PromptLibrary({ onAuthError }: { onAuthError: () => void }) {
       )}
 
       {skills.length === 0 && !editing ? (
-        <Empty icon={<SkillsArt />}>{t("skills_empty_full")}</Empty>
+        <Empty
+          icon={<SkillsArt />}
+          title={t("skills_empty_full")}
+          action={
+            <Button variant="primary" onClick={startNew}>
+              {t("skills_new")}
+            </Button>
+          }
+        >
+          {t("skills_empty_desc")}
+        </Empty>
       ) : (
         <div className="space-y-2">
           {skills.map((s) => (
@@ -155,7 +170,6 @@ function ProjectFiles({ onAuthError }: { onAuthError: () => void }) {
   const [openPath, setOpenPath] = useState<string | null>(null);
   const [content, setContent] = useState("");
   const [dirty, setDirty] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -166,7 +180,6 @@ function ProjectFiles({ onAuthError }: { onAuthError: () => void }) {
   }, []);
 
   const open = async (path: string) => {
-    setStatus(null);
     const r = await api.claudeFile(path);
     setOpenPath(path);
     setContent(r.content);
@@ -177,8 +190,7 @@ function ProjectFiles({ onAuthError }: { onAuthError: () => void }) {
     if (!openPath) return;
     await api.saveClaudeFile(openPath, content);
     setDirty(false);
-    setStatus(t("saved"));
-    setTimeout(() => setStatus(null), 2000);
+    toast.success(t("saved"));
   };
 
   return (
@@ -228,7 +240,6 @@ function ProjectFiles({ onAuthError }: { onAuthError: () => void }) {
                   <Button variant="primary" onClick={save} disabled={!dirty}>
                     {t("save")}
                   </Button>
-                  {status && <span className="text-xs text-emerald-400">{status}</span>}
                 </div>
               </>
             ) : (

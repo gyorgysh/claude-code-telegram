@@ -1,7 +1,8 @@
 import { useEffect, useId, useState } from "react";
 import { api, AuthError, type MainAgent, type Autonomy, type Provider, type PlanView, type PlanType, type ProbeResult, type EmbeddingConfig, type OllamaStatus, type LmStudioStatus, type PreferredBackend } from "../api.ts";
-import { Accordion, Badge, Button, Card, Input, Label, Select, TextArea } from "./ui.tsx";
+import { Accordion, Badge, Button, Card, Input, Label, Select, Skeleton, TextArea } from "./ui.tsx";
 import { useI18n, INTERFACE_LANGUAGES } from "../lib/useI18n.ts";
+import { toast } from "../lib/useToast.ts";
 import type { TranslationKey } from "../i18n/en.ts";
 import { AGENT_LANGUAGES } from "../i18n/languages.ts";
 
@@ -101,7 +102,6 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
   const [autonomy, setAutonomy] = useState<Autonomy>("standard");
   const [fetched, setFetched] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
 
   const load = () =>
     api
@@ -138,22 +138,36 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
 
-  if (!agent) return null;
-
-  const flash = (m: string) => {
-    setStatus(m);
-    setTimeout(() => setStatus(null), 2500);
-  };
+  if (!agent) {
+    return (
+      <Card
+        title={t("settings_agent")}
+        right={<Skeleton className="h-5 w-24" />}
+      >
+        <Skeleton className="mb-4 h-4 w-3/4" />
+        <div className="space-y-2">
+          <Skeleton className="h-9 w-full rounded-lg" />
+          <Skeleton className="h-9 w-full rounded-lg" />
+          <Skeleton className="h-9 w-full rounded-lg" />
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-4">
+          <Skeleton className="h-8 w-20 rounded-lg" />
+          <Skeleton className="h-8 w-20 rounded-lg" />
+          <Skeleton className="h-8 w-24 rounded-lg" />
+        </div>
+      </Card>
+    );
+  }
 
   const save = async () => {
     setBusy("save");
     try {
       const next = await api.saveAgent({ model, providerId, persona, autonomy });
       setAgent(next);
-      flash(t("saved"));
+      toast.success(t("saved"));
     } catch (e) {
       if (e instanceof AuthError) return onAuthError();
-      flash(String(e));
+      toast.error(String(e));
     } finally {
       setBusy(null);
     }
@@ -176,7 +190,7 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
     setBusy("reset");
     try {
       const r = await api.resetAgent();
-      flash(t("settings_reset_done").replace("{sessions}", String(r.sessions)).replace("{aborted}", String(r.aborted)));
+      toast.success(t("settings_reset_done").replace("{sessions}", String(r.sessions)).replace("{aborted}", String(r.aborted)));
     } finally {
       setBusy(null);
     }
@@ -187,9 +201,9 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
     setBusy("restart");
     try {
       await api.restartAgent();
-      flash(t("settings_restarting"));
+      toast.info(t("settings_restarting"));
     } catch (e) {
-      flash(e instanceof Error ? e.message : String(e));
+      toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);
     }
@@ -323,7 +337,6 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
           {t("settings_restart_service")}
         </Button>
         {dirty && <span className="text-xs text-amber-400">{t("settings_unsaved")}</span>}
-        {status && <span className="text-xs text-fg-dim">{status}</span>}
       </div>
     </Card>
   );
@@ -338,7 +351,6 @@ function LanguageSettings({ onAuthError }: { onAuthError: () => void }) {
   const [agent, setAgent] = useState<MainAgent | null>(null);
   const [agentLang, setAgentLang] = useState("");
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -356,8 +368,7 @@ function LanguageSettings({ onAuthError }: { onAuthError: () => void }) {
     try {
       const next = await api.saveAgent({ defaultLanguage: agentLang });
       setAgent(next);
-      setStatus(t("saved"));
-      setTimeout(() => setStatus(null), 2000);
+      toast.success(t("saved"));
     } catch (e) {
       if (e instanceof AuthError) onAuthError();
     } finally {
@@ -418,7 +429,6 @@ function LanguageSettings({ onAuthError }: { onAuthError: () => void }) {
               {busy ? t("saving") : t("save")}
             </Button>
           </div>
-          {status && <p className="mt-1 text-xs text-fg-dim">{status}</p>}
           <p className="mt-1.5 text-xs text-fg-faint">{t("settings_lang_override")}</p>
         </div>
       </div>
@@ -466,7 +476,6 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
   const [probe, setProbe] = useState<ProbeResult | null>(null);
   const [probeRunning, setProbeRunning] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
 
   const loadPlan = () =>
     api
@@ -499,8 +508,7 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
         probeIntervalMs: form.probeIntervalMs,
       });
       await loadPlan();
-      setStatus(t("saved"));
-      setTimeout(() => setStatus(null), 2000);
+      toast.success(t("saved"));
     } catch (e) {
       if (e instanceof AuthError) onAuthError();
     } finally {
@@ -512,8 +520,8 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
     setBusy(true);
     try {
       const { sent } = await api.testReport();
-      setStatus(sent ? t("plan_report_sent") : t("plan_report_failed"));
-      setTimeout(() => setStatus(null), 3000);
+      if (sent) toast.success(t("plan_report_sent"));
+      else toast.error(t("plan_report_failed"));
     } catch (e) {
       if (e instanceof AuthError) onAuthError();
     } finally {
@@ -731,7 +739,6 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
 
         <div className="flex items-center gap-2">
           <Button variant="primary" onClick={save} disabled={busy}>{busy ? t("saving") : t("save")}</Button>
-          {status && <span className="text-xs text-fg-dim">{status}</span>}
         </div>
       </div>
     </Card>
@@ -801,9 +808,6 @@ function ProvidersSettings({ onAuthError }: { onAuthError: () => void }) {
   const [embEnvMode, setEmbEnvMode] = useState<"auto" | "on" | "off">("auto");
   const [manualOpen, setManualOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const [flash, setFlash] = useState<string | null>(null);
-
-  const note = (m: string) => { setFlash(m); setTimeout(() => setFlash(null), 2500); };
 
   const load = () =>
     api
@@ -886,10 +890,10 @@ function ProvidersSettings({ onAuthError }: { onAuthError: () => void }) {
       setEmbEnabled(true);
       setActive(r.activeBackend);
       setEmbAuto(r.embeddingAuto);
-      note(t("saved"));
+      toast.success(t("saved"));
     } catch (e) {
       if (e instanceof AuthError) return onAuthError();
-      note(String(e));
+      toast.error(String(e));
     } finally {
       setBusy(null);
     }
@@ -906,10 +910,10 @@ function ProvidersSettings({ onAuthError }: { onAuthError: () => void }) {
       setEmbAuto(r.embeddingAuto);
       setManualOpen(false);
       await probeBackends();
-      note(t("saved"));
+      toast.success(t("saved"));
     } catch (e) {
       if (e instanceof AuthError) return onAuthError();
-      note(String(e));
+      toast.error(String(e));
     } finally {
       setBusy(null);
     }
@@ -925,10 +929,10 @@ function ProvidersSettings({ onAuthError }: { onAuthError: () => void }) {
       setActive(r.activeBackend);
       setEmbAuto(r.embeddingAuto);
       setManualOpen(false);
-      note(t("saved"));
+      toast.success(t("saved"));
     } catch (e) {
       if (e instanceof AuthError) return onAuthError();
-      note(String(e));
+      toast.error(String(e));
     } finally {
       setBusy(null);
     }
@@ -948,10 +952,10 @@ function ProvidersSettings({ onAuthError }: { onAuthError: () => void }) {
       }
       await load();
       await loadEmbeddings();
-      note(t("ollama_connected"));
+      toast.success(t("ollama_connected"));
     } catch (e) {
       if (e instanceof AuthError) return onAuthError();
-      note(String(e));
+      toast.error(String(e));
     } finally {
       setBusy(null);
     }
@@ -970,10 +974,10 @@ function ProvidersSettings({ onAuthError }: { onAuthError: () => void }) {
       }
       await load();
       await loadEmbeddings();
-      note(t("lmstudio_connected"));
+      toast.success(t("lmstudio_connected"));
     } catch (e) {
       if (e instanceof AuthError) return onAuthError();
-      note(String(e));
+      toast.error(String(e));
     } finally {
       setBusy(null);
     }
@@ -985,7 +989,7 @@ function ProvidersSettings({ onAuthError }: { onAuthError: () => void }) {
       await api.savePreferredBackend(pref);
     } catch (e) {
       if (e instanceof AuthError) return onAuthError();
-      note(String(e));
+      toast.error(String(e));
     }
   };
 
@@ -1221,11 +1225,7 @@ function ProvidersSettings({ onAuthError }: { onAuthError: () => void }) {
           <Button onClick={saveManual} disabled={busy === "emb"}>
             {busy === "emb" ? t("saving") : t("save")}
           </Button>
-          {flash && <span className="text-xs text-fg-dim">{flash}</span>}
         </div>
-      )}
-      {embeddings && flash && currentMode !== "manual" && (
-        <p className="mt-2 text-xs text-fg-dim">{flash}</p>
       )}
     </Card>
   );

@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { api, AuthError, type Column, type ColumnDef, type Priority, type Task, type TaskRunConfig, type Wip } from "../api.ts";
 import { useTaskEvents, type LiveTask } from "../lib/useTaskEvents.ts";
 import { useI18n } from "../lib/useI18n.ts";
-import { Button, Callout, Empty, InfoCard, Input, TextArea } from "./ui.tsx";
+import { toast } from "../lib/useToast.ts";
+import { useListAnimate } from "../lib/useListAnimate.ts";
+import { Button, Callout, Empty, InfoCard, Input, Skeleton, TextArea } from "./ui.tsx";
+import { TasksArt } from "./onboarding.tsx";
 import { RunLog } from "./RunLog.tsx";
 import type { TranslationKey } from "../i18n/en.ts";
 
@@ -32,6 +35,14 @@ const PRIO_DOT: Record<Priority, string> = {
 
 const DAY = 86_400_000;
 
+/**
+ * Invisible 44x44px touch target (WCAG 2.5.5) centred on a visually compact
+ * control, via a `::before` overlay so the element's own size and the
+ * surrounding layout stay unchanged.
+ */
+const HIT44 =
+  "relative before:absolute before:left-1/2 before:top-1/2 before:h-11 before:w-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']";
+
 function formatDate(ts: number): string {
   const d = new Date(ts);
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -41,6 +52,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
   const { t } = useI18n();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [columns, setColumns] = useState<ColumnDef[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [wip, setWip] = useState<Wip>({});
   const [runConfig, setRunConfig] = useState<TaskRunConfig | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
@@ -59,8 +71,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
   const [newColVal, setNewColVal] = useState("");
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Transient, non-fatal notice (e.g. "move cards out first") shown as a banner.
-  const [notice, setNotice] = useState<string | null>(null);
+  const [archiveRef] = useListAnimate();
 
   // Bulk selection state
   const [selectMode, setSelectMode] = useState(false);
@@ -78,7 +89,8 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
         setWip(r.wip);
         setRunConfig(r.config);
       })
-      .catch((e) => (e instanceof AuthError ? onAuthError() : setError(String(e))));
+      .catch((e) => (e instanceof AuthError ? onAuthError() : setError(String(e))))
+      .finally(() => setLoaded(true));
 
   useEffect(() => {
     void load();
@@ -162,17 +174,12 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
     await load();
   };
 
-  const flash = (msg: string) => {
-    setNotice(msg);
-    window.setTimeout(() => setNotice((n) => (n === msg ? null : n)), 4000);
-  };
-
   // Two-step delete: first click arms the confirm (auto-disarms after 3s),
   // second click within the window actually removes the (empty) column.
   const onDeleteColClick = (col: ColumnDef) => {
     const count = inColumn(col.id).length;
     if (count > 0) {
-      flash(t("tasks_move_first").replace("{n}", String(count)).replace("{name}", col.name));
+      toast.info(t("tasks_move_first").replace("{n}", String(count)).replace("{name}", col.name));
       return;
     }
     if (confirmDelCol !== col.id) {
@@ -188,7 +195,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
     try {
       await api.removeColumn(col.id);
     } catch (e) {
-      flash(e instanceof Error ? e.message : String(e));
+      toast.error(e instanceof Error ? e.message : String(e));
     }
     await load();
   };
@@ -220,13 +227,23 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
     });
   };
 
-  const bulkDelete = async () => {
-    const n = selected.size;
+  const bulkDelete = () => {
+    const ids = [...selected];
+    const n = ids.length;
     if (!n) return;
-    if (!confirm(t("tasks_bulk_delete_confirm").replace("{n}", String(n)))) return;
-    await Promise.all([...selected].map((id) => api.deleteTask(id).catch(() => {})));
+    // Optimistically hide the selected cards and open a 5s undo window. Only
+    // commit the deletes to the server once the window closes; undo just
+    // restores the hidden cards (nothing was deleted server-side yet).
+    const hidden = tasks.filter((tk) => ids.includes(tk.id));
+    setTasks((prev) => prev.filter((tk) => !ids.includes(tk.id)));
     exitSelectMode();
-    void load();
+    toast.undo(t("tasks_bulk_deleted").replace("{n}", String(n)), {
+      undoLabel: t("toast_undo"),
+      onUndo: () => setTasks((prev) => [...prev, ...hidden]),
+      onCommit: async () => {
+        await Promise.all(ids.map((id) => api.deleteTask(id).catch(() => {})));
+      },
+    });
   };
 
   const bulkDelegate = async () => {
@@ -235,6 +252,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
     await Promise.all(ids.map((id) => api.delegateTask(id).catch(() => {})));
     exitSelectMode();
     void load();
+    toast.success(t("tasks_bulk_delegated").replace("{n}", String(ids.length)));
   };
 
   const bulkRunTogether = async () => {
@@ -258,6 +276,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
     await Promise.all(ids.map((id) => api.updateTask(id, { column: "archive" as Column }).catch(() => {})));
     exitSelectMode();
     void load();
+    toast.success(t("tasks_bulk_combined").replace("{n}", String(n)));
   };
 
   if (error) return <Empty>{t("tasks_failed_load").replace("{error}", error)}</Empty>;
@@ -277,13 +296,6 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
 
   return (
     <div className="space-y-4">
-      {/* Transient, non-fatal notice (e.g. can't delete a non-empty column) */}
-      {notice && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-400">
-          {notice}
-        </div>
-      )}
-
       {/* Did You Know callout */}
       <Callout title={t("tasks_did_you_know_title")} dismissId="tasks-did-you-know">
         {t("tasks_did_you_know_body")}
@@ -316,27 +328,27 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
           <button
             onClick={bulkDelete}
             disabled={selected.size === 0}
-            className="rounded border border-red-500/40 px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-40 transition-colors"
+            className="flex min-h-[44px] items-center rounded border border-red-500/40 px-2.5 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-40 transition-colors"
           >
             {t("tasks_bulk_delete").replace("{n}", String(selected.size))}
           </button>
           <button
             onClick={bulkDelegate}
             disabled={selected.size === 0}
-            className="rounded border border-line px-2.5 py-1 text-xs text-accent hover:bg-accent/10 disabled:opacity-40 transition-colors"
+            className="flex min-h-[44px] items-center rounded border border-line px-2.5 text-xs text-accent hover:bg-accent/10 disabled:opacity-40 transition-colors"
           >
             {t("tasks_bulk_delegate").replace("{n}", String(selected.size))}
           </button>
           <button
             onClick={bulkRunTogether}
             disabled={selected.size < 2}
-            className="rounded border border-line px-2.5 py-1 text-xs text-fg-dim hover:bg-surface-2 disabled:opacity-40 transition-colors"
+            className="flex min-h-[44px] items-center rounded border border-line px-2.5 text-xs text-fg-dim hover:bg-surface-2 disabled:opacity-40 transition-colors"
           >
             {t("tasks_bulk_run_together")}
           </button>
           <button
             onClick={exitSelectMode}
-            className="ml-auto rounded px-2.5 py-1 text-xs text-fg-faint hover:text-fg-dim transition-colors"
+            className="ml-auto flex min-h-[44px] items-center rounded px-2.5 text-xs text-fg-faint hover:text-fg-dim transition-colors"
           >
             {t("tasks_select_cancel")}
           </button>
@@ -345,7 +357,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
         <div className="flex justify-end">
           <button
             onClick={() => setSelectMode(true)}
-            className="rounded px-2.5 py-1 text-xs text-fg-faint hover:text-fg-dim transition-colors"
+            className="flex min-h-[44px] items-center rounded px-2.5 text-xs text-fg-faint hover:text-fg-dim transition-colors"
           >
             {t("tasks_select_mode")}
           </button>
@@ -374,7 +386,30 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
         </div>
       )}
 
+      {/* Skeleton board while the initial fetch is in flight */}
+      {!loaded && (
+        <div className="grid gap-4 md:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, c) => (
+            <div key={c} className="flex flex-col rounded-xl border border-line bg-surface p-3">
+              <div className="mb-3 flex items-center justify-between gap-1">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-6" />
+              </div>
+              <div className="flex flex-col gap-2">
+                {Array.from({ length: 3 - c }).map((_, i) => (
+                  <div key={i} className="rounded-lg border border-line bg-input p-3">
+                    <Skeleton className="mb-2 h-3.5 w-5/6" />
+                    <Skeleton className="h-3 w-1/2" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Main board */}
+      {loaded && (
       <div className={`grid gap-4 ${gridCols}`}>
         {normalCols.map((col, idx) => {
           const cards = inColumn(col.id);
@@ -437,7 +472,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
                     onClick={() => toggleSelectColumn(col.id)}
                     disabled={cards.length === 0}
                     title={t("tasks_select_all_col")}
-                    className="shrink-0 rounded border border-line px-1.5 py-0.5 text-xs text-accent hover:bg-accent/10 disabled:opacity-40 transition-colors"
+                    className={`shrink-0 rounded border border-line px-1.5 py-0.5 text-xs text-accent hover:bg-accent/10 disabled:opacity-40 transition-colors ${HIT44}`}
                   >
                     {cards.length > 0 && cards.every((tk) => selected.has(tk.id))
                       ? t("tasks_select_none_col")
@@ -459,14 +494,14 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
                         }}
                         placeholder={t("tasks_wip_placeholder")}
                         aria-label={t("tasks_set_wip")}
-                        className="tabular w-12 shrink-0 rounded bg-input px-1 py-0.5 text-xs text-fg outline-none focus:ring-1 focus:ring-accent/50"
+                        className="tabular h-11 w-12 shrink-0 rounded bg-input px-1 text-xs text-fg outline-none focus:ring-1 focus:ring-accent/50"
                       />
                     ) : (
                       <button
                         onClick={() => startEditWip(col)}
                         title={t("tasks_set_wip")}
                         aria-label={t("tasks_set_wip")}
-                        className={`tabular shrink-0 rounded px-1.5 text-xs ${over ? "bg-red-500/15 text-red-400" : "text-fg-faint hover:text-fg-dim"}`}
+                        className={`tabular shrink-0 rounded px-1.5 text-xs ${HIT44} ${over ? "bg-red-500/15 text-red-400" : "text-fg-faint hover:text-fg-dim"}`}
                       >
                         {cards.length}
                         {limit != null && ` / ${limit}`}
@@ -477,7 +512,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
                       onBlur={() => setConfirmDelCol((c) => (c === col.id ? null : c))}
                       title={t("tasks_remove_column")}
                       aria-label={t("tasks_remove_column")}
-                      className={`shrink-0 rounded px-1 text-xs transition-colors ${
+                      className={`shrink-0 rounded px-1 text-xs transition-colors ${HIT44} ${
                         confirmDelCol === col.id
                           ? "bg-red-500/15 text-red-400"
                           : "text-fg-faint hover:text-red-400"
@@ -493,25 +528,33 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
               <AddCard column={col.id} onAdded={load} onAuthError={onAuthError} atTop />
 
               <div className="flex flex-1 flex-col gap-2 mt-2">
-                {cards.map((tk) => (
-                  <Card
-                    key={tk.id}
-                    task={tk}
-                    live={live[tk.id]}
-                    isDragging={dragId === tk.id}
-                    onDragStart={() => setDragId(tk.id)}
-                    onDragEnd={() => {
-                      setDragId(null);
-                      setDragOverCol(null);
-                    }}
-                    onDropBefore={() => drop(col.id, tk.id)}
-                    onChange={load}
-                    onAuthError={onAuthError}
-                    selectMode={selectMode}
-                    selected={selected.has(tk.id)}
-                    onToggleSelect={() => toggleSelect(tk.id)}
-                  />
-                ))}
+                {cards.length === 0 ? (
+                  <div className="scale-90">
+                    <Empty icon={<TasksArt />} title={t("tasks_col_empty")}>
+                      {t("tasks_col_empty_desc")}
+                    </Empty>
+                  </div>
+                ) : (
+                  cards.map((tk) => (
+                    <Card
+                      key={tk.id}
+                      task={tk}
+                      live={live[tk.id]}
+                      isDragging={dragId === tk.id}
+                      onDragStart={() => setDragId(tk.id)}
+                      onDragEnd={() => {
+                        setDragId(null);
+                        setDragOverCol(null);
+                      }}
+                      onDropBefore={() => drop(col.id, tk.id)}
+                      onChange={load}
+                      onAuthError={onAuthError}
+                      selectMode={selectMode}
+                      selected={selected.has(tk.id)}
+                      onToggleSelect={() => toggleSelect(tk.id)}
+                    />
+                  ))
+                )}
               </div>
 
               <AddCard column={col.id} onAdded={load} onAuthError={onAuthError} />
@@ -549,6 +592,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
           )}
         </div>
       </div>
+      )}
 
       {/* Archive section — collapsed by default, title-only cards */}
       {archiveCol && (
@@ -570,7 +614,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
               {archivedCards.length === 0 ? (
                 <p className="text-xs text-fg-faint">{t("tasks_archive_empty")}</p>
               ) : (
-                <div className="grid gap-1.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                <div ref={archiveRef} className="grid gap-1.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                   {archivedCards.map((tk) => {
                     const restoreCol = normalCols[0];
                     const restoreLabel = restoreCol
@@ -591,7 +635,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
                               await api.updateTask(tk.id, { column: restoreCol.id as Column }).catch(() => {});
                               void load();
                             }}
-                            className="rounded px-1.5 py-0.5 text-xs text-accent hover:bg-accent/10 transition-colors"
+                            className={`rounded px-1.5 py-0.5 text-xs text-accent hover:bg-accent/10 transition-colors ${HIT44}`}
                           >
                             {t("tasks_archive_restore")}
                           </button>
@@ -726,7 +770,7 @@ function Card({
             <button
               key={p}
               onClick={() => setPriority(p)}
-              className={`rounded px-2 py-0.5 text-xs capitalize ${
+              className={`flex min-h-[44px] items-center rounded px-2 text-xs capitalize ${
                 priority === p ? "bg-accent/15 text-accent" : "text-fg-dim hover:bg-surface-2"
               }`}
             >
@@ -763,12 +807,15 @@ function Card({
     >
       <div className="flex items-start gap-2">
         {selectMode ? (
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={onToggleSelect}
-            className="mt-1 h-3.5 w-3.5 shrink-0 cursor-pointer accent-accent"
-          />
+          // Invisible 44px hit area around the compact checkbox (WCAG 2.5.5).
+          <label className="relative -m-2.5 flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center">
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onToggleSelect}
+              className="h-3.5 w-3.5 cursor-pointer accent-accent"
+            />
+          </label>
         ) : (
           <span
             className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${PRIO_DOT[task.priority]}`}
@@ -793,6 +840,7 @@ function Card({
           )}
           {task.parentId && <div className="mt-1 text-xs text-fg-faint">{t("tasks_subtask")}</div>}
           <div className="mt-1 flex items-center gap-1.5 text-xs text-fg-faint">
+            <span className="font-mono text-[10px] text-fg-faint opacity-60">#{task.id}</span>
             <span>{t("tasks_created").replace("{date}", formatDate(task.createdAt))}</span>
             {(task.createdByName || task.createdBy) && (
               <span className="rounded bg-accent/10 px-1.5 py-0.5 text-accent">
@@ -908,7 +956,7 @@ function Card({
           {dstatus === "error" && (
             <button
               onClick={retry}
-              className="flex-1 rounded border border-line py-1 text-xs text-accent hover:bg-surface-2"
+              className="flex min-h-[44px] flex-1 items-center justify-center rounded border border-line text-xs text-accent hover:bg-surface-2"
               title={task.retryCount ? t("tasks_retry_count").replace("{n}", String(task.retryCount)) : undefined}
             >
               {t("tasks_retry")}
@@ -917,13 +965,13 @@ function Card({
           )}
           <button
             onClick={() => moveTo("backlog")}
-            className="flex-1 rounded border border-line py-1 text-xs text-fg-dim hover:bg-surface-2 hover:text-fg"
+            className="flex min-h-[44px] flex-1 items-center justify-center rounded border border-line text-xs text-fg-dim hover:bg-surface-2 hover:text-fg"
           >
             {t("tasks_move_to_planned")}
           </button>
           <button
             onClick={() => moveTo("done")}
-            className="flex-1 rounded border border-line py-1 text-xs text-emerald-400 hover:bg-surface-2"
+            className="flex min-h-[44px] flex-1 items-center justify-center rounded border border-line text-xs text-emerald-400 hover:bg-surface-2"
           >
             {t("tasks_mark_done")}
           </button>
@@ -933,7 +981,7 @@ function Card({
       {!selectMode && !running && !isDone && !dstatus && (
         <button
           onClick={delegate}
-          className="mt-2 w-full rounded border border-line py-1 text-xs text-fg-dim hover:bg-surface-2 hover:text-fg"
+          className="mt-2 flex min-h-[44px] w-full items-center justify-center rounded border border-line text-xs text-fg-dim hover:bg-surface-2 hover:text-fg"
         >
           {t("tasks_delegate")}
         </button>

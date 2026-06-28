@@ -195,7 +195,9 @@ export class MemoryStore {
 
   create(input: MemoryInput): MemoryEntry {
     const now = Date.now();
-    const text = input.text.trim();
+    // Strip lone surrogates (e.g. an agent-written memory truncated mid-emoji);
+    // they're invalid UTF-16 and crash the headless CLI when injected later.
+    const text = stripLoneSurrogates(input.text).trim();
     // De-dupe exact repeats: bump the existing entry instead of growing noise.
     const existing = this.entries.find((e) => e.text.toLowerCase() === text.toLowerCase());
     if (existing) {
@@ -227,8 +229,9 @@ export class MemoryStore {
   update(id: string, patch: Partial<MemoryInput>): MemoryEntry | undefined {
     const e = this.get(id);
     if (!e) return undefined;
-    const textChanged = patch.text !== undefined && patch.text.trim() && patch.text.trim() !== e.text;
-    if (patch.text !== undefined) e.text = patch.text.trim() || e.text;
+    const cleanedText = patch.text !== undefined ? stripLoneSurrogates(patch.text).trim() : undefined;
+    const textChanged = cleanedText !== undefined && cleanedText !== "" && cleanedText !== e.text;
+    if (cleanedText !== undefined) e.text = cleanedText || e.text;
     if (patch.tags !== undefined) e.tags = dedupeTags(patch.tags);
     if (patch.salience !== undefined) e.salience = clampSalience(patch.salience, e.salience);
     if (patch.tier !== undefined) e.tier = patch.tier;
@@ -464,10 +467,21 @@ function dedupeTags(tags: string[]): string[] {
  * never its own block) and defang leading markdown markers.
  */
 function sanitizeMemoryText(text: string): string {
-  return text
+  return stripLoneSurrogates(text)
     .replace(/\s+/g, " ")
     .replace(/^[#>*\-\s]+/, "") // strip leading heading/quote/list markers
     .trim();
+}
+
+/**
+ * Remove unpaired UTF-16 surrogates. A memory truncated mid-emoji leaves a lone
+ * high surrogate (e.g. "\uD83D" with no following low surrogate); that's invalid
+ * UTF-16, and when it lands in the system prompt the headless `claude` CLI
+ * crashes (an internal `TypeError: x.startsWith is not a function`, exit code 1).
+ * Stripping them is safe — a lone surrogate carries no real character.
+ */
+export function stripLoneSurrogates(s: string): string {
+  return s.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
 }
 
 /** Render entries as a compact bullet list for the system prompt. */

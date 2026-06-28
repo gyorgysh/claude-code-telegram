@@ -347,7 +347,9 @@ export class WorkerManager {
         persona: w.persona,
         language: w.language,
         permissionMode,
-        settingSources: ["user"],
+        // Load full project context (CLAUDE.md, settings) in the worker's cwd, so
+        // it operates like a real Claude Code session. (The earlier "exit 1" this
+        // skipped was a corrupt-memory bug, fixed in memory.ts, not CLAUDE.md.)
         abortController: abort,
         mcpServers: { memory: memoryMcp, tasks: createTasksMcp({ createdBy: w.id }), skills: skillsMcp, self_update: selfUpdateMcp, crew: crewMcp },
         canUseTool: async (toolName, input) => {

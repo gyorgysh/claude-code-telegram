@@ -103,110 +103,186 @@ export interface RunOptions {
   onToolResult?: (isError: boolean) => void;
 }
 
+/** Token counts for one turn, pulled from the SDK result's `usage` block. */
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+}
+
 export interface RunResult {
   isError: boolean;
   text?: string;
   costUsd?: number;
   durationMs?: number;
+  /** Per-turn token counts (input/output/cache); absent if the SDK omitted them. */
+  tokens?: TokenUsage;
   /** Tool calls made during this turn (for auto-skill extraction). */
   toolCalls?: Array<{ name: string; input: unknown }>;
 }
 
 /** Drive one Claude Code turn, fanning SDK events out to the provided callbacks. */
 export async function runTurn(opts: RunOptions): Promise<RunResult> {
-  // Capture the underlying CLI's stderr so a non-zero exit isn't an opaque
-  // "process exited with code 1" — the real reason ends up in our logs / error.
-  const stderr: string[] = [];
-
-  // With images we must use streaming input (a single structured user message
-  // carrying image blocks); plain text stays a plain string prompt.
-  const prompt =
-    opts.images && opts.images.length > 0
-      ? imagePrompt(opts.prompt, opts.images, opts.resume)
-      : opts.prompt;
-
   // Recall durable memories relevant to this turn and fold them into the system
   // prompt. Hybrid semantic + keyword match when embeddings are on (Phase 2),
-  // keyword-only fallback otherwise; empty store = no-op.
+  // keyword-only fallback otherwise; empty store = no-op. Done once, outside the
+  // retry loop below.
   const recalled = await memory.recallForPromptAsync(opts.prompt);
   const memoryBlock = recalled.length ? formatMemories(recalled) : undefined;
 
-  const response = query({
-    prompt,
-    options: {
-      cwd: opts.cwd,
-      resume: opts.resume,
-      model: opts.model ?? config.CLAUDE_MODEL,
-      // Only override the child env when asked (e.g. a local-model provider);
-      // otherwise the SDK defaults to process.env.
-      env: opts.env ? { ...process.env, ...opts.env } : undefined,
-      systemPrompt: systemPrompt(
-        opts.systemPromptAppend,
-        memoryBlock,
-        opts.crew,
-        opts.persona,
-        opts.language,
-        opts.pendingSuggestions,
-      ),
-      permissionMode: opts.permissionMode,
-      includePartialMessages: true,
-      abortController: opts.abortController,
-      mcpServers: opts.mcpServers,
-      canUseTool: opts.canUseTool,
-      stderr: (data: string) => {
-        const line = data.trim();
-        if (line) {
-          stderr.push(line);
-          log.debug("claude stderr", { line: line.slice(0, 500) });
-        }
-      },
-      settingSources: opts.settingSources ?? ["user", "project", "local"],
-    },
-  }) as unknown as AsyncIterable<SdkMessage>;
+  // The headless `claude` CLI intermittently crashes on startup/teardown with a
+  // non-zero exit and NO output (a known CLI bug). It happens before any text
+  // streams, so we retry the whole turn a few times — but only while nothing has
+  // been emitted to the user yet, to avoid duplicating a partially-streamed reply.
+  let streamedAny = false;
+  const MAX_ATTEMPTS = 3;
+  let lastErr: unknown;
 
-  let result: RunResult = { isError: false };
-  const toolCalls: Array<{ name: string; input: unknown }> = [];
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    // Per-attempt: fresh stderr buffer, and a fresh image prompt (an image
+    // generator is single-use; the text prompt is a reusable string).
+    const stderr: string[] = [];
+    const prompt =
+      opts.images && opts.images.length > 0
+        ? imagePrompt(opts.prompt, opts.images, opts.resume)
+        : opts.prompt;
 
-  // Hold the dev restart-guard for the lifetime of the stream, so a source edit
-  // the agent makes mid-run doesn't bounce the watcher until the turn is done.
-  activityBegin();
-  try {
-    for await (const msg of response) {
-      if (isSystemInit(msg)) {
-        if (msg.session_id) opts.onSessionId(msg.session_id);
-      } else if (isStreamEvent(msg)) {
-        const delta = textDelta(msg);
-        if (delta) opts.onText(delta);
-      } else if (isAssistant(msg)) {
-        for (const block of msg.message.content ?? []) {
-          if (block.type === "tool_use" && block.name) {
-            opts.onToolUse(block.name, block.input);
-            toolCalls.push({ name: block.name, input: block.input });
+    const response = query({
+      prompt,
+      options: {
+        cwd: opts.cwd,
+        resume: opts.resume,
+        model: opts.model ?? config.CLAUDE_MODEL,
+        // Only override the child env when asked (e.g. a local-model provider);
+        // otherwise the SDK defaults to process.env.
+        env: opts.env ? { ...process.env, ...opts.env } : undefined,
+        systemPrompt: systemPrompt(
+          opts.systemPromptAppend,
+          memoryBlock,
+          opts.crew,
+          opts.persona,
+          opts.language,
+          opts.pendingSuggestions,
+        ),
+        permissionMode: opts.permissionMode,
+        includePartialMessages: true,
+        abortController: opts.abortController,
+        mcpServers: opts.mcpServers,
+        canUseTool: opts.canUseTool,
+        stderr: (data: string) => {
+          const line = data.trim();
+          if (line) {
+            stderr.push(line);
+            log.debug("claude stderr", { line: line.slice(0, 500) });
           }
+        },
+        settingSources: opts.settingSources ?? ["user", "project", "local"],
+      },
+    }) as unknown as AsyncIterable<SdkMessage>;
+
+    let result: RunResult = { isError: false };
+    let gotResult = false;
+    const toolCalls: Array<{ name: string; input: unknown }> = [];
+
+    // Hold the dev restart-guard for the lifetime of the stream, so a source edit
+    // the agent makes mid-run doesn't bounce the watcher until the turn is done.
+    activityBegin();
+    try {
+      for await (const msg of response) {
+        if (isSystemInit(msg)) {
+          if (msg.session_id) opts.onSessionId(msg.session_id);
+        } else if (isStreamEvent(msg)) {
+          const delta = textDelta(msg);
+          if (delta) {
+            streamedAny = true;
+            opts.onText(delta);
+          }
+        } else if (isAssistant(msg)) {
+          for (const block of msg.message.content ?? []) {
+            if (block.type === "tool_use" && block.name) {
+              opts.onToolUse(block.name, block.input);
+              toolCalls.push({ name: block.name, input: block.input });
+            }
+          }
+        } else if (isUser(msg)) {
+          // Tool results come back as user messages; surface error state so the
+          // caller (auto_until_error autonomy) can escalate after a failure.
+          if (opts.onToolResult) opts.onToolResult(hasToolError(msg));
+        } else if (isResult(msg)) {
+          const u = msg.usage;
+          // The CLI can report a soft failure as a result with subtype
+          // "error_during_execution" and a populated `errors` array while
+          // `is_error` is false — if we only check `is_error` the real reason
+          // (e.g. an internal CLI TypeError) is swallowed and the user sees an
+          // empty/opaque reply. Surface it by throwing with the actual text.
+          const m = msg as { subtype?: string; errors?: unknown };
+          const errs = Array.isArray(m.errors) ? m.errors.map(String).filter(Boolean) : [];
+          if (m.subtype === "error_during_execution" || errs.length) {
+            const detail = errs.length ? errs.join("; ") : "error during execution";
+            throw new Error(`Claude CLI reported an error during execution: ${detail}`);
+          }
+          result = {
+            isError: Boolean(msg.is_error),
+            text: msg.result,
+            costUsd: msg.total_cost_usd,
+            durationMs: msg.duration_ms,
+            tokens: u
+              ? {
+                  inputTokens: u.input_tokens ?? 0,
+                  outputTokens: u.output_tokens ?? 0,
+                  cacheReadTokens: u.cache_read_input_tokens ?? 0,
+                  cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
+                }
+              : undefined,
+            toolCalls,
+          };
+          gotResult = true;
         }
-      } else if (isUser(msg)) {
-        // Tool results come back as user messages; surface error state so the
-        // caller (auto_until_error autonomy) can escalate after a failure.
-        if (opts.onToolResult) opts.onToolResult(hasToolError(msg));
-      } else if (isResult(msg)) {
-        result = {
-          isError: Boolean(msg.is_error),
-          text: msg.result,
-          costUsd: msg.total_cost_usd,
-          durationMs: msg.duration_ms,
-          toolCalls,
-        };
       }
+      return result;
+    } catch (err) {
+      // The CLI sometimes exits non-zero during teardown *after* emitting a valid
+      // result. If we already captured a successful result, trust it rather than
+      // discarding a completed turn over an exit-code-1 we can ignore.
+      if (gotResult && !result.isError) {
+        log.warn("claude exited non-zero after a successful result — using the result", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return result;
+      }
+      const base = err instanceof Error ? err.message : String(err);
+      // Retry the silent early crash (no stderr, nothing streamed, no result yet).
+      const transient = stderr.length === 0 && !streamedAny && /exited with code|process exited/i.test(base);
+      if (transient && attempt < MAX_ATTEMPTS) {
+        lastErr = err;
+        log.warn(`claude crashed early with no output (attempt ${attempt}/${MAX_ATTEMPTS}) — retrying`, {
+          error: base,
+        });
+        continue;
+      }
+      const tail = stderr.slice(-8).join("\n");
+      if (tail) log.error("claude process failed", { stderr: tail });
+      if (tail) throw new Error(`${base} — ${tail}`);
+      // No stderr from the CLI almost always means it couldn't authenticate or
+      // wasn't found — a silent exit. Point at the doctor so the failure is fixable
+      // instead of an opaque "exited with code 1". Keep this wording free of
+      // auth/usage keywords so bot.ts's friendlyError() doesn't reclassify it.
+      const silent = /exited with code|ENOENT|spawn/i.test(base);
+      throw new Error(
+        silent
+          ? `${base}. The Claude CLI produced no output (retried ${attempt}×) — commonly a transient CLI crash, missing credentials, or not on PATH. Run \`npm run doctor\` on the host to see the real error.`
+          : base,
+      );
+    } finally {
+      activityEnd();
     }
-  } catch (err) {
-    const tail = stderr.slice(-8).join("\n");
-    if (tail) log.error("claude process failed", { stderr: tail });
-    throw new Error(tail ? `${err instanceof Error ? err.message : String(err)} — ${tail}` : String(err));
-  } finally {
-    activityEnd();
   }
 
-  return result;
+  // Exhausted all attempts on the transient early-crash path.
+  throw new Error(
+    `${lastErr instanceof Error ? lastErr.message : String(lastErr)}. The Claude CLI repeatedly crashed on startup with no output (a known headless-mode bug). Run \`npm run doctor\`.`,
+  );
 }
 
 /**

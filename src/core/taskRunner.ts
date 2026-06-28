@@ -270,7 +270,10 @@ export class TaskDelegator {
         systemPromptAppend: append,
         persona: lead?.persona,
         permissionMode: "bypassPermissions",
-        settingSources: ["user"],
+        // Load full project context (CLAUDE.md, settings) so a delegated task can
+        // work on the repo with the same knowledge as the main agent. The earlier
+        // crash this skipped was actually a corrupt-memory bug (now fixed in
+        // memory.ts), not the project CLAUDE.md.
         abortController: abort,
         mcpServers: { memory: memoryMcp, tasks: createTasksMcp({ createdBy: lead?.id ?? "atlas" }), skills: skillsMcp, self_update: selfUpdateMcp, ...buildConnectorMcps() },
         canUseTool: async (_n, input) => ({ behavior: "allow", updatedInput: input }),

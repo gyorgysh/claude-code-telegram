@@ -607,6 +607,29 @@ function Install-Service {
             & sc.exe failureflag $svcName 1 | Out-Null
         } catch { Warn "Could not set SCM recovery actions (NSSM auto-restart is still active)." }
 
+        # Grant the service account SERVICE_STOP (0x0020) + SERVICE_START (0x0010)
+        # + SERVICE_INTERROGATE (0x0080) + READ_CONTROL (0x00020000) on its own
+        # service object so the bot process can restart itself from the panel
+        # without needing an external elevated token.
+        # SDDL ACE format: (A;;access;;;SID)
+        #   A  = Allow,  hex rights,  the SID of $svcUser
+        # We read the existing SDDL first and append our ACE to D: (DACL).
+        try {
+            $sid = (New-Object System.Security.Principal.NTAccount($svcUser)).Translate(
+                       [System.Security.Principal.SecurityIdentifier]).Value
+            $currentSddl = & sc.exe sdshow $svcName 2>$null
+            if ($currentSddl -and $currentSddl -notmatch "ERROR") {
+                # Insert the ACE before the first closing paren group of D:
+                $ace = "(A;;RPWPRC;;;$sid)"
+                # Append to the DACL section
+                $newSddl = $currentSddl -replace '(D:[^S]*)', "`$1$ace"
+                & sc.exe sdset $svcName $newSddl | Out-Null
+                Ok "Granted service control rights to $svcUser on '$svcName'."
+            } else {
+                Warn "Could not read service SDDL — skipping ACL grant (panel restart may need manual fix)."
+            }
+        } catch { Warn "Could not grant service control rights: $_" }
+
         & nssm start $svcName
 
         # Confirm it actually started (a bad 'log on as a service' right or an

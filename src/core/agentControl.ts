@@ -78,14 +78,26 @@ export function restartService(): void {
       // isn't on the service's PATH. An NSSM service is a real Windows service.
       let child;
       if (kind === "nssm") {
-        // sc.exe restart is the cleanest single call. Spawn cmd.exe and pass
-        // the whole command as one /c string — matching the C# pattern of
-        // cmd.exe /c <command>. This avoids argument-array splitting issues
-        // and needs no PowerShell / ExecutionPolicy.
+        // The service runs as .\admin which does not hold SERVICE_STOP/START
+        // rights on its own service object, so sc.exe called directly from
+        // within the process is denied. Work around it with a one-shot
+        // scheduled task that runs as SYSTEM (which always has full service
+        // control rights). schtasks /create + /run + /delete as a chain:
+        //   - /F overwrites a leftover task from a previous crash
+        //   - /RU SYSTEM so the restart runs with full SCM rights
+        //   - /SC ONCE /ST 00:00 satisfies the required trigger fields
+        //   - the task deletes itself after running (/Z ... /ET 00:01)
+        //     but we also chain a /delete at the end for reliability
+        // All via cmd /c so we stay in one detached child process.
+        const taskName = "MyhqRestart";
         const cmdExe = join(sys32, "cmd.exe");
+        const scPath = join(sys32, "sc.exe");
         child = spawn(
           cmdExe,
-          ["/c", `sc.exe restart myhq`],
+          [
+            "/c",
+            `"${SCHTASKS_EXE}" /create /f /tn "${taskName}" /ru SYSTEM /sc ONCE /st 00:00 /tr "${scPath} restart myhq" && "${SCHTASKS_EXE}" /run /tn "${taskName}" && ping -n 4 127.0.0.1 >nul && "${SCHTASKS_EXE}" /delete /f /tn "${taskName}"`,
+          ],
           { detached: true, stdio: "ignore", windowsHide: true, shell: false },
         );
       } else if (kind === "task") {

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.ts";
 import { useI18n } from "../lib/useI18n.ts";
-import { InfoCard } from "./ui.tsx";
+import { InfoCard, Button, Input, Select, Label } from "./ui.tsx";
+import { toast } from "../lib/useToast.ts";
 import type { TranslationKey } from "../i18n/en.ts";
 import type { Tab } from "./Sidebar.tsx";
 
@@ -256,13 +257,11 @@ export function GettingStarted({ onGoto }: { onGoto: (t: Tab) => void }) {
   const { t } = useI18n();
   const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISS_KEY) === "1");
   const [steps, setSteps] = useState<Step[] | null>(null);
+  const [wizard, setWizard] = useState(false);
 
-  useEffect(() => {
-    if (dismissed) return;
-    let alive = true;
+  const refresh = () =>
     Promise.allSettled([api.workers(), api.schedules(), api.vault(), api.connectors()]).then(
       ([w, s, v, c]) => {
-        if (!alive) return;
         const hasWorker = w.status === "fulfilled" && w.value.workers.length > 0;
         const hasSchedule = s.status === "fulfilled" && s.value.schedules.length > 0;
         const hasSecret = v.status === "fulfilled" && v.value.secrets.length > 0;
@@ -276,9 +275,17 @@ export function GettingStarted({ onGoto }: { onGoto: (t: Tab) => void }) {
         ]);
       },
     );
+
+  useEffect(() => {
+    if (dismissed) return;
+    let alive = true;
+    void refresh().then(() => {
+      if (!alive) setSteps(null);
+    });
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dismissed]);
 
   const dismiss = () => {
@@ -290,6 +297,17 @@ export function GettingStarted({ onGoto }: { onGoto: (t: Tab) => void }) {
   const doneCount = steps.filter((s) => s.done).length;
   // Self-dismiss once everything is set up — no clutter for configured installs.
   if (doneCount === steps.length) return null;
+
+  if (wizard) {
+    return (
+      <SetupWizard
+        onClose={() => {
+          setWizard(false);
+          void refresh();
+        }}
+      />
+    );
+  }
 
   const pct = Math.round((doneCount / steps.length) * 100);
 
@@ -307,6 +325,12 @@ export function GettingStarted({ onGoto }: { onGoto: (t: Tab) => void }) {
         >
           {t("onb_dismiss")}
         </button>
+      </div>
+
+      <div className="mb-3">
+        <Button variant="primary" onClick={() => setWizard(true)} className="w-full sm:w-auto">
+          {t("onb_wizard_start")}
+        </Button>
       </div>
 
       <div className="mb-3 flex items-center gap-2">
@@ -350,6 +374,299 @@ export function GettingStarted({ onGoto }: { onGoto: (t: Tab) => void }) {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Guided setup wizard
+//
+// A focused, step-by-step first-run flow embedded in the dashboard (no modal,
+// to match the rest of the panel). Walks three core actions — create the first
+// Lead, set one schedule, attach one connector — each with its own tiny form
+// that calls the real API and verifies success before letting the user advance.
+// Every step is skippable; finishing or skipping all of them closes the wizard
+// and the parent checklist re-checks live state.
+// ---------------------------------------------------------------------------
+
+type WizardStepId = "lead" | "schedule" | "connector";
+const WIZARD_ORDER: WizardStepId[] = ["lead", "schedule", "connector"];
+
+function SetupWizard({ onClose }: { onClose: () => void }) {
+  const { t } = useI18n();
+  const [idx, setIdx] = useState(0);
+  const [doneFlags, setDoneFlags] = useState<Record<WizardStepId, boolean>>({
+    lead: false,
+    schedule: false,
+    connector: false,
+  });
+
+  const stepId = WIZARD_ORDER[idx];
+  const advance = (id: WizardStepId) => {
+    setDoneFlags((d) => ({ ...d, [id]: true }));
+    if (idx + 1 < WIZARD_ORDER.length) setIdx(idx + 1);
+    else onClose();
+  };
+  const skip = () => {
+    if (idx + 1 < WIZARD_ORDER.length) setIdx(idx + 1);
+    else onClose();
+  };
+
+  return (
+    <div className="rounded-xl border border-accent/30 bg-accent/5 p-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-fg">{t("onb_wizard_title")}</h3>
+          <p className="mt-0.5 text-xs text-fg-dim">{t("onb_wizard_desc")}</p>
+        </div>
+        <button
+          onClick={onClose}
+          className="shrink-0 text-xs text-fg-faint hover:text-fg-muted"
+          aria-label={t("onb_wizard_exit")}
+        >
+          {t("onb_wizard_exit")}
+        </button>
+      </div>
+
+      {/* Stepper dots */}
+      <div className="mb-4 flex items-center gap-2">
+        {WIZARD_ORDER.map((id, i) => (
+          <div key={id} className="flex flex-1 items-center gap-2">
+            <span
+              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold ${
+                doneFlags[id]
+                  ? "border-accent bg-accent text-accent-fg"
+                  : i === idx
+                    ? "border-accent text-accent"
+                    : "border-line text-fg-faint"
+              }`}
+            >
+              {doneFlags[id] ? "✓" : i + 1}
+            </span>
+            {i < WIZARD_ORDER.length - 1 && (
+              <div className="h-px flex-1 bg-line" aria-hidden />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {stepId === "lead" && <LeadStep onDone={() => advance("lead")} onSkip={skip} />}
+      {stepId === "schedule" && <ScheduleStep onDone={() => advance("schedule")} onSkip={skip} />}
+      {stepId === "connector" && <ConnectorStep onDone={() => advance("connector")} onSkip={skip} />}
+    </div>
+  );
+}
+
+/** Shared footer row: a primary action + a skip link. */
+function WizardActions({
+  onSkip,
+  busy,
+  actionLabel,
+  onAction,
+  disabled,
+}: {
+  onSkip: () => void;
+  busy: boolean;
+  actionLabel: string;
+  onAction: () => void;
+  disabled?: boolean;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="mt-4 flex items-center gap-2 border-t border-line pt-3">
+      <Button variant="primary" onClick={onAction} disabled={busy || disabled}>
+        {busy ? t("saving") : actionLabel}
+      </Button>
+      <button onClick={onSkip} className="text-xs text-fg-faint hover:text-fg-muted">
+        {t("onb_wizard_skip")}
+      </button>
+    </div>
+  );
+}
+
+/** Step 1 — create the first Lead (a worker with role "lead"). */
+function LeadStep({ onDone, onSkip }: { onDone: () => void; onSkip: () => void }) {
+  const { t } = useI18n();
+  const [name, setName] = useState("");
+  const [portfolio, setPortfolio] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const create = async () => {
+    if (!name.trim()) return;
+    setBusy(true);
+    try {
+      await api.createWorker({
+        name: name.trim(),
+        role: "lead",
+        portfolio: portfolio.trim() || undefined,
+        enabled: true,
+      });
+      toast.success(t("onb_wizard_lead_ok"));
+      onDone();
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <h4 className="text-sm font-semibold text-fg">{t("onb_wizard_lead_h")}</h4>
+      <p className="mt-0.5 mb-3 text-xs text-fg-dim">{t("onb_wizard_lead_p")}</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <Label>{t("onb_wizard_lead_name")}</Label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Mark" />
+        </div>
+        <div>
+          <Label>{t("onb_wizard_lead_portfolio")}</Label>
+          <Input
+            value={portfolio}
+            onChange={(e) => setPortfolio(e.target.value)}
+            placeholder={t("onb_wizard_lead_portfolio_ph")}
+          />
+        </div>
+      </div>
+      <WizardActions
+        onSkip={onSkip}
+        busy={busy}
+        actionLabel={t("onb_wizard_lead_btn")}
+        onAction={create}
+        disabled={!name.trim()}
+      />
+    </div>
+  );
+}
+
+/** Step 2 — set one schedule (a recurring autonomous prompt). */
+function ScheduleStep({ onDone, onSkip }: { onDone: () => void; onSkip: () => void }) {
+  const { t } = useI18n();
+  const [prompt, setPrompt] = useState(t("onb_wizard_sched_default"));
+  const [when, setWhen] = useState("09:00");
+  const [busy, setBusy] = useState(false);
+
+  const create = async () => {
+    if (!prompt.trim() || !when.trim()) return;
+    setBusy(true);
+    try {
+      await api.createSchedule({ prompt: prompt.trim(), when: when.trim() });
+      toast.success(t("onb_wizard_sched_ok"));
+      onDone();
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <h4 className="text-sm font-semibold text-fg">{t("onb_wizard_sched_h")}</h4>
+      <p className="mt-0.5 mb-3 text-xs text-fg-dim">{t("onb_wizard_sched_p")}</p>
+      <div className="space-y-3">
+        <div>
+          <Label>{t("onb_wizard_sched_prompt")}</Label>
+          <Input value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+        </div>
+        <div className="max-w-[10rem]">
+          <Label>{t("onb_wizard_sched_when")}</Label>
+          <Input value={when} onChange={(e) => setWhen(e.target.value)} placeholder="09:00" />
+          <p className="mt-0.5 text-xs text-fg-faint">{t("onb_wizard_sched_when_hint")}</p>
+        </div>
+      </div>
+      <WizardActions
+        onSkip={onSkip}
+        busy={busy}
+        actionLabel={t("onb_wizard_sched_btn")}
+        onAction={create}
+        disabled={!prompt.trim() || !when.trim()}
+      />
+    </div>
+  );
+}
+
+/** Step 3 — attach one connector (vault a token, then bind it to a live connector). */
+function ConnectorStep({ onDone, onSkip }: { onDone: () => void; onSkip: () => void }) {
+  const { t } = useI18n();
+  const [connectors, setConnectors] = useState<{ id: string; name: string; credential: string }[]>([]);
+  const [connectorId, setConnectorId] = useState("");
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void api
+      .connectors()
+      .then((r) => {
+        if (!alive) return;
+        const live = r.connectors.filter((c) => c.status === "live");
+        setConnectors(live.map((c) => ({ id: c.id, name: c.name, credential: c.credential })));
+        if (live.length) setConnectorId(live[0].id);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const selected = connectors.find((c) => c.id === connectorId);
+
+  const attach = async () => {
+    if (!connectorId || !token.trim()) return;
+    setBusy(true);
+    try {
+      const secret = await api.createSecret({
+        name: `${selected?.name ?? connectorId} token`,
+        value: token.trim(),
+        description: t("onb_wizard_conn_secret_desc"),
+      });
+      await api.saveConnector(connectorId, { secretId: secret.id, enabled: true });
+      toast.success(t("onb_wizard_conn_ok"));
+      onDone();
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <h4 className="text-sm font-semibold text-fg">{t("onb_wizard_conn_h")}</h4>
+      <p className="mt-0.5 mb-3 text-xs text-fg-dim">{t("onb_wizard_conn_p")}</p>
+      {connectors.length === 0 ? (
+        <p className="rounded-md border border-line bg-surface-2 px-2.5 py-2 text-xs text-fg-dim">
+          {t("onb_wizard_conn_none")}
+        </p>
+      ) : (
+        <div className="space-y-3">
+          <div>
+            <Label>{t("onb_wizard_conn_pick")}</Label>
+            <Select value={connectorId} onChange={(e) => setConnectorId(e.target.value)}>
+              {connectors.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <Label>{t("onb_wizard_conn_token")}</Label>
+            <Input
+              type="password"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder={selected?.credential || t("onb_wizard_conn_token_ph")}
+            />
+          </div>
+        </div>
+      )}
+      <WizardActions
+        onSkip={onSkip}
+        busy={busy}
+        actionLabel={t("onb_wizard_conn_btn")}
+        onAction={attach}
+        disabled={connectors.length === 0 || !connectorId || !token.trim()}
+      />
     </div>
   );
 }

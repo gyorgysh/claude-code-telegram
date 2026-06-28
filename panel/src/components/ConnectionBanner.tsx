@@ -52,12 +52,11 @@ export function ConnectionBanner() {
       : t("conn_reconnecting");
 
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className={`sticky top-0 z-40 border-b px-4 py-2 text-sm ${tone}`}
-    >
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-3 gap-y-1">
+    // Opaque base layer so page content scrolling under this sticky bar can't
+    // bleed through the translucent colour tint.
+    <div role="status" aria-live="polite" className="sticky top-0 z-40 bg-page">
+      <div className={`border-b px-4 py-2 text-sm ${tone}`}>
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-3 gap-y-1">
         <span className="relative flex h-2.5 w-2.5 shrink-0">
           {!ok && (
             <span
@@ -90,6 +89,7 @@ export function ConnectionBanner() {
             </button>
           </span>
         )}
+        </div>
       </div>
     </div>
   );

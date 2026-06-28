@@ -454,7 +454,7 @@ function AgentChat({ agentId, onAuthError }: { agentId: string; onAuthError: () 
       messages={messages}
       stream={stream}
       busy={busy}
-      empty={t("chat_agent_empty").replace("{name}", view?.name ?? "")}
+      empty={<>{t("chat_agent_empty").replace("{name}", view?.name ?? "")}<br />{t("chat_agent_empty_2")}</>}
       onSend={(txt) => api.sendAgentChat(agentId, txt).then(() => {})}
       onStop={() => void api.stopAgentChat(agentId)}
     />

@@ -505,7 +505,8 @@ export const en = {
   chat_agent_atlas: "Atlas",
   chat_agent_atlas_sub: "Main agent",
   chat_agent_private: "private session",
-  chat_agent_empty: "Direct orders and one-shot questions for {name}. Each prompt runs fresh — no memory carried between turns. For ongoing conversation, use Telegram if this agent has a bot token.",
+  chat_agent_empty: "Direct orders and one-shot questions for {name}. Each prompt runs fresh, no memory carried between turns.",
+  chat_agent_empty_2: "For ongoing conversation, use Telegram if this agent has a bot token.",
 
   // Memory (additional)
   memory_fact_placeholder: "One concise, self-contained fact…",

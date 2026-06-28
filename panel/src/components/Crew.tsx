@@ -621,39 +621,40 @@ function CrewNode({
         <div className="flex items-center gap-2">
           <span className="font-medium text-fg">{title}</span>
           {paused && <Badge tone="zinc">{t("crew_paused")}</Badge>}
-          {/* Telegram status: green + linked when live, dim + tooltip when no token */}
-          {extra &&
-            (extraHref ? (
-              <a
-                href={extraHref}
-                target="_blank"
-                rel="noreferrer"
-                title={t("crew_listening_hint")}
+          {/* Telegram status + Web Chat: icon-only pills, fixed visual weight */}
+          <span className="flex items-center gap-1.5">
+            {extra &&
+              (extraHref ? (
+                <a
+                  href={extraHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={t("crew_listening_hint")}
+                  className="transition-opacity hover:opacity-80"
+                >
+                  <Badge tone="green" className="w-7 justify-center">⦿</Badge>
+                </a>
+              ) : (
+                <span title={t("crew_listening_hint")}>
+                  <Badge tone="green" className="w-7 justify-center">⦿</Badge>
+                </span>
+              ))}
+            {warn && (
+              <span title={t("crew_no_token_hint")} className="opacity-40">
+                <Badge tone="zinc" className="w-7 justify-center">⦾</Badge>
+              </span>
+            )}
+            {onWebChat && (
+              <button
+                type="button"
+                onClick={onWebChat}
+                title={t("crew_web_chat_hint")}
                 className="transition-opacity hover:opacity-80"
               >
-                <Badge tone="green">⦿ {t("crew_listening")}</Badge>
-              </a>
-            ) : (
-              <span title={t("crew_listening_hint")}>
-                <Badge tone="green">⦿ {t("crew_listening")}</Badge>
-              </span>
-            ))}
-          {warn && (
-            <span title={t("crew_no_token_hint")} className="opacity-40">
-              <Badge tone="zinc">⦾ {t("crew_no_token")}</Badge>
-            </span>
-          )}
-          {/* Web Chat: compact, always last */}
-          {onWebChat && (
-            <button
-              type="button"
-              onClick={onWebChat}
-              title={t("crew_web_chat_hint")}
-              className="rounded-full transition-opacity hover:opacity-80"
-            >
-              <Badge tone="violet">⌨ {t("crew_web_chat")}</Badge>
-            </button>
-          )}
+                <Badge tone="violet" className="w-7 justify-center">⌨</Badge>
+              </button>
+            )}
+          </span>
         </div>
         <div className="truncate text-xs text-fg-dim" title={subtitle}>
           {subtitle}

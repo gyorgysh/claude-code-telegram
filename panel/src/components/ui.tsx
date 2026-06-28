@@ -70,9 +70,11 @@ export function Bar({ pct, className = "" }: { pct: number; className?: string }
 export function Badge({
   children,
   tone = "zinc",
+  className = "",
 }: {
   children: ReactNode;
   tone?: "zinc" | "green" | "amber" | "blue" | "violet";
+  className?: string;
 }) {
   const tones: Record<string, string> = {
     zinc: "bg-surface-2 text-fg-muted",
@@ -84,7 +86,7 @@ export function Badge({
     violet: "bg-violet-500/15 text-violet-500 dark:text-violet-300",
   };
   return (
-    <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${tones[tone]}`}>
+    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${tones[tone]} ${className}`}>
       {children}
     </span>
   );

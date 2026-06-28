@@ -42,19 +42,23 @@ export const PRIMARY_NAV: Item[] = [
   { id: "tasks", labelKey: "nav_tasks", icon: "▤", hintKey: "nav_tasks_hint" },
   { id: "crew", labelKey: "nav_crew", icon: "⬡", hintKey: "nav_crew_hint" },
   { id: "inbox", labelKey: "nav_inbox", icon: "✉", hintKey: "nav_inbox_hint" },
-  { id: "memory", labelKey: "nav_memory", icon: "❋", hintKey: "nav_memory_hint" },
 ];
 
 /**
  * @deprecated Use NAV groups directly. Kept for mobile More drawer compatibility.
  */
 export const MORE_NAV: Item[] = [
-  { id: "workers", labelKey: "nav_workers", icon: "◈", hintKey: "nav_workers_hint" },
-  { id: "schedules", labelKey: "nav_schedules", icon: "◷", hintKey: "nav_schedules_hint" },
+  { id: "logs", labelKey: "nav_logs", icon: "≣", hintKey: "nav_logs_hint" },
   { id: "heartbeat", labelKey: "nav_heartbeat", icon: "♡", hintKey: "nav_heartbeat_hint" },
   { id: "sessions", labelKey: "nav_sessions", icon: "◇", hintKey: "nav_sessions_hint" },
   { id: "usage", labelKey: "nav_usage", icon: "↗", hintKey: "nav_usage_hint" },
-  { id: "logs", labelKey: "nav_logs", icon: "≣", hintKey: "nav_logs_hint" },
+  { id: "workers", labelKey: "nav_workers", icon: "◈", hintKey: "nav_workers_hint" },
+  { id: "schedules", labelKey: "nav_schedules", icon: "◷", hintKey: "nav_schedules_hint" },
+  { id: "memory", labelKey: "nav_memory", icon: "❋", hintKey: "nav_memory_hint" },
+  { id: "vault", labelKey: "nav_vault", icon: "⚷", hintKey: "nav_vault_hint" },
+  { id: "connectors", labelKey: "nav_connectors", icon: "⊹", hintKey: "nav_connectors_hint" },
+  { id: "prompt", labelKey: "nav_prompt", icon: "❝", hintKey: "nav_prompt_hint" },
+  { id: "skills", labelKey: "nav_skills", icon: "✦", hintKey: "nav_skills_hint" },
   { id: "setup", labelKey: "nav_setup", icon: "✎", hintKey: "nav_setup_hint" },
 ];
 
@@ -65,35 +69,38 @@ export const MORE_NAV: Item[] = [
  */
 export const NAV: Group[] = [
   {
+    // Monitor — things you observe passively: system state, events, activity
     headingKey: "nav_monitor",
     items: [
       { id: "health", labelKey: "nav_health", icon: "▦", hintKey: "nav_health_hint" },
+      { id: "logs", labelKey: "nav_logs", icon: "≣", hintKey: "nav_logs_hint" },
+      { id: "heartbeat", labelKey: "nav_heartbeat", icon: "♡", hintKey: "nav_heartbeat_hint" },
+      { id: "sessions", labelKey: "nav_sessions", icon: "◇", hintKey: "nav_sessions_hint" },
+      { id: "usage", labelKey: "nav_usage", icon: "↗", hintKey: "nav_usage_hint" },
+    ],
+  },
+  {
+    // Operate — things you actively work with day to day
+    headingKey: "nav_operate",
+    items: [
       { id: "command", labelKey: "nav_command", icon: "❯", hintKey: "nav_command_hint" },
       { id: "tasks", labelKey: "nav_tasks", icon: "▤", hintKey: "nav_tasks_hint" },
       { id: "crew", labelKey: "nav_crew", icon: "⬡", hintKey: "nav_crew_hint" },
       { id: "inbox", labelKey: "nav_inbox", icon: "✉", hintKey: "nav_inbox_hint" },
-      { id: "memory", labelKey: "nav_memory", icon: "❋", hintKey: "nav_memory_hint" },
-    ],
-  },
-  {
-    headingKey: "nav_operate",
-    items: [
       { id: "workers", labelKey: "nav_workers", icon: "◈", hintKey: "nav_workers_hint" },
       { id: "schedules", labelKey: "nav_schedules", icon: "◷", hintKey: "nav_schedules_hint" },
-      { id: "heartbeat", labelKey: "nav_heartbeat", icon: "♡", hintKey: "nav_heartbeat_hint" },
-      { id: "sessions", labelKey: "nav_sessions", icon: "◇", hintKey: "nav_sessions_hint" },
-      { id: "usage", labelKey: "nav_usage", icon: "↗", hintKey: "nav_usage_hint" },
-      { id: "logs", labelKey: "nav_logs", icon: "≣", hintKey: "nav_logs_hint" },
-      { id: "setup", labelKey: "nav_setup", icon: "✎", hintKey: "nav_setup_hint" },
     ],
   },
   {
+    // Configure — set once, rarely revisit
     headingKey: "nav_configure",
     items: [
+      { id: "memory", labelKey: "nav_memory", icon: "❋", hintKey: "nav_memory_hint" },
       { id: "vault", labelKey: "nav_vault", icon: "⚷", hintKey: "nav_vault_hint" },
       { id: "connectors", labelKey: "nav_connectors", icon: "⊹", hintKey: "nav_connectors_hint" },
       { id: "prompt", labelKey: "nav_prompt", icon: "❝", hintKey: "nav_prompt_hint" },
       { id: "skills", labelKey: "nav_skills", icon: "✦", hintKey: "nav_skills_hint" },
+      { id: "setup", labelKey: "nav_setup", icon: "✎", hintKey: "nav_setup_hint" },
     ],
   },
 ];

@@ -28,6 +28,7 @@ import { skillsMcp } from "../mcp/skills.js";
 import { createCrewMcp } from "../mcp/crew.js";
 import { audit } from "./audit.js";
 import { log, preview } from "../logger.js";
+import { toolDiffMeta } from "../telegram/formatting.js";
 
 export interface AgentChatMessage {
   id: string;
@@ -192,8 +193,9 @@ export class AgentChatManager {
         },
         onToolUse: (name, input) => {
           const arg = preview(typeof input === "string" ? input : JSON.stringify(input), 200);
-          log.info("Tool use", { chatId: 0, tool: name, arg, agentChat: w.name, agentId: w.id });
-          this.broadcast({ type: "agentchat", event: "tool", agentId, id: streamId, tool: name, arg });
+          const diff = toolDiffMeta(name, input);
+          log.info("Tool use", { chatId: 0, tool: name, arg, agentChat: w.name, agentId: w.id, ...(diff ?? {}) });
+          this.broadcast({ type: "agentchat", event: "tool", agentId, id: streamId, tool: name, arg, ...(diff ?? {}) });
         },
         onSessionId: (id) => {
           if (id) s.resume = id;

@@ -5,6 +5,8 @@ export interface ChatStream {
   id: string;
   text: string;
   tool?: string;
+  diffLines?: string;
+  diffSnippet?: string;
 }
 
 type ChatMsg =

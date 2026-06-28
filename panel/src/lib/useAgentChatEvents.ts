@@ -6,7 +6,7 @@ type AgentMsg =
   | { type: "agentchat"; event: "user" | "end"; agentId: string; message: ChatMessage }
   | { type: "agentchat"; event: "start"; agentId: string; id: string }
   | { type: "agentchat"; event: "delta"; agentId: string; id: string; delta: string }
-  | { type: "agentchat"; event: "tool"; agentId: string; id: string; tool: string; arg: string }
+  | { type: "agentchat"; event: "tool"; agentId: string; id: string; tool: string; arg: string; diffLines?: string; diffSnippet?: string }
   | { type: "agentchat"; event: "busy"; agentId: string; busy: boolean }
   | { type: "agentchat"; event: "cleared"; agentId: string };
 
@@ -73,7 +73,7 @@ export function useAgentChatEvents(agentId: string | null, onAuthError: () => vo
             setStream((s) => (s ? { ...s, text: s.text + m.delta } : { id: m.id, text: m.delta }));
             break;
           case "tool":
-            setStream((s) => (s ? { ...s, tool: `${m.tool} ${m.arg}`.trim() } : s));
+            setStream((s) => s ? { ...s, tool: `${m.tool} ${m.arg}`.trim(), diffLines: m.diffLines, diffSnippet: m.diffSnippet } : s);
             break;
           case "end":
             setStream(null);

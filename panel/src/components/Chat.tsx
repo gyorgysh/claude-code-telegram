@@ -454,6 +454,7 @@ function AgentChat({ agentId, onAuthError }: { agentId: string; onAuthError: () 
       messages={messages}
       stream={stream}
       busy={busy}
+      agentName={view?.name}
       empty={<>{t("chat_agent_empty").replace("{name}", view?.name ?? "")}<br />{t("chat_agent_empty_2")}</>}
       onSend={(txt) => api.sendAgentChat(agentId, txt).then(() => {})}
       onStop={() => void api.stopAgentChat(agentId)}
@@ -467,6 +468,8 @@ interface PaneStream {
   id: string;
   text: string;
   tool?: string;
+  diffLines?: string;
+  diffSnippet?: string;
 }
 
 function ChatPane({
@@ -475,6 +478,7 @@ function ChatPane({
   stream,
   busy,
   empty,
+  agentName,
   onSend,
   onStop,
 }: {
@@ -483,12 +487,23 @@ function ChatPane({
   stream: PaneStream | null;
   busy: boolean;
   empty: React.ReactNode;
+  agentName?: string;
   onSend: (text: string) => Promise<void>;
   onStop: () => void;
 }) {
   const { t } = useI18n();
   const [text, setText] = useState("");
+  const [diffOpen, setDiffOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Collapse diff when the tool changes.
+  const prevToolRef = useRef<string | undefined>();
+  useEffect(() => {
+    if (stream?.tool !== prevToolRef.current) {
+      prevToolRef.current = stream?.tool;
+      setDiffOpen(false);
+    }
+  }, [stream?.tool]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -523,12 +538,51 @@ function ChatPane({
           </div>
         )}
         {messages.map((m) => (
-          <Bubble key={m.id} m={m} />
+          <Bubble key={m.id} m={m} agentName={agentName} />
         ))}
         {stream && (
-          <div className="flex justify-start">
+          <div className="flex flex-col gap-1">
+            {agentName && (
+              <span className="ml-1 self-start rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-accent border border-accent/20">
+                {agentName}
+              </span>
+            )}
             <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-surface px-4 py-2.5 text-sm">
-              {stream.tool && <div className="mono mb-1 text-xs text-fg-dim">⚙ {stream.tool}</div>}
+              {stream.tool && (
+                <div className="mono mb-1 flex items-center gap-2 text-xs text-fg-dim">
+                  <span>⚙ {stream.tool}</span>
+                  {stream.diffLines && (
+                    <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-fg-faint">
+                      {stream.diffLines}
+                    </span>
+                  )}
+                  {stream.diffSnippet && (
+                    <button
+                      type="button"
+                      onClick={() => setDiffOpen((o) => !o)}
+                      className="text-[10px] text-accent hover:underline"
+                    >
+                      {diffOpen ? "hide diff" : "show diff"}
+                    </button>
+                  )}
+                </div>
+              )}
+              {stream.diffSnippet && diffOpen && (
+                <pre className="mb-2 overflow-x-auto rounded border border-line bg-base px-2 py-1 text-[11px] leading-snug">
+                  {stream.diffSnippet.split("\n").map((line, i) => (
+                    <div
+                      key={i}
+                      className={
+                        line.startsWith("+ ") ? "text-ok-fg" :
+                        line.startsWith("- ") ? "text-critical-fg" :
+                        "text-fg-dim"
+                      }
+                    >
+                      {line}
+                    </div>
+                  ))}
+                </pre>
+              )}
               <div className="break-words text-fg">
                 <Markdown text={stream.text} />
                 <span className="ml-0.5 animate-pulse text-accent">▮</span>
@@ -561,12 +615,17 @@ function ChatPane({
   );
 }
 
-function Bubble({ m }: { m: ChatMessage }) {
+function Bubble({ m, agentName }: { m: ChatMessage; agentName?: string }) {
   const { t } = useI18n();
   const user = m.role === "user";
   const body = m.text || (m.error ? t("chat_failed") : "");
   return (
-    <div className={`flex ${user ? "justify-end" : "justify-start"}`}>
+    <div className={`flex flex-col gap-1 ${user ? "items-end" : "items-start"}`}>
+      {!user && agentName && (
+        <span className="ml-1 rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-accent border border-accent/20">
+          {agentName}
+        </span>
+      )}
       <div
         className={`max-w-[85%] break-words rounded-2xl px-4 py-2.5 text-sm ${
           user

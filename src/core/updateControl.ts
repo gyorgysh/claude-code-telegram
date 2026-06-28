@@ -136,16 +136,19 @@ async function runScript(
     const psExe = process.env.SystemRoot
       ? join(process.env.SystemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
       : "powershell.exe";
+    // On Unix: detached + unref so the build survives the systemd/launchd
+    // SIGTERM that the restart step sends to this process near the end.
+    // On Windows: omit detached — Node.js 24 on Windows silently breaks the
+    // stdout pipe when detached:true is set, causing zero data events and
+    // making the panel show no output. It's fine without it: update.ps1 ends
+    // with Restart-Service which kills us; NSSM (AppExit Default: Restart)
+    // brings us back, so the script doesn't need to outlive the parent.
     const child = isWin
-      ? spawn(
-          psExe,
-          ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", UPDATE_PS1],
-          { cwd: repoRoot, detached: true },
-        )
+      ? spawn(psExe, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", UPDATE_PS1], {
+          cwd: repoRoot,
+        })
       : spawn("bash", [UPDATE_SH], { cwd: repoRoot, detached: true });
-    // Detach from our lifecycle so the build survives the service restart the
-    // script performs near the end.
-    child.unref();
+    if (!isWin) child.unref();
     const handle = (buf: Buffer) => {
       for (const line of buf.toString().split("\n")) {
         if (line.length) {

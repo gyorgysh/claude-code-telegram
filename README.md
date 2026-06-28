@@ -113,10 +113,11 @@ curl -fsSL https://gyorgy.sh/myhq-install.sh | bash
 Open PowerShell as Administrator and run:
 
 ```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 irm https://gyorgy.sh/myhq-install.ps1 | iex
 ```
 
-The Windows installer uses `winget` for Node.js and Git, creates a NSSM service (with Task Scheduler as a fallback), and writes a sibling `myhq-update.ps1` for future updates.
+The first line lets PowerShell run the `npm`/`claude` script shims for this session only (Windows blocks them by default); it isn't persisted and needs no admin. The Windows installer uses `winget` for Node.js and Git, creates a NSSM service (with Task Scheduler as a fallback), and writes a sibling `myhq-update.ps1` for future updates.
 
 ---
 

@@ -6,7 +6,7 @@ import { createTasksMcp } from "../mcp/tasks.js";
 import { skillsMcp } from "../mcp/skills.js";
 import { selfUpdateMcp } from "../mcp/selfUpdate.js";
 import { buildConnectorMcps } from "../mcp/connectorsMcp.js";
-import { getTask, setDelegate, updateTask, listTasks, archiveTask, prepareRetry, getTaskRunConfig, blockingPrereqs } from "./tasks.js";
+import { getTask, setDelegate, updateTask, listTasks, archiveTask, prepareRetry, getTaskRunConfig, blockingPrereqs, consumeResumeSession } from "./tasks.js";
 import { memory } from "./memory.js";
 import { workers, type Worker } from "./workers.js";
 import { getSkill } from "./skills.js";
@@ -241,13 +241,16 @@ export class TaskDelegator {
     const startedAt = Date.now();
     const abort = new AbortController();
     this.active.set(id, abort);
-    setDelegate(id, { status: "running", runId, startedAt, output: "" });
+    // If a previous (failed) run left a resume token, consume it now so this run
+    // resumes that conversation instead of starting over. Used exactly once.
+    const resume = consumeResumeSession(id);
+    setDelegate(id, { status: "running", runId, startedAt, output: "", sessionId: resume });
     const movedTo = task.column === "backlog" ? "doing" : task.column;
     if (task.column === "backlog") updateTask(id, { column: "doing" });
     this.broadcast({ type: "task", event: "start", taskId: id, runId, column: movedTo });
-    audit("task.delegate", { id, runId, leadId: lead?.id });
-    log.info("Task delegate starting", { taskId: id, title: task.title, runId, lead: lead?.name, model: lead?.model ?? config.CLAUDE_MODEL });
-    void this.execute(id, task.title, task.notes, runId, startedAt, abort, lead);
+    audit("task.delegate", { id, runId, leadId: lead?.id, resume: !!resume });
+    log.info("Task delegate starting", { taskId: id, title: task.title, runId, lead: lead?.name, model: lead?.model ?? config.CLAUDE_MODEL, resume: !!resume });
+    void this.execute(id, task.title, task.notes, runId, startedAt, abort, lead, resume);
   }
 
   /** After a run finishes, start the next queued card if a slot is free. */
@@ -317,8 +320,13 @@ export class TaskDelegator {
     startedAt: number,
     abort: AbortController,
     lead?: Worker,
+    resume?: string,
   ): Promise<void> {
     let output = "";
+    // Live Claude session token for this run, captured from the SDK. Persisted
+    // on the delegation so a future retry can resume the conversation. Seeded
+    // with the resume token (a resumed run keeps the same session id).
+    let sessionId = resume;
     // Full uncapped transcript on disk for the panel's "View full log".
     const transcript = new RunLogWriter(runId, { kind: "task", ownerId: id, ownerName: title });
     // Compact label for the Logs activity feed: a delegated card's full title can
@@ -372,6 +380,7 @@ export class TaskDelegator {
       const res = await runTurn({
         prompt,
         cwd: lead?.cwd || config.WORKDIR,
+        resume,
         model: lead?.model,
         env,
         systemPromptAppend: append,
@@ -409,7 +418,9 @@ export class TaskDelegator {
           this.broadcast({ type: "task", event: "tool", taskId: id, runId, tool: name });
         },
         onToolResult: (isError) => transcript.event({ ts: Date.now(), kind: "result", isError }),
-        onSessionId: () => {},
+        onSessionId: (sid) => {
+          sessionId = sid;
+        },
       });
       setDelegate(id, {
         status: res.isError ? "error" : "ok",
@@ -418,6 +429,9 @@ export class TaskDelegator {
         endedAt: Date.now(),
         output: capOutput(output),
         error: res.isError ? res.text?.slice(0, 500) : undefined,
+        // Keep the session token only when the run failed, so a retry can resume
+        // it. A successful run needs no resume token (and the card moves to done).
+        sessionId: res.isError ? sessionId : undefined,
       });
       // Track token usage under the lead's name if routed, otherwise "Tasks".
       agentUsage.record(lead ? lead.name : "Tasks", lead ? "lead" : "task", {
@@ -465,6 +479,9 @@ export class TaskDelegator {
         endedAt: Date.now(),
         output: capOutput(output),
         error: stopped ? undefined : errMsg,
+        // Keep the session token on a failure/timeout/stop so a retry can resume
+        // the conversation from where it broke.
+        sessionId,
       });
       if (!stopped) log.error("Task delegation failed", { id, runId, timedOut });
       await Promise.resolve(

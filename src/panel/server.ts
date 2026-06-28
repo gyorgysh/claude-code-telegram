@@ -958,6 +958,10 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
       createdByName: t.createdBy ? creatorName(t.createdBy) : undefined,
       blockingIds: t.blockedBy?.length ? blockingPrereqs(t.id).map((p) => p.id) : undefined,
       waitingOnPrereq: taskDelegator.isBlocked(t.id) || undefined,
+      // A failed card carries a resume token if its last run captured a Claude
+      // session, so a retry can continue that conversation. Surface a boolean
+      // (never the raw token) so the panel can label the Retry action.
+      canResume: !!t.delegate?.sessionId || !!t.resumeSessionId || undefined,
     }));
     return {
       tasks,

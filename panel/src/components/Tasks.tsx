@@ -1020,7 +1020,9 @@ function Card({
               {running
                 ? t("tasks_running")
                 : dstatus === "queued"
-                  ? t("tasks_queued")
+                  ? task.waitingOnPrereq
+                    ? t("tasks_waiting_prereq")
+                    : t("tasks_queued")
                   : t("tasks_delegated").replace("{status}", String(dstatus))}
               {!running && <span className="ml-1 opacity-50">{delegateOpen ? "▲" : "▼"}</span>}
             </button>
@@ -1105,9 +1107,15 @@ function Card({
             <button
               onClick={retry}
               className="flex min-h-[44px] flex-1 items-center justify-center rounded border border-line text-xs text-accent hover:bg-surface-2"
-              title={task.retryCount ? t("tasks_retry_count").replace("{n}", String(task.retryCount)) : undefined}
+              title={
+                task.canResume
+                  ? t("tasks_retry_resume_title")
+                  : task.retryCount
+                    ? t("tasks_retry_count").replace("{n}", String(task.retryCount))
+                    : undefined
+              }
             >
-              {t("tasks_retry")}
+              {task.canResume ? t("tasks_retry_resume") : t("tasks_retry")}
               {task.retryCount ? ` (${task.retryCount})` : ""}
             </button>
           )}

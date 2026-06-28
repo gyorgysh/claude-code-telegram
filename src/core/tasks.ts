@@ -23,6 +23,12 @@ export interface TaskDelegation {
   error?: string;
   /** Tail of streamed output (capped). */
   output?: string;
+  /**
+   * Claude resume token captured from the run. Kept across a failure so a retry
+   * can resume the same conversation (continuing where it broke) instead of
+   * starting the task over from scratch. Cleared once the card lands in done.
+   */
+  sessionId?: string;
 }
 
 export interface Task {
@@ -43,6 +49,12 @@ export interface Task {
   delegate?: TaskDelegation;
   /** How many times this card has been re-delegated after a failure. */
   retryCount?: number;
+  /**
+   * Claude resume token carried over from a failed run by prepareRetry(), so the
+   * next delegated run can resume that conversation instead of starting over.
+   * Consumed (cleared) by the task runner when it picks the card up.
+   */
+  resumeSessionId?: string;
   /** Sort position within its column (ascending). */
   order: number;
   /**
@@ -150,8 +162,11 @@ export function setDelegate(id: string, delegate: TaskDelegation | undefined): T
 /**
  * Reset an errored card so it can be re-delegated: move it back to the first
  * (backlog) column, clear its delegation error state, and bump retryCount so
- * runaway retries are visible. Returns the updated card, or undefined if it
- * doesn't exist. The actual re-delegation is kicked off by the caller.
+ * runaway retries are visible. The failed run's Claude session token is carried
+ * over to `resumeSessionId` so the retry resumes that conversation (continuing
+ * from where it broke) rather than starting the task from scratch. Returns the
+ * updated card, or undefined if it doesn't exist. The actual re-delegation is
+ * kicked off by the caller.
  */
 export function prepareRetry(id: string): Task | undefined {
   const tasks = load();
@@ -160,13 +175,33 @@ export function prepareRetry(id: string): Task | undefined {
   const backlog = getColumnIds()[0] ?? "backlog";
   const maxOrder = Math.max(0, ...tasks.filter((t) => t.column === backlog).map((t) => t.order));
   task.retryCount = (task.retryCount ?? 0) + 1;
+  // Preserve the resume token before clearing the delegation so the next run
+  // can pick up the same conversation.
+  task.resumeSessionId = task.delegate?.sessionId;
   task.delegate = undefined;
   task.column = backlog;
   task.order = maxOrder + 1;
   task.updatedAt = Date.now();
   persist(tasks);
-  audit("task.retry", { id, retryCount: task.retryCount });
+  audit("task.retry", { id, retryCount: task.retryCount, resume: !!task.resumeSessionId });
   return task;
+}
+
+/**
+ * Read and clear a card's pending `resumeSessionId` (set by prepareRetry). The
+ * task runner calls this when it picks the card up so the resume token is used
+ * exactly once: the next run resumes that session, a fresh delegation does not.
+ */
+export function consumeResumeSession(id: string): string | undefined {
+  const tasks = load();
+  const task = tasks.find((t) => t.id === id);
+  if (!task) return undefined;
+  const token = task.resumeSessionId;
+  if (token === undefined) return undefined;
+  task.resumeSessionId = undefined;
+  task.updatedAt = Date.now();
+  persist(tasks);
+  return token;
 }
 
 /** Normalise a blockedBy list: dedupe, drop the card's own id, keep only strings. */

@@ -178,6 +178,8 @@ export interface Task {
   delegate?: TaskDelegation;
   /** How many times this card has been re-delegated after a failure. */
   retryCount?: number;
+  /** True when a retry would resume the prior Claude session (not start over). */
+  canResume?: boolean;
   order: number;
   /** Creator id stamped at create-time: "atlas", a worker/lead id, or "panel". */
   createdBy?: string;

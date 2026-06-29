@@ -12,6 +12,7 @@ import { SetupView } from "./components/Setup.tsx";
 import { ToastViewport, Breadcrumb } from "./components/ui.tsx";
 import { ConnectionBanner } from "./components/ConnectionBanner.tsx";
 import { CommandPalette } from "./components/CommandPalette.tsx";
+import { StatusStrip } from "./components/StatusStrip.tsx";
 import { useSuggestionEvents } from "./lib/useSuggestionEvents.ts";
 // Lazy — loaded on first visit to that tab.
 const CrewView       = lazy(() => import("./components/Crew.tsx").then((m) => ({ default: m.CrewView })));
@@ -362,6 +363,10 @@ export function App() {
         onOpenMenu={() => setDrawer(true)}
         inboxPending={inboxPending}
       />
+
+      {/* Live "what's running" strip — pinned to the bottom whenever any
+          autonomous run (Lead/worker or delegated kanban card) is in flight. */}
+      <StatusStrip />
 
       {/* Global toast stack (success / error / info), shared across all views. */}
       <ToastViewport />

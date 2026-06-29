@@ -97,6 +97,18 @@ export function WorkersView({
   const [wizarding, setWizarding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const live = useWorkerEvents();
+  // Deep-link target: a `?worker=<id>` param (set by the Chat profile card's
+  // "Edit agent" link) auto-opens that worker's editor once on mount, then the
+  // param is stripped so a refresh doesn't keep re-opening it.
+  const [autoEditId] = useState<string | null>(() => {
+    if (typeof location === "undefined") return null;
+    const url = new URL(location.href);
+    const id = url.searchParams.get("worker");
+    if (!id) return null;
+    url.searchParams.delete("worker");
+    history.replaceState(null, "", url.pathname + url.search + url.hash);
+    return id;
+  });
 
   const load = () =>
     api
@@ -202,6 +214,7 @@ export function WorkersView({
               onChange={load}
               onAuthError={onAuthError}
               onChat={onChat}
+              autoEdit={w.id === autoEditId}
             />
           );
           const parented = new Set<string>();
@@ -236,6 +249,7 @@ function WorkerRow({
   onChange,
   onAuthError,
   onChat,
+  autoEdit,
 }: {
   worker: Worker;
   skills: Named[];
@@ -246,10 +260,22 @@ function WorkerRow({
   onAuthError: () => void;
   /** Open the panel chat with this worker. Absent when web chat is disabled. */
   onChat?: (agentId: string) => void;
+  /** Deep-link target: open this row's editor and scroll it into view on mount. */
+  autoEdit?: boolean;
 }) {
   const { t } = useI18n();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(Boolean(autoEdit));
   const [open, setOpen] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  // When arrived at via the "Edit agent" deep-link, scroll the (already-open)
+  // editor into view so the user lands on it.
+  useEffect(() => {
+    if (autoEdit && rowRef.current) {
+      rowRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Run-Agent confirmation modal: an ad-hoc run is intentional (shows cwd +
   // editable prompt) rather than a one-tap fire-and-forget.
   const [runModal, setRunModal] = useState(false);
@@ -292,6 +318,7 @@ function WorkerRow({
   };
 
   return (
+    <div ref={rowRef} className="scroll-mt-4">
     <Card>
       <div className="flex flex-wrap items-center gap-2">
         <Avatar id={worker.id} avatar={worker.avatar} size={32} alt={worker.name} />
@@ -452,6 +479,7 @@ function WorkerRow({
         />
       )}
     </Card>
+    </div>
   );
 }
 

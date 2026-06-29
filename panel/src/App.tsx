@@ -109,6 +109,15 @@ export function App() {
     history.pushState(null, "", `/chat?agent=${encodeURIComponent(agentId)}`);
   };
 
+  // Jump to the Workers tab with a specific worker's editor opened (used by the
+  // Chat profile card's "Edit agent" link). WorkersView reads the `worker`
+  // query param on mount and expands that row's editor.
+  const editWorker = (workerId: string) => {
+    setTab("workers");
+    setDrawer(false);
+    history.pushState(null, "", `/workers?worker=${encodeURIComponent(workerId)}`);
+  };
+
   // Learn which optional features are on (chat can be disabled via env).
   useEffect(() => {
     if (!authed) return;
@@ -268,6 +277,7 @@ export function App() {
               chatEnabled={chatEnabled}
               terminalEnabled={terminalEnabled}
               onAuthError={onAuthError}
+              onEditAgent={editWorker}
             />
           )}
           {tab === "health" && <HealthView onGoto={select} />}

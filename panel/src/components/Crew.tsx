@@ -163,6 +163,8 @@ export function CrewView({
       {/* Atlas — the main bot is always reachable on Telegram */}
       <CrewNode
         icon="◈"
+        avatarId="atlas"
+        avatar="robot"
         title="Atlas"
         role={t("crew_role_coordinator")}
         subtitle={`${t("crew_atlas_sub")} · ${atlas?.effectiveModel ?? "…"}`}

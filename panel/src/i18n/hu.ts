@@ -554,6 +554,10 @@ export const hu: Translations = {
   chat_agent_private: "privát munkamenet",
   chat_agent_empty: "Privát, többfordulós munkamenet {name} számára. A kontextus megmarad az üzenetek között a munkameneten belül.",
   chat_agent_empty_2: "A munkamenet-kontextus panel-újraindításkor törlődik. Tartós előzményekhez használd a Telegramot, ha az ügynöknek van bot tokenje.",
+  // Ügynök profilkártya (a kapcsolósávon egy pill megérintésekor jelenik meg)
+  chat_profile_edit: "Ügynök szerkesztése",
+  chat_profile_close: "Profil bezárása",
+  chat_profile_atlas_tagline: "A központi koordinátorod — viszi a napi működést és irányítja a csapatot.",
 
   // Memória (további)
   memory_fact_placeholder: "Egy tömör, önmagában érthető tény…",

@@ -5,9 +5,9 @@ import { useAgentChatEvents } from "../lib/useAgentChatEvents.ts";
 import { useI18n } from "../lib/useI18n.ts";
 import { Markdown } from "../lib/markdown.tsx";
 import { roleLabel } from "../lib/agentRole.ts";
-import { avatarPng64Src } from "../lib/avatar.ts";
+import { avatarPng64Src, resolveAvatarSlug } from "../lib/avatar.ts";
 import { Button } from "./ui.tsx";
-import { Settings2, Plus, ClipboardList, Zap, ShieldCheck, HelpCircle } from "lucide-react";
+import { Settings2, Plus, ClipboardList, Zap, ShieldCheck, HelpCircle, Pencil } from "lucide-react";
 
 /** Sentinel id for the main Atlas chat (the Telegram-mirrored session). */
 const ATLAS = "atlas";
@@ -51,7 +51,14 @@ function usePlanningMode(agentId: string): [boolean, (v: boolean) => void] {
  * at the top: Atlas (the shared Telegram session) plus every worker / Lead /
  * Assistant, each with its own resumable interactive session.
  */
-export function ChatView({ onAuthError }: { onAuthError: () => void }) {
+export function ChatView({
+  onAuthError,
+  onEditAgent,
+}: {
+  onAuthError: () => void;
+  /** Navigate to the Workers tab with this worker's editor opened. */
+  onEditAgent?: (workerId: string) => void;
+}) {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [selected, setSelected] = useState<string>(initialAgentFromUrl);
   const [fabOpen, setFabOpen] = useState(false);
@@ -95,6 +102,7 @@ export function ChatView({ onAuthError }: { onAuthError: () => void }) {
         workers={workers}
         selected={selected}
         onSelect={setSelected}
+        onEditAgent={onEditAgent}
       />
       {selected === ATLAS ? (
         <AtlasChat key={`atlas-${chatNonce}`} onAuthError={onAuthError} />
@@ -245,17 +253,24 @@ function shortModel(id?: string): string {
   return (id ?? "").replace(/^claude-/, "").replace(/-\d{8}$/, "");
 }
 
-/** Horizontal, scrollable rail of selectable agents: Atlas first, then crew. */
+/** Horizontal, scrollable rail of selectable agents: Atlas first, then crew.
+ *  Tapping the active pill toggles a compact profile card that slides in below
+ *  the rail (height-animated, no popover — so it never clips on mobile). */
 function AgentSwitcher({
   workers,
   selected,
   onSelect,
+  onEditAgent,
 }: {
   workers: Worker[];
   selected: string;
   onSelect: (id: string) => void;
+  onEditAgent?: (workerId: string) => void;
 }) {
   const { t } = useI18n();
+  // Whether the profile card for the active pill is showing. Tapping a new pill
+  // selects it and opens the card; tapping the already-active pill toggles it.
+  const [profileOpen, setProfileOpen] = useState(false);
   const leads = workers.filter((w) => w.role === "lead");
   const assistants = workers.filter((w) => w.role === "assistant");
   const specialists = workers.filter(
@@ -275,32 +290,148 @@ function AgentSwitcher({
   ordered.push(...assistants.filter((a) => !parented.has(a.id)));
   ordered.push(...specialists);
 
+  // Tapping a pill: switch to it (and open its profile); tap the active pill to
+  // toggle the card closed/open without changing selection.
+  const onPill = (id: string) => {
+    if (id === selected) {
+      setProfileOpen((o) => !o);
+    } else {
+      onSelect(id);
+      setProfileOpen(true);
+    }
+  };
+
+  const activeWorker = selected === ATLAS ? undefined : ordered.find((w) => w.id === selected);
+  const showProfile = profileOpen && (selected === ATLAS || !!activeWorker);
+
   return (
-    <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-line pb-3">
-      <Pill
-        active={selected === ATLAS}
-        onClick={() => onSelect(ATLAS)}
-        label={t("chat_agent_atlas")}
-        sub={t("chat_agent_atlas_sub")}
-        tone="atlas"
-      />
-      {ordered.map((w) => (
+    <div className="shrink-0 border-b border-line">
+      <div className="flex items-center gap-2 overflow-x-auto pb-3">
         <Pill
-          key={w.id}
-          active={selected === w.id}
-          onClick={() => onSelect(w.id)}
-          label={w.name}
-          sub={
-            w.role === "lead"
-              ? t("workers_lead")
-              : w.role === "assistant"
-                ? t("workers_assistant")
-                : shortModel(w.model) || t("workers_role_specialist")
-          }
-          tone={w.role === "lead" ? "lead" : "agent"}
-          listening={w.listening}
+          active={selected === ATLAS}
+          onClick={() => onPill(ATLAS)}
+          label={t("chat_agent_atlas")}
+          sub={t("chat_agent_atlas_sub")}
+          tone="atlas"
+          avatarId={ATLAS}
+          avatar="robot"
+          listening
         />
-      ))}
+        {ordered.map((w) => (
+          <Pill
+            key={w.id}
+            active={selected === w.id}
+            onClick={() => onPill(w.id)}
+            label={w.name}
+            sub={
+              w.role === "lead"
+                ? t("workers_lead")
+                : w.role === "assistant"
+                  ? t("workers_assistant")
+                  : shortModel(w.model) || t("workers_role_specialist")
+            }
+            tone={w.role === "lead" ? "lead" : "agent"}
+            avatarId={w.id}
+            avatar={w.avatar}
+            listening={w.listening}
+          />
+        ))}
+      </div>
+      {/* Profile card: height-animated so it slides in/out smoothly. The grid
+          0fr→1fr trick animates an auto-height child without measuring. */}
+      <div
+        className={`grid overflow-hidden transition-all duration-300 ease-out ${
+          showProfile ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+        }`}
+      >
+        <div className="min-h-0">
+          {showProfile && (
+            <ProfileCard
+              worker={activeWorker}
+              isAtlas={selected === ATLAS}
+              onEditAgent={onEditAgent}
+              onClose={() => setProfileOpen(false)}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Compact profile card for the active agent, shown below the switcher rail.
+ * Avatar + name + role badge + portfolio + a short persona preview, plus an
+ * "Edit agent" link to the Workers tab. Atlas has no worker record, so it shows
+ * a fixed tagline and no edit link.
+ */
+function ProfileCard({
+  worker,
+  isAtlas,
+  onEditAgent,
+  onClose,
+}: {
+  worker?: Worker;
+  isAtlas: boolean;
+  onEditAgent?: (workerId: string) => void;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const name = isAtlas ? t("chat_agent_atlas") : worker?.name ?? "";
+  const slug = resolveAvatarSlug(isAtlas ? ATLAS : worker?.id ?? "", isAtlas ? "robot" : worker?.avatar);
+  const roleBadge = isAtlas
+    ? t("crew_role_coordinator")
+    : worker
+      ? roleLabel(worker, t)
+      : "";
+  const persona = isAtlas ? t("chat_profile_atlas_tagline") : (worker?.persona ?? "").trim();
+  const personaPreview = persona.length > 100 ? `${persona.slice(0, 100).trimEnd()}…` : persona;
+
+  return (
+    <div className="mb-3 flex items-start gap-3 rounded-xl border border-accent/30 bg-accent/5 p-3">
+      <img
+        src={avatarPng64Src(slug)}
+        alt=""
+        aria-hidden
+        className="h-16 w-16 shrink-0 rounded-full bg-surface-2 object-cover ring-1 ring-line"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold text-fg">{name}</span>
+          {roleBadge && (
+            <span className="rounded bg-surface-2 px-1.5 py-0.5 text-xs font-medium text-fg-dim">
+              {roleBadge}
+            </span>
+          )}
+        </div>
+        {!isAtlas && worker?.portfolio && (
+          <div className="mt-0.5 truncate text-xs text-fg-dim" title={worker.portfolio}>
+            {worker.portfolio}
+          </div>
+        )}
+        {personaPreview && (
+          <p className="mt-1.5 text-xs italic text-fg-faint">{personaPreview}</p>
+        )}
+        {!isAtlas && worker && onEditAgent && (
+          <button
+            type="button"
+            onClick={() => onEditAgent(worker.id)}
+            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-accent transition-opacity hover:opacity-80"
+          >
+            <Pencil size={11} className="shrink-0" />
+            {t("chat_profile_edit")}
+          </button>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label={t("chat_profile_close")}
+        title={t("chat_profile_close")}
+        className="shrink-0 text-fg-faint transition-colors hover:text-fg-muted"
+      >
+        ✕
+      </button>
     </div>
   );
 }
@@ -311,6 +442,8 @@ function Pill({
   label,
   sub,
   tone,
+  avatarId,
+  avatar,
   listening,
 }: {
   active: boolean;
@@ -318,10 +451,15 @@ function Pill({
   label: string;
   sub?: string;
   tone: "atlas" | "lead" | "agent";
+  /** Worker id (or ATLAS) used to derive a deterministic avatar. */
+  avatarId: string;
+  /** Explicit avatar slug; falls back to a deterministic default from avatarId. */
+  avatar?: string;
   listening?: boolean;
 }) {
-  const dot =
-    tone === "atlas" ? "bg-accent" : tone === "lead" ? "bg-blue-400" : "bg-fg-faint";
+  const slug = resolveAvatarSlug(avatarId, avatar);
+  const ring =
+    tone === "atlas" ? "ring-accent/40" : tone === "lead" ? "ring-blue-400/40" : "ring-line";
   return (
     <button
       onClick={onClick}
@@ -331,9 +469,15 @@ function Pill({
           : "border-line bg-surface hover:border-accent/30"
       }`}
     >
-      <span className={`relative h-2 w-2 shrink-0 rounded-full ${dot}`}>
+      <span className="relative shrink-0">
+        <img
+          src={avatarPng64Src(slug)}
+          alt=""
+          aria-hidden
+          className={`h-7 w-7 rounded-full bg-surface-2 object-cover ring-1 ${ring}`}
+        />
         {listening && (
-          <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-ok" />
+          <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-ok ring-2 ring-surface" />
         )}
       </span>
       <span className="min-w-0">

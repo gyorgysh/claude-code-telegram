@@ -551,6 +551,10 @@ export const en = {
   chat_agent_private: "private session",
   chat_agent_empty: "Private multi-turn session with {name}. Context is carried across messages within this session.",
   chat_agent_empty_2: "Session context resets on panel restart. For durable history, use Telegram if this agent has a bot token.",
+  // Agent profile card (shown below the switcher rail when a pill is tapped)
+  chat_profile_edit: "Edit agent",
+  chat_profile_close: "Close profile",
+  chat_profile_atlas_tagline: "Your central coordinator — runs day-to-day operations and directs the crew.",
 
   // Memory (additional)
   memory_fact_placeholder: "One concise, self-contained fact…",

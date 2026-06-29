@@ -20,12 +20,15 @@ export function CommandHub({
   chatEnabled,
   terminalEnabled,
   onAuthError,
+  onEditAgent,
 }: {
   tab: Tab | "settings";
   onSubTab: (t: SubTab) => void;
   chatEnabled: boolean;
   terminalEnabled: boolean;
   onAuthError: () => void;
+  /** Navigate to the Workers tab with this worker's editor opened. */
+  onEditAgent?: (workerId: string) => void;
 }) {
   const { t } = useI18n();
 
@@ -73,7 +76,7 @@ export function CommandHub({
       <div className="min-h-0 flex-1">
         {active === "chat" ? (
           chatEnabled ? (
-            <ChatView onAuthError={onAuthError} />
+            <ChatView onAuthError={onAuthError} onEditAgent={onEditAgent} />
           ) : (
             <p className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-fg-faint">
               {t("nav_chat_hint")}

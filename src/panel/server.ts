@@ -1380,8 +1380,8 @@ Respond with ONLY a JSON array, no markdown fences, no explanation. Example form
   });
   app.post("/api/agent-chat/:id/send", async (req, reply) => {
     const { id } = req.params as { id: string };
-    const { text } = (req.body ?? {}) as { text?: string };
-    const r = agentChat.send(id, typeof text === "string" ? text : "");
+    const { text, planning } = (req.body ?? {}) as { text?: string; planning?: boolean };
+    const r = agentChat.send(id, typeof text === "string" ? text : "", planning === true);
     if (!r.ok) return reply.code(409).send({ error: r.error });
     return agentChat.view(id);
   });

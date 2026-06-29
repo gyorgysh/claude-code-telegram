@@ -425,6 +425,7 @@ function AgentChat({
   const { t } = useI18n();
   const { messages, stream, busy, view, setView } = useAgentChatEvents(agentId, onAuthError);
   const [editingCwd, setEditingCwd] = useState(false);
+  const [planning, setPlanning] = useState(false);
   const role = worker ? roleLabel(worker, t) : undefined;
 
   const saveCwd = async (cwd: string) => {
@@ -479,7 +480,9 @@ function AgentChat({
       agentName={view?.name}
       agentRole={role}
       empty={<>{t("chat_agent_empty").replace("{name}", view?.name ?? "")}<br />{t("chat_agent_empty_2")}</>}
-      onSend={(txt) => api.sendAgentChat(agentId, txt).then(() => {})}
+      planning={planning}
+      onPlanningChange={setPlanning}
+      onSend={(txt) => api.sendAgentChat(agentId, txt, planning).then(() => {})}
       onStop={() => void api.stopAgentChat(agentId)}
     />
   );

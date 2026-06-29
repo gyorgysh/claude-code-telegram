@@ -15,6 +15,25 @@
 
 import { randomBytes } from "node:crypto";
 import { config } from "../config.js";
+
+/**
+ * Prepended to a message when the panel Chat is in *Planning mode*. Mirrors the
+ * same preamble used for Atlas (chat.ts) so Leads behave identically: scope the
+ * work and propose cards/suggestions instead of taking real actions.
+ */
+const PLANNING_PREAMBLE = [
+  "[Planning mode] Stay conversational and non-destructive for this turn.",
+  "Do NOT take real actions: no editing files, running shell commands, or",
+  "mutating anything. Your job is to think through and scope the work with me.",
+  "When you have something concrete to capture, propose it as an inbox",
+  'suggestion (crew_suggest) or a backlog card (task_create with column "backlog")',
+  "— title, notes, and priority — rather than doing the work now.",
+  "If anything is ambiguous, ask a short clarifying question instead of guessing.",
+  "",
+  "My message:",
+  "",
+].join("\n");
+
 import { runTurn } from "../claude/runner.js";
 import { agentUsage } from "./agentUsage.js";
 import { workers, type Worker } from "./workers.js";
@@ -112,7 +131,7 @@ export class AgentChatManager {
   }
 
   /** Send a user message to an agent — drives a single resumable turn. */
-  send(agentId: string, text: string): { ok: boolean; error?: string } {
+  send(agentId: string, text: string, planning = false): { ok: boolean; error?: string } {
     if (!this.isEnabled()) return { ok: false, error: "disabled" };
     const trimmed = text.trim();
     if (!trimmed) return { ok: false, error: "empty" };
@@ -120,8 +139,9 @@ export class AgentChatManager {
     if (!w) return { ok: false, error: "no-agent" };
     const s = this.session(agentId);
     if (s.busy) return { ok: false, error: "busy" };
-    void this.runTurnFor(w, s, trimmed);
-    audit("agentchat.send", { agentId, chars: trimmed.length });
+    const prompt = planning ? PLANNING_PREAMBLE + trimmed : trimmed;
+    void this.runTurnFor(w, s, prompt);
+    audit("agentchat.send", { agentId, chars: trimmed.length, planning });
     return { ok: true };
   }
 

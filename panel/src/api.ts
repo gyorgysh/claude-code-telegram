@@ -985,8 +985,8 @@ export const api = {
 
   // Per-agent interactive chat (talk to a specific worker / Lead).
   agentChat: (id: string) => get<AgentChatView>(`/api/agent-chat/${id}`),
-  sendAgentChat: (id: string, text: string) =>
-    req<AgentChatView>("POST", `/api/agent-chat/${id}/send`, { text }),
+  sendAgentChat: (id: string, text: string, planning = false) =>
+    req<AgentChatView>("POST", `/api/agent-chat/${id}/send`, { text, planning }),
   stopAgentChat: (id: string) => req<{ ok: boolean }>("POST", `/api/agent-chat/${id}/stop`),
   clearAgentChat: (id: string) => req<AgentChatView>("POST", `/api/agent-chat/${id}/clear`),
   agentChatSettings: (id: string, s: { cwd?: string }) =>

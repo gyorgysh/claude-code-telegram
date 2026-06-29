@@ -4,13 +4,15 @@ import { audit } from "./audit.js";
 const FILE = "connectors.json";
 
 /**
- * Catalog of external MCP connectors. All ten are **live** (Notion, Google
+ * Catalog of external MCP connectors. All twelve are **live** (Notion, Google
  * Calendar, Gmail, Google Drive, Apple Calendar, Apple Mail, Slack, GitHub,
- * Unreal Engine, Unity): each is wired to a real MCP server in
- * `src/mcp/connectorsMcp.ts`, contributing tools to every interactive/delegated
+ * Unreal Engine, Unity, PostgreSQL, SQLite): each is wired to a real MCP server
+ * in `src/mcp/connectorsMcp.ts`, contributing tools to every interactive/delegated
  * run once enabled. Most connectors require a vault-attached credential; the
- * Unreal Engine connector is credential-free (SSE to local editor), and the
- * Unity connector credential is the path to the mcp-unity server script.
+ * Unreal Engine connector is credential-free (SSE to local editor), the
+ * Unity connector credential is the path to the mcp-unity server script, the
+ * PostgreSQL credential is a connection string, and the SQLite credential is a
+ * path to the database file.
  * The `credential` field on each def is the human-readable hint for what
  * secret to vault (token type / format), surfaced in the panel.
  */
@@ -47,6 +49,8 @@ export const CONNECTORS: ConnectorDef[] = [
   { id: "github", name: "GitHub", description: "List repos, issues and PRs, read file contents; create/comment on issues, open PRs, and push files.", credential: "GitHub personal access token (ghp_… / fine-grained)", status: "live", hasWrite: true },
   { id: "unreal-engine", name: "Unreal Engine", description: "Control a running Unreal Engine 5.8+ editor via the built-in MCP plugin (no credential needed; enable the plugin and toggle this on).", credential: "Editor MCP URL (optional override; defaults to http://127.0.0.1:8000/mcp)", status: "live", hasWrite: true },
   { id: "unity", name: "Unity", description: "Control a running Unity Editor via the mcp-unity package (CoderGamester). Requires Node.js 18+.", credential: "Absolute path to mcp-unity server script (e.g. /path/to/project/Library/PackageCache/com.gamelovers.mcp-unity@<hash>/Server~/build/index.js)", status: "live", hasWrite: true },
+  { id: "postgres", name: "PostgreSQL", description: "Inspect and query a PostgreSQL database: list tables, describe schemas, run read-only SELECTs (and, with write scope, mutating statements).", credential: "PostgreSQL connection string (postgresql://user:pass@host:5432/db)", status: "live", hasWrite: true },
+  { id: "sqlite", name: "SQLite", description: "Inspect and query a local SQLite database file: list tables, describe schemas, run read-only SELECTs (and, with write scope, mutating statements).", credential: "Absolute path to the SQLite database file (e.g. /path/to/app.db)", status: "live", hasWrite: true },
 ];
 
 interface ConnectorConfig {

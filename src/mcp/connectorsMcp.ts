@@ -44,6 +44,10 @@ const WRITE_TOOLS = new Set<string>([
   "github_comment_issue",
   "github_create_pr",
   "github_put_file",
+  // PostgreSQL
+  "postgres_execute",
+  // SQLite
+  "sqlite_execute",
 ]);
 
 /**
@@ -1763,6 +1767,351 @@ function githubMcp(token: string, scope: ConnectorScope) {
 }
 
 // ---------------------------------------------------------------------------
+// Databases (PostgreSQL + SQLite)
+// ---------------------------------------------------------------------------
+
+/** Hard cap on rows rendered back to the agent, to keep tool results compact. */
+const DB_MAX_ROWS = 200;
+/** Hard cap on the rendered length of a single cell value. */
+const DB_MAX_CELL = 500;
+
+/**
+ * Reject anything that isn't a single read-only statement. Used by the
+ * read-only `query` tools so a connector in `read` scope can't smuggle a
+ * mutation through the query tool. We strip leading SQL comments/whitespace and
+ * require the statement to start with SELECT or WITH, contain no statement
+ * separator that begins a second statement, and not contain a data-changing
+ * keyword as its leading verb. This is a guard, not a full SQL parser, so the
+ * actual write path stays the separate `execute` tool (gated by WRITE_TOOLS).
+ */
+function assertReadOnlySql(sql: string): string | undefined {
+  // Drop leading line (--) and block (/* */) comments plus whitespace.
+  let s = sql.trim();
+  // Remove leading comments repeatedly.
+  for (;;) {
+    if (s.startsWith("--")) {
+      const nl = s.indexOf("\n");
+      s = nl === -1 ? "" : s.slice(nl + 1).trimStart();
+      continue;
+    }
+    if (s.startsWith("/*")) {
+      const end = s.indexOf("*/");
+      s = end === -1 ? "" : s.slice(end + 2).trimStart();
+      continue;
+    }
+    break;
+  }
+  if (!s) return "Empty query.";
+  const lead = s.slice(0, 6).toLowerCase();
+  if (!lead.startsWith("select") && !lead.startsWith("with")) {
+    return "Read-only query must start with SELECT or WITH. Use the *_execute tool (write scope) for mutations.";
+  }
+  // Disallow a trailing second statement (anything non-trivial after a `;`).
+  const semi = s.indexOf(";");
+  if (semi !== -1 && s.slice(semi + 1).trim().length > 0) {
+    return "Only a single statement is allowed in a read-only query.";
+  }
+  return undefined;
+}
+
+/** Format an array of row objects as a compact text table for tool output. */
+function formatRows(rows: Record<string, unknown>[]): string {
+  if (!rows.length) return "(0 rows)";
+  const cols = Object.keys(rows[0]);
+  const shown = rows.slice(0, DB_MAX_ROWS);
+  const render = (v: unknown): string => {
+    if (v === null || v === undefined) return "NULL";
+    let str: string;
+    if (v instanceof Date) str = v.toISOString();
+    else if (typeof v === "object") str = JSON.stringify(v);
+    else if (Buffer.isBuffer(v)) str = `<${v.length} bytes>`;
+    else str = String(v);
+    return str.length > DB_MAX_CELL ? str.slice(0, DB_MAX_CELL) + "…" : str;
+  };
+  const lines = [cols.join(" | ")];
+  for (const row of shown) lines.push(cols.map((c) => render(row[c])).join(" | "));
+  let out = lines.join("\n");
+  if (rows.length > DB_MAX_ROWS) out += `\n… ${rows.length - DB_MAX_ROWS} more row(s) truncated`;
+  return out;
+}
+
+// --- PostgreSQL ------------------------------------------------------------
+
+type PgModule = typeof import("pg");
+let pgModule: PgModule | undefined;
+let pgLoadAttempted = false;
+
+/** Lazily load the optional `pg` dependency once. Undefined if unavailable. */
+async function loadPg(): Promise<PgModule | undefined> {
+  if (pgLoadAttempted) return pgModule;
+  pgLoadAttempted = true;
+  try {
+    pgModule = (await import(/* @vite-ignore */ "pg")).default as unknown as PgModule;
+  } catch (err) {
+    log.warn("[connector] pg not available — PostgreSQL connector disabled", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    pgModule = undefined;
+  }
+  return pgModule;
+}
+
+/**
+ * Run a query against a one-shot PostgreSQL client built from the connection
+ * string. A fresh client per call keeps the connector stateless (no pool to
+ * manage across runs); fine for the inspect/occasional-write workload here.
+ */
+async function pgRun(
+  conn: string,
+  sql: string,
+  params: unknown[] | undefined,
+): Promise<{ rows: Record<string, unknown>[]; rowCount: number | null } | { error: string }> {
+  const pg = await loadPg();
+  if (!pg) return { error: "PostgreSQL driver (pg) is not installed on the host." };
+  const client = new pg.Client({ connectionString: conn });
+  try {
+    await client.connect();
+    const res = await client.query(sql, params);
+    return { rows: (res.rows ?? []) as Record<string, unknown>[], rowCount: res.rowCount };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
+function postgresMcp(conn: string, scope: ConnectorScope) {
+  return createSdkMcpServer({
+    name: "postgres",
+    version: "1.0.0",
+    tools: scopeTools([
+      tool(
+        "postgres_list_tables",
+        "List tables (and views) in the PostgreSQL database, with their schema. " +
+          "Excludes the internal pg_catalog / information_schema namespaces.",
+        {
+          schema: z.string().optional().describe("Restrict to one schema (default: all user schemas)."),
+        },
+        async (a) => {
+          const where = a.schema
+            ? "table_schema = $1"
+            : "table_schema NOT IN ('pg_catalog', 'information_schema')";
+          const r = await pgRun(
+            conn,
+            `SELECT table_schema, table_name, table_type FROM information_schema.tables WHERE ${where} ORDER BY table_schema, table_name`,
+            a.schema ? [a.schema] : undefined,
+          );
+          if ("error" in r) return text(`Error: ${r.error}`);
+          return text(formatRows(r.rows));
+        },
+      ),
+      tool(
+        "postgres_describe_schema",
+        "Describe a table's columns: name, type, nullability, and default. Also " +
+          "lists primary-key columns.",
+        {
+          table: z.string().describe("Table name."),
+          schema: z.string().optional().describe("Schema name (default: public)."),
+        },
+        async (a) => {
+          const schema = a.schema ?? "public";
+          const cols = await pgRun(
+            conn,
+            `SELECT column_name, data_type, is_nullable, column_default
+             FROM information_schema.columns
+             WHERE table_schema = $1 AND table_name = $2
+             ORDER BY ordinal_position`,
+            [schema, a.table],
+          );
+          if ("error" in cols) return text(`Error: ${cols.error}`);
+          if (!cols.rows.length) return text(`No such table ${schema}.${a.table}.`);
+          const pk = await pgRun(
+            conn,
+            `SELECT a.attname AS column_name
+             FROM pg_index i
+             JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+             WHERE i.indrelid = ($1)::regclass AND i.indisprimary`,
+            [`${schema}.${a.table}`],
+          );
+          let out = `Columns of ${schema}.${a.table}:\n${formatRows(cols.rows)}`;
+          if (!("error" in pk) && pk.rows.length) {
+            out += `\n\nPrimary key: ${pk.rows.map((r) => r.column_name).join(", ")}`;
+          }
+          return text(out);
+        },
+      ),
+      tool(
+        "postgres_query",
+        "Run a read-only SQL query (SELECT / WITH) against the PostgreSQL database " +
+          "and return the rows. Use $1, $2, … placeholders with the params array to " +
+          "avoid SQL injection. For mutations use postgres_execute (write scope).",
+        {
+          sql: z.string().describe("A single SELECT/WITH statement."),
+          params: z.array(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional().describe("Bound parameters for $1, $2, …"),
+        },
+        async (a) => {
+          const bad = assertReadOnlySql(a.sql);
+          if (bad) return text(`Rejected: ${bad}`);
+          const r = await pgRun(conn, a.sql, a.params);
+          if ("error" in r) return text(`Error: ${r.error}`);
+          return text(formatRows(r.rows));
+        },
+      ),
+      tool(
+        "postgres_execute",
+        "Run a mutating SQL statement (INSERT / UPDATE / DELETE / DDL) against the " +
+          "PostgreSQL database. Use $1, $2, … placeholders with the params array. " +
+          "Returns the affected row count. Requires write scope.",
+        {
+          sql: z.string().describe("A single mutating statement."),
+          params: z.array(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional().describe("Bound parameters for $1, $2, …"),
+        },
+        async (a) => {
+          const r = await pgRun(conn, a.sql, a.params);
+          if ("error" in r) return text(`Error: ${r.error}`);
+          const n = r.rowCount ?? 0;
+          if (r.rows.length) return text(`OK (${n} row(s)):\n${formatRows(r.rows)}`);
+          return text(`OK — ${n} row(s) affected.`);
+        },
+      ),
+    ], scope),
+  });
+}
+
+// --- SQLite ----------------------------------------------------------------
+
+type SqliteModule = typeof import("node:sqlite");
+let sqliteModule: SqliteModule | undefined;
+let sqliteLoadAttempted = false;
+
+/**
+ * Lazily load Node's built-in `node:sqlite` (stable in Node 22.5+/24). On older
+ * runtimes the import throws and the connector degrades to disabled.
+ */
+async function loadSqlite(): Promise<SqliteModule | undefined> {
+  if (sqliteLoadAttempted) return sqliteModule;
+  sqliteLoadAttempted = true;
+  try {
+    sqliteModule = await import(/* @vite-ignore */ "node:sqlite");
+  } catch (err) {
+    log.warn("[connector] node:sqlite not available — SQLite connector disabled", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    sqliteModule = undefined;
+  }
+  return sqliteModule;
+}
+
+/**
+ * Run a statement against a freshly-opened SQLite database file. `readonly`
+ * opens the file in read-only mode so even a SELECT that tries to write fails.
+ * The handle is closed in `finally`, keeping the connector stateless.
+ */
+async function sqliteRun(
+  path: string,
+  sql: string,
+  params: unknown[] | undefined,
+  readonly: boolean,
+): Promise<{ rows: Record<string, unknown>[]; changes: number } | { error: string }> {
+  const mod = await loadSqlite();
+  if (!mod) return { error: "node:sqlite is not available on this Node runtime (needs Node 22.5+/24)." };
+  let db: InstanceType<SqliteModule["DatabaseSync"]> | undefined;
+  try {
+    db = new mod.DatabaseSync(path, { readOnly: readonly, open: true });
+    const stmt = db.prepare(sql);
+    const bound = (params ?? []) as never[];
+    if (stmt.all && /^\s*(select|with|pragma)/i.test(sql)) {
+      const rows = stmt.all(...bound) as Record<string, unknown>[];
+      return { rows, changes: 0 };
+    }
+    const res = stmt.run(...bound);
+    return { rows: [], changes: Number(res.changes ?? 0) };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  } finally {
+    try {
+      db?.close();
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+function sqliteMcp(path: string, scope: ConnectorScope) {
+  return createSdkMcpServer({
+    name: "sqlite",
+    version: "1.0.0",
+    tools: scopeTools([
+      tool(
+        "sqlite_list_tables",
+        "List the tables (and views) in the SQLite database file.",
+        {},
+        async () => {
+          const r = await sqliteRun(
+            path,
+            "SELECT name, type FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' ORDER BY type, name",
+            undefined,
+            true,
+          );
+          if ("error" in r) return text(`Error: ${r.error}`);
+          return text(formatRows(r.rows));
+        },
+      ),
+      tool(
+        "sqlite_describe_schema",
+        "Describe a table's columns (name, type, nullability, default, primary key) " +
+          "via PRAGMA table_info.",
+        {
+          table: z.string().describe("Table name."),
+        },
+        async (a) => {
+          // table_info takes an identifier, not a bound param; validate it tightly.
+          if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(a.table)) {
+            return text("Rejected: table name must be a simple identifier.");
+          }
+          const r = await sqliteRun(path, `PRAGMA table_info(${a.table})`, undefined, true);
+          if ("error" in r) return text(`Error: ${r.error}`);
+          if (!r.rows.length) return text(`No such table ${a.table}.`);
+          return text(formatRows(r.rows));
+        },
+      ),
+      tool(
+        "sqlite_query",
+        "Run a read-only SQL query (SELECT / WITH) against the SQLite database and " +
+          "return the rows. Use ? placeholders with the params array to avoid SQL " +
+          "injection. For mutations use sqlite_execute (write scope).",
+        {
+          sql: z.string().describe("A single SELECT/WITH statement."),
+          params: z.array(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional().describe("Bound parameters for ? placeholders."),
+        },
+        async (a) => {
+          const bad = assertReadOnlySql(a.sql);
+          if (bad) return text(`Rejected: ${bad}`);
+          const r = await sqliteRun(path, a.sql, a.params, true);
+          if ("error" in r) return text(`Error: ${r.error}`);
+          return text(formatRows(r.rows));
+        },
+      ),
+      tool(
+        "sqlite_execute",
+        "Run a mutating SQL statement (INSERT / UPDATE / DELETE / DDL) against the " +
+          "SQLite database. Use ? placeholders with the params array. Returns the " +
+          "number of changed rows. Requires write scope.",
+        {
+          sql: z.string().describe("A single mutating statement."),
+          params: z.array(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional().describe("Bound parameters for ? placeholders."),
+        },
+        async (a) => {
+          const r = await sqliteRun(path, a.sql, a.params, false);
+          if ("error" in r) return text(`Error: ${r.error}`);
+          return text(`OK — ${r.changes} row(s) changed.`);
+        },
+      ),
+    ], scope),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
 
@@ -1812,6 +2161,10 @@ export function buildConnectorMcps(): Record<string, McpServer | ExternalMcpServ
     // Credential is the absolute path to the mcp-unity Server~/build/index.js script.
     out["unity"] = { type: "stdio", command: "node", args: [unityScript] };
   }
+  const pgConn = credentialFor("postgres");
+  if (pgConn) out.postgres = postgresMcp(pgConn, connectorScope("postgres"));
+  const sqlitePath = credentialFor("sqlite");
+  if (sqlitePath) out.sqlite = sqliteMcp(sqlitePath, connectorScope("sqlite"));
   if (Object.keys(out).length) {
     log.debug("Connector MCPs enabled", {
       connectors: Object.keys(out).map((id) => `${id}:${connectorScope(id)}`),
@@ -1821,4 +2174,4 @@ export function buildConnectorMcps(): Record<string, McpServer | ExternalMcpServ
 }
 
 /** Names of the live connectors that have wired MCP servers (for the panel). */
-export const LIVE_CONNECTORS = ["notion", "gcal", "gmail", "gdrive", "apple-calendar", "apple-mail", "slack", "github", "unreal-engine", "unity"] as const;
+export const LIVE_CONNECTORS = ["notion", "gcal", "gmail", "gdrive", "apple-calendar", "apple-mail", "slack", "github", "unreal-engine", "unity", "postgres", "sqlite"] as const;

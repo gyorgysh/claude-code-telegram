@@ -7,6 +7,8 @@ import {
   siApple,
   siUnity,
   siUnrealengine,
+  siPostgresql,
+  siSqlite,
 } from "simple-icons";
 
 export type ConnectorIcon = {
@@ -36,6 +38,8 @@ const ICON_MAP: Record<string, ConnectorIcon> = {
   slack: SLACK_ICON,
   unity: siUnity,
   "unreal-engine": siUnrealengine,
+  postgres: siPostgresql,
+  sqlite: siSqlite,
 };
 
 export function getConnectorIcon(id: string): ConnectorIcon | undefined {

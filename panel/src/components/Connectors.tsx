@@ -39,6 +39,9 @@ export function ConnectorsView({ onAuthError, onGoto }: { onAuthError: () => voi
     await api.saveConnector(id, { scope }).catch(() => void load());
   };
 
+  const noneConfigured = connectors.length > 0 && !connectors.some((c) => c.secretId);
+  const noSecrets = secrets.length === 0;
+
   return (
     <Card title={t("connectors_title")}>
       <p className="mb-3 text-sm text-fg-dim">{t("connectors_desc")}</p>
@@ -47,22 +50,22 @@ export function ConnectorsView({ onAuthError, onGoto }: { onAuthError: () => voi
         <Empty icon={<ConnectorsArt />} title={t("connectors_empty_title")}>
           {t("connectors_empty_desc")}
         </Empty>
-      ) : !connectors.some((c) => c.secretId) ? (
-        <Empty
-          icon={<ConnectorsArt />}
-          title={t("connectors_none_configured")}
-          action={
-            onGoto && (
-              <Button variant="primary" onClick={() => onGoto("vault")}>
-                {t("connectors_add_credential")}
-              </Button>
-            )
-          }
-        >
-          {t("connectors_none_configured_desc")}
-        </Empty>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <>
+          {noneConfigured && (
+            <div className="mb-3 flex flex-col gap-2 rounded-lg border border-accent/30 bg-accent/5 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-fg">{t("connectors_none_configured")}</p>
+                <p className="mt-0.5 text-xs text-fg-dim">{t("connectors_none_configured_desc")}</p>
+              </div>
+              {onGoto && (
+                <Button variant="primary" className="shrink-0" onClick={() => onGoto("vault")}>
+                  {t("connectors_add_credential")}
+                </Button>
+              )}
+            </div>
+          )}
+          <div className="grid gap-3 sm:grid-cols-2">
           {connectors.map((c) => {
             const live = c.status === "live";
             return (
@@ -76,7 +79,10 @@ export function ConnectorsView({ onAuthError, onGoto }: { onAuthError: () => voi
                   )}
                 </div>
                 <p className="mt-1 text-sm text-fg-dim">{c.description}</p>
-                <p className="mt-1 text-xs text-fg-faint">{t("connectors_needs").replace("{credential}", c.credential)}</p>
+                <p className="mt-2 text-xs text-fg-faint">
+                  {t("connectors_needs").replace("{credential}", "")}
+                  <span className="font-medium text-fg-dim">{c.credential}</span>
+                </p>
                 <div className="mt-2">
                   <Label>{t("connectors_credential")}</Label>
                   <Select value={c.secretId ?? ""} onChange={(e) => setSecret(c.id, e.target.value)}>
@@ -87,6 +93,7 @@ export function ConnectorsView({ onAuthError, onGoto }: { onAuthError: () => voi
                       </option>
                     ))}
                   </Select>
+                  {noSecrets && <p className="mt-1 text-xs text-fg-faint">{t("connectors_no_secret")}</p>}
                 </div>
                 {live && c.hasWrite && (
                   <div className="mt-2">
@@ -129,7 +136,8 @@ export function ConnectorsView({ onAuthError, onGoto }: { onAuthError: () => voi
               </div>
             );
           })}
-        </div>
+          </div>
+        </>
       )}
     </Card>
   );

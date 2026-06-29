@@ -1341,7 +1341,7 @@ export const hu: Translations = {
 
   // Csatlakozók nézet
   connectors_title: "Csatlakozók",
-  connectors_desc: "Külső integrációk, amelyeket az ügynökeid használhatnak. A Notion és a Google Naptár élő: csatolj egy vault titkot a hitelesítő adattal, kapcsold be őket, és az eszközeik megjelennek minden beszélgetésben és delegált futásban. A többi egyelőre helykitöltő.",
+  connectors_desc: "Külső integrációk, amelyeket az ügynökeid használhatnak. Mindegyikhez kell egy hitelesítő adat: tárold a kért titkot a széfben, csatold lent, és kapcsold be a csatlakozót — az eszközei ekkor megjelennek minden beszélgetésben és delegált futásban.",
   connectors_coming_soon: "hamarosan",
   connectors_live: "élő",
   connectors_needs: "Szükséges: {credential}",
@@ -1355,9 +1355,10 @@ export const hu: Translations = {
   connectors_access_write_hint: "Olvasó eszközök, plusz létrehozás, módosítás, küldés és törlés.",
   connectors_empty_title: "Nincsenek betöltött csatlakozók",
   connectors_empty_desc: "Az integrációk itt jelennek meg, amint a katalógus betöltődik. Ha ez tartósan így marad, ellenőrizd a panel kapcsolatát.",
-  connectors_none_configured: "Még nincs beállított csatlakozó",
-  connectors_none_configured_desc: "Tárolj egy hitelesítő adatot (API tokent vagy OAuth kulcsot) a széfben, majd kösd hozzá egy lenti csatlakozóhoz, hogy a flotta megkapja az adott integráció eszközeit.",
-  connectors_add_credential: "Hitelesítő adat hozzáadása",
+  connectors_none_configured: "Még nincs összekötve semmi",
+  connectors_none_configured_desc: "Válassz egy csatlakozót lent, és látod pontosan, milyen titok kell hozzá (API token, OAuth kulcs vagy app-jelszó). Tárold azt a titkot a széfben, majd csatold ide, hogy a flotta megkapja az adott integráció eszközeit.",
+  connectors_add_credential: "Széf megnyitása",
+  connectors_no_secret: "Még nincs hozzá illő titok a széfben. Tárolj egyet, majd válaszd ki itt.",
 
   // Általános webhook eszközök (egyéni HTTP végpontok mint ágens eszközök)
   webhooks_title: "Egyéni webhook eszközök",

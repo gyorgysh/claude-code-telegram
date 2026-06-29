@@ -1336,7 +1336,7 @@ export const en = {
 
   // Connectors view
   connectors_title: "Connectors",
-  connectors_desc: "External integrations your agents can use. Notion and Google Calendar are live: attach a vault secret with the credential and enable them, and their tools appear in every chat and delegated run. The rest are placeholders for now.",
+  connectors_desc: "External integrations your agents can use. Each one needs a credential: vault the secret it asks for, attach it below, and enable the connector — its tools then appear in every chat and delegated run.",
   connectors_coming_soon: "coming soon",
   connectors_live: "live",
   connectors_needs: "Needs: {credential}",
@@ -1350,9 +1350,10 @@ export const en = {
   connectors_access_write_hint: "Read tools plus create, update, send, and delete.",
   connectors_empty_title: "No connectors loaded",
   connectors_empty_desc: "Integrations appear here once the catalogue loads. If this persists, check the panel connection.",
-  connectors_none_configured: "No connector configured yet",
-  connectors_none_configured_desc: "Vault a credential (an API token or OAuth key), then bind it to a connector below to give the fleet that integration's tools.",
-  connectors_add_credential: "Add a credential",
+  connectors_none_configured: "Nothing connected yet",
+  connectors_none_configured_desc: "Pick a connector below to see exactly which secret it needs (an API token, OAuth key, or app password). Vault that secret, then attach it here to give the fleet that integration's tools.",
+  connectors_add_credential: "Open the vault",
+  connectors_no_secret: "No matching secret in the vault yet. Vault one, then select it here.",
 
   // Generic webhook tools (custom HTTP endpoints as agent tools)
   webhooks_title: "Custom webhook tools",

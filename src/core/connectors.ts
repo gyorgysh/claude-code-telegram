@@ -4,12 +4,13 @@ import { audit } from "./audit.js";
 const FILE = "connectors.json";
 
 /**
- * Catalog of external MCP connectors. Two are **live** (Notion, Google
- * Calendar): wired to a real MCP server in `src/mcp/connectorsMcp.ts`,
+ * Catalog of external MCP connectors. All eight are **live** (Notion, Google
+ * Calendar, Gmail, Google Drive, Apple Calendar, Apple Mail, Slack, GitHub):
+ * each is wired to a real MCP server in `src/mcp/connectorsMcp.ts`,
  * contributing tools to every interactive/delegated run once enabled with a
- * vault-attached credential. The rest are placeholders ("coming-soon"): the
- * registration surface + credential slot exist so the panel can show what's
- * planned, but no MCP server is wired yet.
+ * vault-attached credential. The `credential` field on each def is the
+ * human-readable hint for exactly what secret to vault (token type / format),
+ * surfaced in the panel so a user knows what to add before attaching it.
  */
 /**
  * Access scope for a connector's tools:

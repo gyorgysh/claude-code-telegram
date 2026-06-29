@@ -1225,7 +1225,11 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
     return { ok: true };
   });
   app.post("/api/workers/:id/run", async (req, reply) => {
-    const run = workers.run((req.params as { id: string }).id);
+    const { prompt } = (req.body ?? {}) as { prompt?: string };
+    const run = workers.run(
+      (req.params as { id: string }).id,
+      typeof prompt === "string" ? prompt : undefined,
+    );
     if (!run) return reply.code(404).send({ error: "not found" });
     return run;
   });

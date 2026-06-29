@@ -9,6 +9,7 @@ import {
   type ProviderKind,
 } from "../api.ts";
 import { useWorkerEvents, type LiveRun } from "../lib/useWorkerEvents.ts";
+import { roleLabel } from "../lib/agentRole.ts";
 import { useI18n } from "../lib/useI18n.ts";
 import type { TranslationKey } from "../i18n/en.ts";
 import { Badge, Button, Card, Empty, InfoCard, Input, Label, Select, TextArea } from "./ui.tsx";
@@ -246,6 +247,9 @@ function WorkerRow({
   const { t } = useI18n();
   const [editing, setEditing] = useState(false);
   const [open, setOpen] = useState(false);
+  // Run-Agent confirmation modal: an ad-hoc run is intentional (shows cwd +
+  // editable prompt) rather than a one-tap fire-and-forget.
+  const [runModal, setRunModal] = useState(false);
   const [runs, setRuns] = useState<WorkerRun[]>([]);
   const running = worker.running || live?.status === "running";
   // Resolve the agent's backend provider. With no providerId set it runs on the
@@ -264,9 +268,10 @@ function WorkerRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, live?.status]);
 
-  const run = async () => {
+  const run = async (prompt?: string) => {
     try {
-      await api.runWorker(worker.id);
+      await api.runWorker(worker.id, prompt);
+      setRunModal(false);
       setOpen(true);
       onChange();
     } catch (e) {
@@ -356,8 +361,8 @@ function WorkerRow({
               {t("stop")}
             </Button>
           ) : (
-            <Button variant="primary" onClick={run} title={t("workers_try_agent_tooltip")}>
-              {t("workers_run_now")}
+            <Button variant="primary" onClick={() => setRunModal(true)} title={t("workers_run_agent_tooltip")}>
+              {t("workers_run_agent")}
             </Button>
           )}
           <Button onClick={() => setOpen((o) => !o)}>{open ? t("hide") : t("details")}</Button>
@@ -432,7 +437,85 @@ function WorkerRow({
           </div>
         </div>
       )}
+
+      {runModal && (
+        <RunAgentModal
+          worker={worker}
+          onCancel={() => setRunModal(false)}
+          onConfirm={(prompt) => void run(prompt)}
+        />
+      )}
     </Card>
+  );
+}
+
+/**
+ * Confirmation modal for an ad-hoc agent run. Shows the agent's name + role, the
+ * working directory the run will use, and an editable prompt (pre-filled with
+ * the saved prompt). Confirming fires an autonomous run with the edited prompt
+ * without mutating the saved worker; the edit is one-shot.
+ */
+function RunAgentModal({
+  worker,
+  onCancel,
+  onConfirm,
+}: {
+  worker: Worker;
+  onCancel: () => void;
+  onConfirm: (prompt: string) => void;
+}) {
+  const { t } = useI18n();
+  const [prompt, setPrompt] = useState(worker.prompt ?? "");
+  const role = roleLabel(worker, t);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t("workers_run_agent")}
+    >
+      <button aria-label={t("cancel")} onClick={onCancel} className="absolute inset-0 bg-black/40" />
+      <div className="relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border border-line bg-surface shadow-xl">
+        <div className="border-b border-line px-4 py-3">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-fg">
+            {t("workers_run_agent")}
+            <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
+              {worker.name}
+            </span>
+          </h3>
+          <div className="mt-0.5 text-xs text-fg-dim">{role}</div>
+        </div>
+        <div className="space-y-3 px-4 py-3">
+          <div>
+            <Label>{t("workers_cwd")}</Label>
+            <div
+              className="mono truncate rounded border border-line bg-base px-2 py-1.5 text-xs text-fg-dim"
+              title={worker.cwd}
+            >
+              {worker.cwd || t("workers_no_cwd")}
+            </div>
+          </div>
+          <div>
+            <Label>{t("workers_run_agent_prompt")}</Label>
+            <TextArea
+              autoFocus
+              rows={6}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder={t("workers_task")}
+            />
+            <p className="mt-1 text-xs text-fg-faint">{t("workers_run_agent_prompt_hint")}</p>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
+          <Button onClick={onCancel}>{t("cancel")}</Button>
+          <Button variant="primary" disabled={!prompt.trim()} onClick={() => onConfirm(prompt)}>
+            {t("workers_run_agent_confirm")}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -885,7 +885,8 @@ export const api = {
   createWorker: (w: Partial<Worker>) => req<Worker>("POST", "/api/workers", w),
   updateWorker: (id: string, w: Partial<Worker>) => req<Worker>("PUT", `/api/workers/${id}`, w),
   deleteWorker: (id: string) => req<{ ok: boolean }>("DELETE", `/api/workers/${id}`),
-  runWorker: (id: string) => req<WorkerRun>("POST", `/api/workers/${id}/run`),
+  runWorker: (id: string, prompt?: string) =>
+    req<WorkerRun>("POST", `/api/workers/${id}/run`, prompt === undefined ? undefined : { prompt }),
   stopWorker: (id: string) => req<{ ok: boolean }>("POST", `/api/workers/${id}/stop`),
   workerRuns: (id: string) => get<{ runs: WorkerRun[] }>(`/api/workers/${id}/runs`),
   runLog: (runId: string) => get<{ events: RunLogEvent[] }>(`/api/runs/${runId}/log`),

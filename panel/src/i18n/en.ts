@@ -777,8 +777,11 @@ export const en = {
   workers_webhook_placeholder: "https://hooks.example.com/...",
   workers_webhook_hint: "POSTed a JSON outcome (name, summary, cost, status) when a run completes.",
   workers_name: "Name",
-  workers_run_now: "Try agent",
-  workers_try_agent_tooltip: "Runs the agent once with its current prompt, no schedule involved.",
+  workers_run_agent: "Run agent",
+  workers_run_agent_tooltip: "Runs the agent once. You confirm the prompt and working directory first.",
+  workers_run_agent_prompt: "Prompt",
+  workers_run_agent_prompt_hint: "Edit the prompt for this one run. The saved prompt is left unchanged.",
+  workers_run_agent_confirm: "Run",
   workers_interact_hint:
     "Leads can work in two ways. If a Telegram bot token is configured, the Lead gets its own chat you can message directly. Without a token, ask Atlas in your main chat to delegate a task or question to this agent by name.",
   workers_no_cwd: "(no cwd)",

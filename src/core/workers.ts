@@ -283,8 +283,12 @@ export class WorkerManager {
     return true;
   }
 
-  /** Launch a worker run. Rejects if one is already in flight for that worker. */
-  run(workerId: string): WorkerRun | undefined {
+  /**
+   * Fire an autonomous run for a worker. `promptOverride` lets the panel's
+   * "Run Agent" modal kick off an ad-hoc run with an edited prompt without
+   * mutating the saved worker; when absent the worker's stored prompt is used.
+   */
+  run(workerId: string, promptOverride?: string): WorkerRun | undefined {
     const w = this.get(workerId);
     if (!w) return undefined;
     if (this.active.has(workerId)) return this.active.get(workerId)!.run;
@@ -305,11 +309,16 @@ export class WorkerManager {
     audit("worker.run", { id: workerId, runId: run.id });
     log.info("Worker run starting", { worker: w.name, workerId: w.id, runId: run.id, model: w.model ?? config.CLAUDE_MODEL });
 
-    void this.execute(w, run, abort);
+    void this.execute(w, run, abort, promptOverride);
     return run;
   }
 
-  private async execute(w: Worker, run: WorkerRun, abort: AbortController): Promise<void> {
+  private async execute(
+    w: Worker,
+    run: WorkerRun,
+    abort: AbortController,
+    promptOverride?: string,
+  ): Promise<void> {
     const skill = w.skillId ? getSkill(w.skillId) : undefined;
     if (skill && w.skillId) recordSkillUse(w.skillId);
     // Lead workers get the crew-protocol block prepended so they know to use
@@ -362,7 +371,7 @@ export class WorkerManager {
 
     try {
       const res = await runTurn({
-        prompt: w.prompt,
+        prompt: promptOverride?.trim() || w.prompt,
         cwd: w.cwd,
         model: w.model,
         env,

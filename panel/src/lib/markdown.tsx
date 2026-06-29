@@ -164,7 +164,7 @@ function renderEmphasis(text: string, keyBase: string): ReactNode[] {
   return out;
 }
 
-export function Markdown({ text }: { text: string }) {
+export function Markdown({ text, compact }: { text: string; compact?: boolean }) {
   const blocks = parseBlocks(text);
   return (
     <div className="space-y-2">
@@ -181,6 +181,20 @@ export function Markdown({ text }: { text: string }) {
               </pre>
             );
           case "h": {
+            // In compact mode (e.g. changelog cards), sub-headings (h2/h3+) are
+            // downsized to small uppercase labels so the CHANGELOG's
+            // ###-section headers don't render oversized inside a card. The top
+            // heading (h1) stays a normal bold line.
+            if (compact && (b.level ?? 1) >= 2) {
+              return (
+                <p
+                  key={key}
+                  className="mt-1 text-xs font-semibold uppercase tracking-wide text-fg-dim"
+                >
+                  {renderInline(b.lines[0], key)}
+                </p>
+              );
+            }
             const size =
               b.level === 1 ? "text-base" : b.level === 2 ? "text-sm" : "text-sm";
             return (

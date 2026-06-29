@@ -1288,6 +1288,8 @@ export const en = {
   updates_whatsnew_behind: "Released since your version",
   updates_whatsnew_latest_title: "You're on the latest release",
   updates_whatsnew_latest_body: "Here's what landed in the current release.",
+  updates_release_history: "Release history",
+  updates_show_all: "Show all ({n})",
 
   // Terminal
   terminal_connecting: "Connecting…",

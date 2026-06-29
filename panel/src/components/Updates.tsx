@@ -67,6 +67,7 @@ export function UpdatesView({
   const [running, setRunning] = useState(false);
   const [lines, setLines] = useState<string[]>([]);
   const [changelog, setChangelog] = useState<ChangelogEntry[] | null>(null);
+  const [showAllHistory, setShowAllHistory] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
   const apply = (s: UpdateStatus) => {
@@ -236,6 +237,22 @@ export function UpdatesView({
   const showWhatsNew = newerEntries.length > 0;
   const showLatestConfirm = !showWhatsNew && haveVersion && latestEntry !== null;
 
+  // Release history: every entry already covered above is excluded, so the
+  // history lists only the *older* releases. When we showed "what's new", that's
+  // everything not newer than the installed version; when we showed the
+  // "you're on the latest" confirmation, that's everything except the latest.
+  const historyEntries =
+    sortedLog && haveVersion
+      ? showLatestConfirm
+        ? sortedLog.filter((e) => e.version !== latestEntry?.version)
+        : sortedLog.filter((e) => cmpVer(e.version, version) <= 0)
+      : [];
+  const HISTORY_CAP = 10;
+  const visibleHistory = showAllHistory
+    ? historyEntries
+    : historyEntries.slice(0, HISTORY_CAP);
+  const showHistory = historyEntries.length > 0;
+
   return (
     <div className="space-y-4">
       {status?.active && (
@@ -326,7 +343,7 @@ export function UpdatesView({
                   <span className="ml-2 text-xs text-fg-faint">{e.date}</span>
                 </summary>
                 <div className="mt-2 text-sm text-fg-dim">
-                  <Markdown text={e.body} />
+                  <Markdown text={e.body} compact />
                 </div>
               </details>
             ))}
@@ -342,9 +359,39 @@ export function UpdatesView({
               <span className="ml-2 text-xs text-fg-faint">{latestEntry.date}</span>
             </summary>
             <div className="mt-2 text-sm text-fg-dim">
-              <Markdown text={latestEntry.body} />
+              <Markdown text={latestEntry.body} compact />
             </div>
           </details>
+        </Card>
+      )}
+
+      {/* Release history: all changelog entries older than the installed
+          version, collapsed. Capped at the last 10 with a "Show all" toggle. */}
+      {showHistory && (
+        <Card title={t("updates_release_history")}>
+          <div className="space-y-3">
+            {visibleHistory.map((e) => (
+              <details
+                key={e.version}
+                className="rounded-lg border border-line bg-input p-3"
+              >
+                <summary className="cursor-pointer select-none text-sm font-medium text-fg">
+                  <span className="mono">{e.version}</span>
+                  <span className="ml-2 text-xs text-fg-faint">{e.date}</span>
+                </summary>
+                <div className="mt-2 text-sm text-fg-dim">
+                  <Markdown text={e.body} compact />
+                </div>
+              </details>
+            ))}
+          </div>
+          {historyEntries.length > HISTORY_CAP && !showAllHistory && (
+            <div className="mt-3">
+              <Button onClick={() => setShowAllHistory(true)}>
+                {t("updates_show_all").replace("{n}", String(historyEntries.length))}
+              </Button>
+            </div>
+          )}
         </Card>
       )}
 

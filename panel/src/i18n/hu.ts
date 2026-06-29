@@ -1293,6 +1293,8 @@ export const hu: Translations = {
   updates_whatsnew_behind: "A te verziód óta megjelent",
   updates_whatsnew_latest_title: "A legfrissebb kiadást használod",
   updates_whatsnew_latest_body: "Íme, mi került a jelenlegi kiadásba.",
+  updates_release_history: "Kiadási előzmények",
+  updates_show_all: "Összes mutatása ({n})",
 
   // Terminál
   terminal_connecting: "Csatlakozás…",

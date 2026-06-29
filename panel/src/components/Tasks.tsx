@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api, AuthError, type Column, type ColumnDef, type Priority, type QueueState, type Task, type TaskRunConfig, type Wip } from "../api.ts";
+import { api, AuthError, type Column, type ColumnDef, type Priority, type QueueState, type Task, type TaskRunConfig, type Wip, type Worker } from "../api.ts";
 import { useTaskEvents, type LiveTask } from "../lib/useTaskEvents.ts";
 import { useI18n } from "../lib/useI18n.ts";
 import { toast } from "../lib/useToast.ts";
@@ -118,6 +118,10 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
   // Bulk selection state
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Enabled Leads for the bulk delegate-as picker, and the chosen Lead (empty
+  // = auto-route each card to the best-fit Lead, the existing behaviour).
+  const [leads, setLeads] = useState<Worker[]>([]);
+  const [delegateLead, setDelegateLead] = useState("");
 
   // Mobile: columns scroll horizontally with snap; the chips jump to a column.
   // Refs let a chip tap smooth-scroll its column into view.
@@ -141,6 +145,11 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
 
   useEffect(() => {
     void load();
+    // Enabled Leads power the bulk "delegate as …" picker; failures are non-fatal.
+    api
+      .workers()
+      .then((r) => setLeads(r.workers.filter((w) => w.role === "lead" && w.enabled)))
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -270,6 +279,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
   const exitSelectMode = () => {
     setSelectMode(false);
     setSelected(new Set());
+    setDelegateLead("");
   };
 
   /** Select or deselect every card in one column at once. */
@@ -307,10 +317,16 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
   const bulkDelegate = async () => {
     const ids = [...selected];
     if (!ids.length) return;
-    await Promise.all(ids.map((id) => api.delegateTask(id).catch(() => {})));
+    const lead = delegateLead || undefined;
+    await Promise.all(ids.map((id) => api.delegateTask(id, lead).catch(() => {})));
+    const leadName = leads.find((l) => l.id === delegateLead)?.name;
     exitSelectMode();
     void load();
-    toast.success(t("tasks_bulk_delegated").replace("{n}", String(ids.length)));
+    toast.success(
+      leadName
+        ? t("tasks_bulk_delegated_lead").replace("{n}", String(ids.length)).replace("{lead}", leadName)
+        : t("tasks_bulk_delegated").replace("{n}", String(ids.length)),
+    );
   };
 
   const bulkRunTogether = async () => {
@@ -456,6 +472,21 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
           >
             {t("tasks_bulk_delegate").replace("{n}", String(selected.size))}
           </button>
+          {leads.length > 0 && (
+            <select
+              value={delegateLead}
+              onChange={(e) => setDelegateLead(e.target.value)}
+              title={t("tasks_bulk_delegate_as")}
+              className="min-h-[44px] rounded border border-line bg-surface px-2 text-xs text-fg"
+            >
+              <option value="">{t("tasks_bulk_delegate_auto")}</option>
+              {leads.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          )}
           <button
             onClick={bulkRunTogether}
             disabled={selected.size < 2}

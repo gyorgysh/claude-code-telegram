@@ -730,6 +730,9 @@ export const hu: Translations = {
   tasks_bulk_run_together_confirm: "Futtatod a(z) {n} kijelölt kártyát egyetlen kombinált feladatként?",
   tasks_bulk_deleted: "{n} kártya törölve ✓",
   tasks_bulk_delegated: "{n} kártya delegálva ✓",
+  tasks_bulk_delegated_lead: "{n} kártya delegálva neki: {lead} ✓",
+  tasks_bulk_delegate_as: "A kijelölt kártyák delegálása egy adott vezetőnek",
+  tasks_bulk_delegate_auto: "Automatikus",
   tasks_bulk_combined: "{n} kártya egy delegált futtatásba vonva ✓",
   col_archive: "Archívum",
 

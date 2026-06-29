@@ -820,7 +820,8 @@ export const api = {
   deleteTask: (id: string) => req<{ ok: boolean }>("DELETE", `/api/tasks/${id}`),
   setWip: (column: Column, limit: number | null) =>
     req<{ wip: Wip }>("PUT", "/api/tasks/wip", { column, limit }),
-  delegateTask: (id: string) => req<{ ok: boolean }>("POST", `/api/tasks/${id}/delegate`),
+  delegateTask: (id: string, leadId?: string) =>
+    req<{ ok: boolean }>("POST", `/api/tasks/${id}/delegate`, leadId ? { leadId } : undefined),
   stopTask: (id: string) => req<{ ok: boolean }>("POST", `/api/tasks/${id}/stop`),
   retryTask: (id: string) =>
     req<{ ok: boolean; retryCount?: number }>("POST", `/api/tasks/${id}/retry`),

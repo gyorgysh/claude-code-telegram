@@ -726,6 +726,9 @@ export const en = {
   tasks_bulk_run_together_confirm: "Run {n} selected cards as a single combined task?",
   tasks_bulk_deleted: "Deleted {n} cards ✓",
   tasks_bulk_delegated: "Delegated {n} cards ✓",
+  tasks_bulk_delegated_lead: "Delegated {n} cards to {lead} ✓",
+  tasks_bulk_delegate_as: "Delegate selected cards to a specific Lead",
+  tasks_bulk_delegate_auto: "Auto-route",
   tasks_bulk_combined: "Combined {n} cards into one delegated run ✓",
   col_archive: "Archive",
 

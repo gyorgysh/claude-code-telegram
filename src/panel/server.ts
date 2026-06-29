@@ -1125,7 +1125,11 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
     return { config: setTaskRunConfig({ timeoutMs, maxConcurrent }) };
   });
   app.post("/api/tasks/:id/delegate", async (req, reply) => {
-    const r = taskDelegator.delegate((req.params as { id: string }).id);
+    const { leadId } = (req.body ?? {}) as { leadId?: string };
+    const r = taskDelegator.delegate(
+      (req.params as { id: string }).id,
+      typeof leadId === "string" && leadId ? leadId : undefined,
+    );
     if (!r.ok) return reply.code(409).send({ error: r.error });
     return { ok: true };
   });

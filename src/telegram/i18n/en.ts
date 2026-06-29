@@ -186,7 +186,7 @@ export const en = {
   cmd_start:
     "👋 <b>{greeting}! I'm {agent}, your {brand} coordinator.</b>\n\nI run as a real Claude Code agent on this machine. I can read files, write code, run commands, check services, and ship things. Replies stream live as I work. Anything that writes or executes pauses for your approval first.\n\n<b>Talk to me like a person:</b>\n<i>\"What's eating all the disk space?\"</i>\n<i>\"Deploy the site and let me know when it's done.\"</i>\n<i>\"Summarize any errors from the last hour of logs.\"</i>\n\nI coordinate a crew of specialist Leads (DevOps, Finance, Research, whatever you configure). Use /council to put a decision to a full team vote, or message a Lead directly if they have their own bot.\n\nYou can send me files and photos (I see images inline) and voice notes (transcribed and run as prompts).\n\n/help for the full command list.",
   cmd_help:
-    "🤖 <b>{agent}: Commands</b>\n\n<b>Conversation</b>\n/new: fresh context (clear session)\n/stop: abort the running request\n\n<b>Files &amp; Git</b>\n/cd &lt;path&gt;: change working directory\n/pwd: current directory\n/projects: switch between saved working dirs\n/diff: review the working-tree diff with Commit / Discard buttons\n/commit &lt;message&gt;: stage all changes and commit\n\n<b>Autonomy</b>\n/mode supervised|standard|full|auto_until_error: approval level for this chat\n/model: switch the AI model (Claude, local, providers)\n/allow &lt;Tool&gt; · /allowed · /disallow &lt;Tool|all&gt;: persistent tool allow-rules\n\n<b>Crew</b>\n/inbox: review suggestions agents filed for you (accept → a task, or dismiss)\n/council &lt;idea&gt;: put a proposal to a full Lead council vote\n\n<b>Scheduling</b>\n/schedule add &lt;when&gt; | &lt;prompt&gt;: timed autonomous run (<code>30m</code>, <code>2h</code>, <code>HH:MM</code>)\n/schedule list · /schedule rm &lt;id&gt;\n\n<b>Info</b>\n/status: session info (cwd, model, autonomy, session id)\n/usage: plan, subscription limits, and API spend\n/update [now]: check for a new version, or apply it with <code>/update now</code>\n/restore [confirm]: reset code to the latest GitHub commit, keeping your data &amp; config\n/lang [code]: show or set response language (e.g. <code>/lang hu</code>)\n/voice [on|off]: toggle spoken voice replies (TTS)\n/help: this message\n\nSend files or photos (seen inline as vision input), or voice notes (transcribed and run as prompts).",
+    "🤖 <b>{agent}: Commands</b>\n\n<b>Conversation</b>\n/new: fresh context (clear session)\n/stop: abort the running request\n\n<b>Files &amp; Git</b>\n/cd &lt;path&gt;: change working directory\n/pwd: current directory\n/projects: switch between saved working dirs\n/diff: review the working-tree diff with Commit / Discard buttons\n/commit &lt;message&gt;: stage all changes and commit\n\n<b>Autonomy</b>\n/mode supervised|standard|full|auto_until_error: approval level for this chat\n/model: switch the AI model (Claude, local, providers)\n/allow &lt;Tool&gt; · /allowed · /disallow &lt;Tool|all&gt;: persistent tool allow-rules\n\n<b>Crew</b>\n/inbox: review suggestions agents filed for you (accept → a task, or dismiss)\n/council &lt;idea&gt;: put a proposal to a full Lead council vote\n\n<b>Scheduling</b>\n/schedule add &lt;when&gt; | &lt;prompt&gt;: timed autonomous run (<code>30m</code>, <code>2h</code>, <code>HH:MM</code>)\n/schedule list · /schedule rm &lt;id&gt;\n\n<b>Info</b>\n/status: session info (cwd, model, autonomy, session id)\n/usage: plan, subscription limits, and API spend\n/digest: morning briefing — last 24h of tasks, memories, skills, cost &amp; alerts\n/update [now]: check for a new version, or apply it with <code>/update now</code>\n/restore [confirm]: reset code to the latest GitHub commit, keeping your data &amp; config\n/lang [code]: show or set response language (e.g. <code>/lang hu</code>)\n/voice [on|off]: toggle spoken voice replies (TTS)\n/help: this message\n\nSend files or photos (seen inline as vision input), or voice notes (transcribed and run as prompts).",
   cmd_new_done: "🆕 Started a fresh conversation.",
   cmd_cd_usage: "Usage: /cd <path>",
   cmd_cd_not_dir: "⚠️ Not a directory: {path}",
@@ -289,6 +289,16 @@ export const en = {
   cmd_usage_fresh_ago: "{n}m ago",
   cmd_usage_refreshing: " · refreshing",
   cmd_usage_no_data: "\n<i>No subscription data yet · checking now</i>",
+
+  cmd_digest_header: "<b>🌅 Daily digest</b> · last 24h",
+  cmd_digest_empty: "Quiet last 24 hours: nothing completed, written, or alerted.",
+  cmd_digest_tasks: "✅ <b>{n}</b> task{s} completed{titles}",
+  cmd_digest_runs: "🤖 {ok} run{oks} ok · {err} failed",
+  cmd_digest_memories: "🧠 <b>{n}</b> memor{y} written",
+  cmd_digest_skills: "🛠 <b>{n}</b> skill{s} saved: {names}",
+  cmd_digest_cost: "💸 <b>${cost}</b> spent · {turns} turn{s}",
+  cmd_digest_alerts: "⚠️ <b>{n}</b> alert{s}: {first}",
+  cmd_digest_alerts_more: " (+{n} more)",
 } as const;
 
 export type TranslationKey = keyof typeof en;

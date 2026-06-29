@@ -5,6 +5,7 @@ import { mainSettingsView, setMainSettings } from "./core/mainSettings.js";
 import { config } from "./config.js";
 import { AGENT_LANGUAGES, isValidLanguage, languageName } from "./core/languages.js";
 import { runCouncil, formatCouncilTelegram } from "./core/council.js";
+import { gatherDigest, isDigestEmpty, type DigestData } from "./core/digest.js";
 import { sessions } from "./session/manager.js";
 import { sendDiff } from "./telegram/gitFlow.js";
 import { sendProjectsMenu } from "./telegram/projects.js";
@@ -429,6 +430,13 @@ export function registerCommands(bot: Telegraf): void {
     await ctx.replyWithHTML(lines.join("\n"));
   });
 
+  bot.command("digest", async (ctx) => {
+    const lang = langForChat(ctx.chat.id);
+    const data = gatherDigest();
+    log.info("Command /digest", { chatId: ctx.chat.id });
+    await ctx.replyWithHTML(formatDigest(data, lang));
+  });
+
   bot.command("status", async (ctx) => {
     const lang = langForChat(ctx.chat.id);
     const s = sessions.get(ctx.chat.id);
@@ -706,4 +714,74 @@ function fmtCountdown(ms: number): string {
   }
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
+}
+
+/** Render a 24h digest as a tight Telegram HTML block. */
+function formatDigest(d: DigestData, lang: string): string {
+  const lines: string[] = [t("cmd_digest_header", lang)];
+
+  if (isDigestEmpty(d)) {
+    lines.push(t("cmd_digest_empty", lang));
+    return lines.join("\n");
+  }
+
+  if (d.tasksCompleted.length > 0) {
+    // Inline up to 3 titles, then a "+N" tail, to keep it a tight paragraph.
+    const shown = d.tasksCompleted.slice(0, 3).map((x) => escapeHtml(x.title));
+    const extra = d.tasksCompleted.length - shown.length;
+    let titles = shown.length ? ` — ${shown.join(", ")}` : "";
+    if (extra > 0) titles += ` +${extra}`;
+    lines.push(t("cmd_digest_tasks", lang, {
+      n: d.tasksCompleted.length,
+      s: d.tasksCompleted.length === 1 ? "" : "s",
+      titles,
+    }));
+  }
+
+  if (d.runsOk > 0 || d.runsError > 0) {
+    lines.push(t("cmd_digest_runs", lang, {
+      ok: d.runsOk,
+      oks: d.runsOk === 1 ? "" : "s",
+      err: d.runsError,
+    }));
+  }
+
+  if (d.memoriesWritten > 0) {
+    lines.push(t("cmd_digest_memories", lang, {
+      n: d.memoriesWritten,
+      y: d.memoriesWritten === 1 ? "y" : "ies",
+    }));
+  }
+
+  if (d.skillsSaved.length > 0) {
+    const names = d.skillsSaved.slice(0, 3).map((x) => escapeHtml(x.name)).join(", ");
+    const extra = d.skillsSaved.length - Math.min(3, d.skillsSaved.length);
+    lines.push(t("cmd_digest_skills", lang, {
+      n: d.skillsSaved.length,
+      s: d.skillsSaved.length === 1 ? "" : "s",
+      names: extra > 0 ? `${names} +${extra}` : names,
+    }));
+  }
+
+  if (d.turns > 0 || d.costUsd > 0) {
+    lines.push(t("cmd_digest_cost", lang, {
+      cost: d.costUsd.toFixed(2),
+      turns: d.turns,
+      s: d.turns === 1 ? "" : "s",
+    }));
+  }
+
+  if (d.alerts.length > 0) {
+    const first = escapeHtml(d.alerts[0].text);
+    const more = d.alerts.length > 1
+      ? t("cmd_digest_alerts_more", lang, { n: d.alerts.length - 1 })
+      : "";
+    lines.push(t("cmd_digest_alerts", lang, {
+      n: d.alerts.length,
+      s: d.alerts.length === 1 ? "" : "s",
+      first: first + more,
+    }));
+  }
+
+  return lines.join("\n");
 }

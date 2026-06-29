@@ -103,6 +103,7 @@ async function main(): Promise<void> {
     { command: "diff", description: "Review changes, commit or discard" },
     { command: "commit", description: "Stage all changes and commit" },
     { command: "usage", description: "Show cost & activity" },
+    { command: "digest", description: "Daily summary of the last 24h" },
     { command: "allowed", description: "Show always-allow rules" },
     { command: "schedule", description: "Run a prompt on a timer" },
     { command: "stop", description: "Abort the running request" },

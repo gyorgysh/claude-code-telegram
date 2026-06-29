@@ -609,6 +609,9 @@ export const en = {
   vault_empty: "No secrets stored.",
   vault_reveal: "Reveal",
   vault_unused: "unused",
+  vault_copy_value: "Copy secret value",
+  vault_filter_placeholder: "Filter secrets by name or description…",
+  vault_no_results: "No secrets match your filter.",
   vault_keymgmt_title: "Key management",
   vault_keymgmt_desc:
     "Rotate the master key, or take an encrypted, passphrase-protected backup of all secrets you can restore on another machine.",

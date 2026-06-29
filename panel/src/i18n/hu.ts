@@ -613,6 +613,9 @@ export const hu: Translations = {
   vault_empty: "Nincs tárolt titok.",
   vault_reveal: "Megjelenítés",
   vault_unused: "nem használt",
+  vault_copy_value: "Titok értékének másolása",
+  vault_filter_placeholder: "Szűrés név vagy leírás alapján…",
+  vault_no_results: "Nincs a szűrőnek megfelelő titok.",
   vault_keymgmt_title: "Kulcskezelés",
   vault_keymgmt_desc:
     "Forgasd a mesterkulcsot, vagy készíts titkosított, jelmondattal védett biztonsági mentést az összes titokról, amelyet másik gépen is visszaállíthatsz.",

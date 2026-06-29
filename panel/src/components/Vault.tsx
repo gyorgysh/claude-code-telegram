@@ -4,6 +4,7 @@ import { useI18n } from "../lib/useI18n.ts";
 import { toast } from "../lib/useToast.ts";
 import { useListAnimate } from "../lib/useListAnimate.ts";
 import { Badge, Button, Callout, Card, ConfirmDialog, Empty, Input, Label } from "./ui.tsx";
+import { Copy } from "lucide-react";
 import { VaultArt } from "./onboarding.tsx";
 
 const blank = { name: "", value: "", description: "" };
@@ -24,7 +25,16 @@ export function VaultView({ onAuthError }: { onAuthError: () => void }) {
   const [importPass, setImportPass] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmRotate, setConfirmRotate] = useState(false);
+  const [filter, setFilter] = useState("");
   const [listRef] = useListAnimate();
+
+  const q = filter.trim().toLowerCase();
+  const filtered = q
+    ? secrets.filter(
+        (s) =>
+          s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q),
+      )
+    : secrets;
 
   const load = () =>
     api
@@ -81,6 +91,17 @@ export function VaultView({ onAuthError }: { onAuthError: () => void }) {
     }
     const { value } = await api.revealSecret(id);
     setRevealed((r) => ({ ...r, [id]: value }));
+  };
+
+  const copyValue = async (id: string) => {
+    try {
+      const value = revealed[id] !== undefined ? revealed[id] : (await api.revealSecret(id)).value;
+      await navigator.clipboard.writeText(value);
+      toast.success(t("vault_copied"));
+    } catch (e) {
+      if (e instanceof AuthError) return onAuthError();
+      toast.error(String(e));
+    }
   };
 
   const del = (id: string) => {
@@ -240,44 +261,66 @@ export function VaultView({ onAuthError }: { onAuthError: () => void }) {
           {t("onb_step_vault_desc")}
         </Empty>
       ) : (
-        <div ref={listRef} className="mt-3 space-y-2">
-          {secrets.map((s) => {
-            const uses = usages[s.id] ?? [];
-            return (
-              <div
-                key={s.id}
-                className="flex items-start justify-between gap-3 rounded-lg border border-line p-3"
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-fg">{s.name}</span>
-                    <Badge>vault:{s.id}</Badge>
-                    {uses.length === 0 ? (
-                      <Badge tone="zinc">{t("vault_unused")}</Badge>
-                    ) : (
-                      uses.map((u, i) => (
-                        <Badge key={i} tone="blue">{u.kind}: {u.name}</Badge>
-                      ))
-                    )}
+        <>
+          {secrets.length > 1 && (
+            <Input
+              className="mt-3"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder={t("vault_filter_placeholder")}
+              aria-label={t("vault_filter_placeholder")}
+            />
+          )}
+          {filtered.length === 0 ? (
+            <Empty>{t("vault_no_results")}</Empty>
+          ) : (
+            <div ref={listRef} className="mt-3 space-y-2">
+              {filtered.map((s) => {
+                const uses = usages[s.id] ?? [];
+                return (
+                  <div
+                    key={s.id}
+                    className="flex items-start justify-between gap-3 rounded-lg border border-line p-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-fg">{s.name}</span>
+                        <Badge>vault:{s.id}</Badge>
+                        {uses.length === 0 ? (
+                          <Badge tone="zinc">{t("vault_unused")}</Badge>
+                        ) : (
+                          uses.map((u, i) => (
+                            <Badge key={i} tone="blue">{u.kind}: {u.name}</Badge>
+                          ))
+                        )}
+                      </div>
+                      {s.description && <p className="text-sm text-fg-dim">{s.description}</p>}
+                      <p className="mono mt-1 text-xs text-fg-faint">
+                        {revealed[s.id] !== undefined ? revealed[s.id] : s.hint}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 gap-1.5">
+                      <Button
+                        onClick={() => copyValue(s.id)}
+                        aria-label={t("vault_copy_value")}
+                        title={t("vault_copy_value")}
+                      >
+                        <Copy className="h-4 w-4" strokeWidth={2} />
+                      </Button>
+                      <Button onClick={() => reveal(s.id)}>
+                        {revealed[s.id] !== undefined ? t("hide") : t("vault_reveal")}
+                      </Button>
+                      <Button onClick={() => startEdit(s)}>{t("edit")}</Button>
+                      <Button variant="danger" onClick={() => del(s.id)}>
+                        {t("delete")}
+                      </Button>
+                    </div>
                   </div>
-                  {s.description && <p className="text-sm text-fg-dim">{s.description}</p>}
-                  <p className="mono mt-1 text-xs text-fg-faint">
-                    {revealed[s.id] !== undefined ? revealed[s.id] : s.hint}
-                  </p>
-                </div>
-                <div className="flex shrink-0 gap-1.5">
-                  <Button onClick={() => reveal(s.id)}>
-                    {revealed[s.id] !== undefined ? t("hide") : t("vault_reveal")}
-                  </Button>
-                  <Button onClick={() => startEdit(s)}>{t("edit")}</Button>
-                  <Button variant="danger" onClick={() => del(s.id)}>
-                    {t("delete")}
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
 
       <div className="mt-6 border-t border-line pt-4">

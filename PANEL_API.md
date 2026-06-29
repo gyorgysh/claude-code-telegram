@@ -200,6 +200,36 @@ curl -X POST -H "Content-Type: application/json" -H "X-Signature-256: sha256=$SI
 # 202 → a backlog card was filed and delegated to an autonomous run
 ```
 
+### Webhook tools (outbound)
+
+Register an arbitrary HTTP endpoint as a callable agent tool. Each definition
+surfaces to the agent as `webhook_<slug>_<id>`; the agent fills the declared
+params and the call is issued through the SSRF-guarded `safeFetch`. Static
+`headers` values may be `vault:<id>` references (resolved at call time, so an
+`Authorization` header can hold a secret without storing it in plaintext).
+
+```bash
+# List tool definitions (secret header values returned only as a hint)
+curl -H "$AUTH" $BASE/api/webhook-tools
+
+# Create a tool. `params` declare what the agent fills in and where each goes
+# (query | header | body | path; a path param fills the {name} placeholder).
+curl -X POST -H "$AUTH" -H "Content-Type: application/json" $BASE/api/webhook-tools \
+  -d '{
+    "name": "Create Linear issue",
+    "description": "Open a new Linear issue",
+    "method": "POST",
+    "url": "https://api.linear.app/graphql",
+    "headers": { "Authorization": "vault:<secret-id>" },
+    "params": [{ "name": "title", "in": "body", "required": true }]
+  }'
+
+# Update / delete a tool
+curl -X PUT -H "$AUTH" -H "Content-Type: application/json" $BASE/api/webhook-tools/<id> \
+  -d '{ "method": "GET" }'
+curl -X DELETE -H "$AUTH" $BASE/api/webhook-tools/<id>
+```
+
 ### Memory
 
 ```bash
@@ -425,6 +455,13 @@ curl -H "$AUTH" $BASE/api/audit
 # Council vote history (each entry has the proposal, per-Lead votes, and tally)
 curl -H "$AUTH" $BASE/api/council
 
+# Get / set the decision rule. Votes are relevance-weighted (each voter's weight
+# is the proposal's relevance to their domain; 1.0 when embeddings are off).
+# rule: "majority" (default) | "supermajority" (>=2/3 of decisive weight) | "unanimous"
+curl -H "$AUTH" $BASE/api/council/rule
+curl -X PUT -H "$AUTH" -H "Content-Type: application/json" $BASE/api/council/rule \
+  -d '{ "rule": "supermajority" }'
+
 # Cross-agent delegation log
 curl -H "$AUTH" $BASE/api/delegations
 
@@ -609,7 +646,7 @@ A few more endpoints exist, mostly mirroring panel views:
 - `GET /api/logs/summary`: usage insights (`?hours=72`) — most-used tools and shell commands tallied from persisted "Tool use" entries.
 - `GET /api/update`, `POST /api/update/check|run|restore`: in-panel update check, apply, and rollback.
 - `GET /api/update/changelog`: the locally served `CHANGELOG.md` (`{ content }`); used as the Updates view's fallback when GitHub is unreachable.
-- `GET /api/connectors`, `PUT /api/connectors/<id>`: the external-connector catalogue. All six (Notion, Google Calendar, Gmail, Google Drive, Apple Calendar, Apple Mail) are live; `PUT` takes `{ enabled, secretId, scope }` where `scope` is `read` (default) or `write` (gates the write tools).
+- `GET /api/connectors`, `PUT /api/connectors/<id>`: the external-connector catalogue. All eight (Notion, Google Calendar, Gmail, Google Drive, Apple Calendar, Apple Mail, Slack, GitHub) are live; `PUT` takes `{ enabled, secretId, scope }` where `scope` is `read` (default) or `write` (gates the write tools).
 - `GET /api/chat`, `POST /api/chat/send|stop|clear|approve`, `PUT /api/chat/settings`: the panel's own Claude chat session (talks to Atlas). The autonomy level is set per-chat from the toolbar (replacing the removed `PANEL_CHAT_BYPASS` env flag).
 - `POST /api/chat/react`: react to an assistant reply with `{ reaction: "up" | "down", text }`. A thumbs-up files the response text as a durable memory; a thumbs-down is recorded. Returns 400 for any other reaction.
 - `GET /api/asks`, `POST /api/asks/resolve`: the pending `AskUserQuestion` queue and its resolver, used to render interactive question widgets in panel chat. Resolve with `{ id, optionIndices?, text? }`.
@@ -620,3 +657,5 @@ A few more endpoints exist, mostly mirroring panel views:
 - `POST /api/feedback`: relay a bug report / suggestion `{ kind, message, email? }` to the central collector (`FEEDBACK_URL`).
 - `GET /api/me`: read-only deployment facts (version, brand/agent name, allowed-user count, panel host/port, tunnel/terminal flags) for the Setup view.
 - `GET /api/terminal`, `POST /api/terminal/spawn|resize`: the panel terminal session.
+- `GET /api/conversations/search`: hybrid (cosine + keyword) search across the live chat history and on-disk run transcripts (`?q=&limit=`), returning ranked hits with an extracted snippet and source (`chat` | `run`).
+- `GET|PUT /api/branding`: the white-label branding draft (product/agent name, panel title, logo, favicon, colours, email footer). Overrides are only *applied* (folded into `GET /api/me`) when `BRANDING_UNLOCKED=true`; otherwise the draft persists but the env-default names are served.

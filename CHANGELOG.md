@@ -3,6 +3,22 @@
 All notable changes to MyHQ are documented here, grouped by release.
 Commit links point to `github.com/gyorgysh/myhq`.
 
+## [0.5.7] - 2026-06-30
+
+### Added
+- **Slack and GitHub connectors**: two new live integrations alongside the existing six. Slack (`slack_list_channels`/`history`/`post_message`/`reply_thread`/`search`/`upload_file`) and GitHub (`github_list_repos`/`list_issues`/`get_file`/`put_file`/`create_issue`/`comment_issue`/`create_pr`), each vault-backed with a read/write scope toggle. ([fd5b24a](https://github.com/gyorgysh/myhq/commit/fd5b24a))
+- **Generic outbound webhook connector**: register an arbitrary HTTP endpoint in the panel (Webhook Tools view) and it surfaces to the agent as a callable `webhook_<slug>` MCP tool. Each request goes through the SSRF-guarded `safeFetch`, and an auth header can reference a `vault:<id>` secret so tokens never sit in plaintext. Routes: `GET|POST /api/webhook-tools`, `PUT|DELETE /api/webhook-tools/:id`. ([eb005ef](https://github.com/gyorgysh/myhq/commit/eb005ef))
+- **Event-driven inbound webhook triggers**: external services hit a public per-trigger URL (`POST /hook/:id`, authenticated by HMAC-SHA256 over the raw body with the trigger's own secret) to kick off an autonomous run. A fired trigger files a backlog card and delegates it, reusing the full delegation path (transcript, retry, completion webhook); the inbound payload is appended to the prompt. Managed via `GET|POST /api/webhook-triggers`, `PUT|DELETE /api/webhook-triggers/:id`, `POST /api/webhook-triggers/:id/rotate`, `GET /api/webhook-triggers/:id/secret`. ([c5e0888](https://github.com/gyorgysh/myhq/commit/c5e0888))
+- **`/digest` command**: a tight Telegram summary of the last 24h of fleet activity — tasks completed, autonomous runs ok/errored, memories written, skills saved, and cost. ([73b81a9](https://github.com/gyorgysh/myhq/commit/73b81a9))
+- **Conversation search across sessions**: one panel search box over the live chat history and every on-disk run transcript, ranked by the shared hybrid (cosine + keyword) search with snippet extraction. Route: `GET /api/conversations/search`. ([8f0f69a](https://github.com/gyorgysh/myhq/commit/8f0f69a))
+- **Relevance-weighted council votes + configurable quorum**: each voter's weight is the proposal's relevance to their domain (1.0 when embeddings are off, so everyone counts equally), and the decision rule is configurable — `majority` (default), `supermajority` (≥2/3 of decisive weight), or `unanimous`. Routes: `GET|PUT /api/council/rule`. ([7368840](https://github.com/gyorgysh/myhq/commit/7368840))
+- **White-label branding** (gated licensed feature): a panel surface to override product/agent name, panel title, logo, favicon, colours, and email footer. The configuration always exists and persists, but overrides are only *applied* when `BRANDING_UNLOCKED=true` (free for self-hosters; there is deliberately no panel toggle). Routes: `GET|PUT /api/branding`. ([d1aacbd](https://github.com/gyorgysh/myhq/commit/d1aacbd))
+- **Multi-device presence**: a panel banner showing when the dashboard is open on more than one device, broadcast over the existing WebSocket. ([fb4bfcb](https://github.com/gyorgysh/myhq/commit/fb4bfcb))
+- **Onboarding CTA for unconfigured connectors**: the Connectors view shows the full catalogue with credential hints when nothing is set up yet. ([f7ca4b2](https://github.com/gyorgysh/myhq/commit/f7ca4b2), [5cffceb](https://github.com/gyorgysh/myhq/commit/5cffceb))
+
+### Fixed
+- **Stuck-task recovery**: a `POST /api/tasks/:id/unstick` route aborts any live run, drops the card from the queue, and clears its delegation without re-running it; cards left `queued`/`running` by a restart are auto-reconciled to a retryable error on boot. Plus an agents empty-state CTA, Linux OAuth keyring support for the usage probe, and a `work.md` drift indicator with a restore-to-default action (`POST /api/prompt/restore`). ([0890a30](https://github.com/gyorgysh/myhq/commit/0890a30))
+
 ## [0.5.6] - 2026-06-29
 
 ### Added

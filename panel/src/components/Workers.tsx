@@ -49,6 +49,12 @@ function shortModel(id: string): string {
   return id.replace(/^claude-/, "").replace(/-\d{8}$/, "");
 }
 
+/** Pick the right cwd placeholder i18n key for the host platform, so the path
+ *  example matches what the user will actually type (C:\... on Windows). */
+function cwdPlaceholderKey(platform: string): "workers_cwd_placeholder_win" | "workers_cwd_placeholder_unix" {
+  return platform === "win32" ? "workers_cwd_placeholder_win" : "workers_cwd_placeholder_unix";
+}
+
 /** Fixed display label for each provider kind; Anthropic is the implicit
  *  default when a worker has no provider set (the cloud API). */
 const PROVIDER_KIND_LABEL: Record<ProviderKind, string> = {
@@ -939,7 +945,14 @@ function WizardConfigEditor({
   const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   const [fetched, setFetched] = useState<string[]>([]);
+  const [platform, setPlatform] = useState("");
   const listId = useId();
+
+  // Capture the host platform so the cwd placeholder hint shows a matching
+  // (Windows vs Unix) path example.
+  useEffect(() => {
+    api.me().then((m) => setPlatform(m.platform)).catch(() => {});
+  }, []);
 
   const fetchModels = async () => {
     if (!form.providerId) return;
@@ -973,7 +986,7 @@ function WizardConfigEditor({
           <Input
             value={form.cwd}
             onChange={(e) => onChange({ cwd: e.target.value })}
-            placeholder={t("workers_cwd_placeholder")}
+            placeholder={t(cwdPlaceholderKey(platform))}
           />
         </div>
       </div>
@@ -1192,17 +1205,20 @@ function WorkerForm({
   const [busy, setBusy] = useState(false);
   const [fetched, setFetched] = useState<string[]>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
+  const [platform, setPlatform] = useState("");
   const listId = useId();
 
-  // Prefill the working directory with the panel's default for a brand-new
+  // Prefill the working directory with the user's home dir for a brand-new
   // worker (empty cwd), so the form can be saved straight away instead of the
   // save button staying greyed out until a path is typed. The user can edit it.
+  // Also capture the host platform so the placeholder hint shows a matching
+  // (Windows vs Unix) path example.
   useEffect(() => {
-    if (form.cwd.trim()) return;
     api
       .me()
       .then((m) => {
-        setForm((f) => (f.cwd.trim() ? f : { ...f, cwd: m.defaultWorkdir }));
+        setPlatform(m.platform);
+        setForm((f) => (f.cwd.trim() ? f : { ...f, cwd: m.homeDir }));
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1249,7 +1265,7 @@ function WorkerForm({
           <Input
             value={form.cwd}
             onChange={(e) => setForm({ ...form, cwd: e.target.value })}
-            placeholder={t("workers_cwd_placeholder")}
+            placeholder={t(cwdPlaceholderKey(platform))}
           />
         </div>
       </div>

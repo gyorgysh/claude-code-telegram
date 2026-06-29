@@ -65,12 +65,12 @@ const MODEL_SUGGESTIONS = [
   "claude-opus-4-8",
 ];
 
-const PERSONA_PRESETS: Array<{ labelKey: TranslationKey; value: string }> = [
-  { labelKey: "settings_persona_concise", value: "Concise and direct. Lead with the result, skip preamble, use short sentences." },
-  { labelKey: "settings_persona_warm", value: "Warm and encouraging. Acknowledge effort, celebrate wins, frame challenges positively." },
-  { labelKey: "settings_persona_formal", value: "Formal and precise. Use structured language, avoid contractions and casual expressions." },
-  { labelKey: "settings_persona_analytical", value: "Analytical and methodical. Think through problems step by step, cite specifics." },
-  { labelKey: "settings_persona_playful", value: "Witty and playful. Use light humor, analogies, and keep the energy high." },
+const PERSONA_PRESETS: Array<{ labelKey: TranslationKey; descKey: TranslationKey; value: string }> = [
+  { labelKey: "settings_persona_concise", descKey: "workers_persona_preset_concise", value: "Concise and direct. Lead with the result, skip preamble, use short sentences." },
+  { labelKey: "settings_persona_warm", descKey: "workers_persona_preset_warm", value: "Warm and encouraging. Acknowledge effort, celebrate wins, frame challenges positively." },
+  { labelKey: "settings_persona_formal", descKey: "workers_persona_preset_formal", value: "Formal and precise. Use structured language, avoid contractions and casual expressions." },
+  { labelKey: "settings_persona_analytical", descKey: "workers_persona_preset_analytical", value: "Analytical and methodical. Think through problems step by step, cite specifics." },
+  { labelKey: "settings_persona_playful", descKey: "workers_persona_preset_playful", value: "Witty and playful. Use light humor, analogies, and keep the energy high." },
 ];
 
 const AUTONOMY_KEY: Record<Autonomy, TranslationKey> = {
@@ -79,6 +79,31 @@ const AUTONOMY_KEY: Record<Autonomy, TranslationKey> = {
   full: "full",
   auto_until_error: "auto_until_error",
 };
+
+const AUTONOMY_DESC_KEY: Record<Autonomy, TranslationKey> = {
+  supervised: "settings_autonomy_supervised_desc",
+  standard: "settings_autonomy_standard_desc",
+  full: "settings_autonomy_full_desc",
+  auto_until_error: "settings_autonomy_auto_until_error_desc",
+};
+
+// Tappable example goals for the wizard's goal field (chips prefill the textarea).
+const WIZARD_GOAL_EXAMPLES: Array<{ labelKey: TranslationKey; goal: string }> = [
+  { labelKey: "wizard_goal_ex_server", goal: "Monitor my server's CPU, memory and disk health and alert me when something looks wrong." },
+  { labelKey: "wizard_goal_ex_digest", goal: "Every morning, research a topic I care about and send me a concise digest of what's new." },
+  { labelKey: "wizard_goal_ex_review", goal: "Review recent code changes for bugs, style issues and security problems, then summarise findings." },
+  { labelKey: "wizard_goal_ex_writer", goal: "Draft and polish written content (posts, docs, emails) in a clear, consistent voice." },
+];
+
+// Schedule chip presets → the cron/interval string the backend understands.
+// "" = manual; "custom" reveals the raw input instead of mapping to a value.
+const WIZARD_SCHEDULE_CHIPS: Array<{ labelKey: TranslationKey; value: string }> = [
+  { labelKey: "wizard_sched_manual", value: "" },
+  { labelKey: "wizard_sched_30m", value: "30m" },
+  { labelKey: "wizard_sched_hourly", value: "1h" },
+  { labelKey: "wizard_sched_daily", value: "09:00" },
+  { labelKey: "wizard_sched_custom", value: "custom" },
+];
 
 export function WorkersView({
   onAuthError,
@@ -137,11 +162,11 @@ export function WorkersView({
         <h2 className="text-sm font-semibold text-fg-dim">{t("workers_crew")}</h2>
         {!creating && !wizarding && (
           <div className="flex gap-2">
-            <Button variant="primary" onClick={() => setWizarding(true)}>
-              {t("workers_wizard")}
-            </Button>
             <Button onClick={() => setCreating(true)}>
               {t("workers_new")}
+            </Button>
+            <Button variant="primary" onClick={() => setWizarding(true)}>
+              {t("workers_wizard")}
             </Button>
           </div>
         )}
@@ -617,6 +642,9 @@ function WorkerWizard({
   const [answers, setAnswers] = useState<WizardAnswers>({
     goal: "", context: "", cwd: "", schedule: "", crew: false,
   });
+  // Schedule chip picker: which preset chip is active. "custom" reveals the raw
+  // input; an empty string maps to manual. Starts on "Manually".
+  const [scheduleChip, setScheduleChip] = useState<string>("");
   const [configs, setConfigs] = useState<Form[]>([]);
   const [created, setCreated] = useState<Set<number>>(new Set());
   const [genError, setGenError] = useState<string | null>(null);
@@ -727,6 +755,21 @@ function WorkerWizard({
               onChange={(e) => setAnswers({ ...answers, goal: e.target.value })}
               placeholder={t("wizard_q_goal_placeholder")}
             />
+            <div className="mt-1.5">
+              <p className="mb-1 text-xs text-fg-faint">{t("wizard_goal_inspiration")}</p>
+              <div className="flex flex-wrap gap-1">
+                {WIZARD_GOAL_EXAMPLES.map((ex) => (
+                  <button
+                    key={ex.labelKey}
+                    type="button"
+                    onClick={() => setAnswers({ ...answers, goal: ex.goal })}
+                    className="rounded px-2 py-0.5 text-xs border border-line text-fg-dim transition-colors hover:text-fg hover:border-accent/40"
+                  >
+                    {t(ex.labelKey)}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
           <div>
             <Label>{t("wizard_q_context")}</Label>
@@ -736,41 +779,69 @@ function WorkerWizard({
               onChange={(e) => setAnswers({ ...answers, context: e.target.value })}
               placeholder={t("wizard_q_context_placeholder")}
             />
+            <p className="mt-1 text-xs text-fg-faint">{t("wizard_context_hint")}</p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <Label>{t("wizard_q_cwd")}</Label>
-              <Input
-                value={answers.cwd}
-                onChange={(e) => setAnswers({ ...answers, cwd: e.target.value })}
-                placeholder={t("wizard_q_cwd_placeholder")}
-              />
-              <p className="mt-1 text-xs text-fg-faint">{t("wizard_q_cwd_help")}</p>
+          <div>
+            <Label>{t("wizard_q_cwd")}</Label>
+            <Input
+              value={answers.cwd}
+              onChange={(e) => setAnswers({ ...answers, cwd: e.target.value })}
+              placeholder={t("wizard_q_cwd_placeholder")}
+            />
+            <p className="mt-1 text-xs text-fg-faint">{t("wizard_q_cwd_help")}</p>
+          </div>
+          <div>
+            <Label>{t("wizard_q_schedule")}</Label>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {WIZARD_SCHEDULE_CHIPS.map((chip) => (
+                <button
+                  key={chip.labelKey}
+                  type="button"
+                  onClick={() => {
+                    setScheduleChip(chip.value);
+                    // "custom" reveals the raw input and keeps the current value;
+                    // any other chip writes its mapped schedule string directly.
+                    if (chip.value !== "custom") {
+                      setAnswers({ ...answers, schedule: chip.value });
+                    }
+                  }}
+                  className={`rounded px-3 py-1.5 text-xs border transition-colors ${
+                    scheduleChip === chip.value
+                      ? "bg-[var(--accent)] text-white border-transparent"
+                      : "border-line text-fg-dim hover:text-fg"
+                  }`}
+                >
+                  {t(chip.labelKey)}
+                </button>
+              ))}
             </div>
-            <div>
-              <Label>{t("wizard_q_schedule")}</Label>
+            {scheduleChip === "custom" && (
               <Input
+                className="mt-2"
                 value={answers.schedule}
                 onChange={(e) => setAnswers({ ...answers, schedule: e.target.value })}
                 placeholder={t("wizard_q_schedule_placeholder")}
               />
-            </div>
+            )}
           </div>
           <div>
             <Label>{t("wizard_q_crew")}</Label>
-            <div className="mt-1 flex gap-2">
+            <div className="mt-1 flex flex-col gap-2 sm:flex-row">
               {([false, true] as const).map((val) => (
                 <button
                   key={String(val)}
                   type="button"
                   onClick={() => setAnswers({ ...answers, crew: val })}
-                  className={`rounded px-3 py-1.5 text-xs border transition-colors ${
+                  className={`flex-1 rounded px-3 py-2 text-left text-xs border transition-colors ${
                     answers.crew === val
-                      ? "bg-[var(--accent)] text-white border-transparent"
+                      ? "bg-accent/10 border-accent/40 text-fg"
                       : "border-line text-fg-dim hover:text-fg"
                   }`}
                 >
-                  {val ? t("wizard_opt_crew") : t("wizard_opt_single")}
+                  <span className="font-medium">{val ? t("wizard_opt_crew") : t("wizard_opt_single")}</span>
+                  <span className="mt-0.5 block text-fg-faint">
+                    {val ? t("wizard_opt_crew_desc") : t("wizard_opt_single_desc")}
+                  </span>
                 </button>
               ))}
             </div>
@@ -949,6 +1020,7 @@ function WizardConfigEditor({
               </button>
             ))}
           </div>
+          <p className="mt-1 text-xs text-fg-faint">{t(AUTONOMY_DESC_KEY[form.autonomy])}</p>
         </div>
         {(form.role === "lead" || form.role === "assistant") && (
           <div>
@@ -1192,11 +1264,13 @@ function WorkerForm({
       </div>
       <div>
         <Label>{t("workers_persona_label")}</Label>
+        <p className="-mt-0.5 mb-1.5 text-xs text-fg-faint">{t("workers_persona_sub")}</p>
         <div className="flex flex-wrap gap-1 mb-1.5">
           {PERSONA_PRESETS.map((p) => (
             <button
               key={p.labelKey}
               type="button"
+              title={t(p.descKey)}
               onClick={() => setForm({ ...form, persona: p.value })}
               className={`rounded px-2 py-0.5 text-xs border transition-colors ${
                 form.persona === p.value
@@ -1220,6 +1294,7 @@ function WorkerForm({
       </div>
       <div>
         <Label>{t("workers_domain")}</Label>
+        <p className="-mt-0.5 mb-1.5 text-xs text-fg-faint">{t("workers_domain_sub")}</p>
         <TextArea
           rows={3}
           value={form.systemPrompt}
@@ -1264,6 +1339,11 @@ function WorkerForm({
           {form.providerId && fetched.length > 0 && (
             <p className="mt-1 text-xs text-fg-faint">{t("workers_models_available").replace("{n}", String(fetched.length))}</p>
           )}
+          {!form.providerId && (
+            <p className="mt-1 text-xs text-fg-faint">
+              {t("workers_model_hint")} {t("workers_model_hint_url")}
+            </p>
+          )}
         </div>
         <div>
           <Label>{t("workers_skill")}</Label>
@@ -1278,6 +1358,7 @@ function WorkerForm({
               </option>
             ))}
           </Select>
+          <p className="mt-1 text-xs text-fg-faint">{t("workers_skill_hint")}</p>
         </div>
         <div>
           <Label>{t("workers_schedule")}</Label>
@@ -1299,6 +1380,15 @@ function WorkerForm({
             <option value="lead">{t("workers_role_lead")}</option>
             <option value="assistant">{t("workers_role_assistant")}</option>
           </Select>
+          <p className="mt-1 text-xs text-fg-faint">
+            {t(
+              form.role === "lead"
+                ? "workers_role_hint_lead"
+                : form.role === "assistant"
+                  ? "workers_role_hint_assistant"
+                  : "workers_role_hint_specialist",
+            )}
+          </p>
         </div>
         {(form.role === "lead" || form.role === "assistant") && (
           <div>
@@ -1334,8 +1424,9 @@ function WorkerForm({
             <Input
               value={form.telegramToken}
               onChange={(e) => setForm({ ...form, telegramToken: e.target.value })}
-              placeholder={t("workers_token_placeholder")}
+              placeholder={t("workers_token_placeholder_friendly")}
             />
+            <p className="mt-1 text-xs text-fg-faint">{t("workers_token_hint")}</p>
           </div>
         )}
         <div className="flex items-end">
@@ -1366,6 +1457,7 @@ function WorkerForm({
               </button>
             ))}
           </div>
+          <p className="mt-1 text-xs text-fg-faint">{t(AUTONOMY_DESC_KEY[form.autonomy])}</p>
         </div>
         <div>
           <Label>{t("workers_lang_label")}</Label>

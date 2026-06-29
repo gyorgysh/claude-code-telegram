@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { api, AuthError, type ApprovalView, type Autonomy, type ChatMessage, type Worker } from "../api.ts";
+import { api, AuthError, type ApprovalView, type AskQuestionView, type Autonomy, type ChatMessage, type Worker } from "../api.ts";
 import { useChatEvents } from "../lib/useChatEvents.ts";
 import { useAgentChatEvents } from "../lib/useAgentChatEvents.ts";
 import { useI18n } from "../lib/useI18n.ts";
 import { Markdown } from "../lib/markdown.tsx";
 import { roleLabel } from "../lib/agentRole.ts";
 import { Button } from "./ui.tsx";
-import { Settings2, Plus, ClipboardList, Zap, ShieldCheck } from "lucide-react";
+import { Settings2, Plus, ClipboardList, Zap, ShieldCheck, HelpCircle } from "lucide-react";
 
 /** Sentinel id for the main Atlas chat (the Telegram-mirrored session). */
 const ATLAS = "atlas";
@@ -349,7 +349,7 @@ function Pill({
 
 function AtlasChat({ onAuthError }: { onAuthError: () => void }) {
   const { t } = useI18n();
-  const { messages, stream, busy, view, setView, approvals } = useChatEvents(onAuthError);
+  const { messages, stream, busy, view, setView, approvals, asks } = useChatEvents(onAuthError);
   const [editingCwd, setEditingCwd] = useState(false);
   // Planning mode is a per-agent UI preference (defaults to Execution),
   // persisted in localStorage so it survives navigation/reload. It only changes
@@ -434,6 +434,7 @@ function AtlasChat({ onAuthError }: { onAuthError: () => void }) {
       busy={busy}
       empty={empty}
       approvals={approvals}
+      asks={asks}
       planning={planning}
       onPlanningChange={setPlanning}
       autonomy={autonomy}
@@ -540,6 +541,7 @@ function ChatPane({
   agentName,
   agentRole,
   approvals,
+  asks,
   planning,
   onPlanningChange,
   autonomy,
@@ -556,6 +558,8 @@ function ChatPane({
   agentRole?: string;
   /** Pending tool-call approvals to surface above the composer (Atlas only). */
   approvals?: ApprovalView[];
+  /** Pending AskUserQuestion prompts to surface above the composer (Atlas only). */
+  asks?: AskQuestionView[];
   /** When defined, renders a Planning/Execution mode pill in the composer. */
   planning?: boolean;
   onPlanningChange?: (planning: boolean) => void;
@@ -671,6 +675,8 @@ function ChatPane({
           </div>
         )}
       </div>
+
+      {asks && asks.length > 0 && <AsksBar asks={asks} />}
 
       {approvals && approvals.length > 0 && (
         <ApprovalsBar approvals={approvals} />
@@ -902,6 +908,135 @@ function ApprovalsBar({ approvals }: { approvals: ApprovalView[] }) {
           </button>
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Surfaces pending AskUserQuestion prompts as interactive buttons in the panel,
+ * mirroring the Telegram inline keyboard. Single-select resolves on tap;
+ * multiSelect toggles options then confirms with Send. An "Other" toggle reveals
+ * a free-text field. Answering settles the same promise the Telegram buttons do.
+ */
+function AsksBar({ asks }: { asks: AskQuestionView[] }) {
+  return (
+    <div className="mt-2 space-y-2">
+      {asks.map((q) => (
+        <AskCard key={q.id} q={q} />
+      ))}
+    </div>
+  );
+}
+
+function AskCard({ q }: { q: AskQuestionView }) {
+  const { t } = useI18n();
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [other, setOther] = useState(false);
+  const [otherText, setOtherText] = useState("");
+  const [pending, setPending] = useState(false);
+
+  const submit = async (answer: { optionIndices?: number[]; text?: string }) => {
+    setPending(true);
+    try {
+      await api.resolveAsk(q.id, answer);
+    } catch {
+      /* The WS broadcast keeps the list authoritative; a stale card clears itself. */
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const toggle = (i: number) => {
+    if (!q.multiSelect) {
+      void submit({ optionIndices: [i] });
+      return;
+    }
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+  };
+
+  return (
+    <div className="space-y-2 rounded-xl border border-accent/40 bg-accent/5 p-2.5">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-accent">
+        <HelpCircle size={12} className="shrink-0" />
+        {q.header}
+      </div>
+      <div className="text-sm text-fg">{q.question}</div>
+      <div className="flex flex-col gap-1.5">
+        {q.options.map((o, i) => {
+          const on = selected.has(i);
+          return (
+            <button
+              key={i}
+              type="button"
+              disabled={pending}
+              onClick={() => toggle(i)}
+              className={`flex flex-col items-start rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors disabled:opacity-50 ${
+                on
+                  ? "bg-accent text-accent-fg"
+                  : "bg-surface text-fg hover:bg-surface-2"
+              }`}
+            >
+              <span className="font-semibold">
+                {q.multiSelect && (on ? "✓ " : "")}
+                {o.label}
+              </span>
+              {o.description && (
+                <span className={on ? "text-accent-fg/80" : "text-fg-dim"}>{o.description}</span>
+              )}
+            </button>
+          );
+        })}
+        {other ? (
+          <div className="flex items-end gap-2">
+            <textarea
+              autoFocus
+              rows={1}
+              value={otherText}
+              onChange={(e) => setOtherText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  if (otherText.trim()) void submit({ text: otherText });
+                }
+              }}
+              placeholder={t("chat_ask_other_placeholder")}
+              className="min-h-[2rem] flex-1 resize-none rounded-lg border border-line bg-input px-2.5 py-1.5 text-xs text-fg outline-none focus:border-accent"
+            />
+            <button
+              type="button"
+              disabled={pending || !otherText.trim()}
+              onClick={() => void submit({ text: otherText })}
+              className="rounded-full bg-accent px-2.5 py-1.5 text-xs font-medium text-accent-fg transition-colors hover:opacity-90 disabled:opacity-50"
+            >
+              {t("chat_send")}
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => setOther(true)}
+            className="self-start rounded-lg px-2.5 py-1.5 text-xs font-medium text-fg-dim transition-colors hover:text-fg-muted disabled:opacity-50"
+          >
+            {t("chat_ask_other")}
+          </button>
+        )}
+      </div>
+      {q.multiSelect && (
+        <button
+          type="button"
+          disabled={pending || selected.size === 0}
+          onClick={() => void submit({ optionIndices: [...selected] })}
+          className="rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-fg transition-colors hover:opacity-90 disabled:opacity-50"
+        >
+          {t("chat_ask_confirm")}
+        </button>
+      )}
     </div>
   );
 }

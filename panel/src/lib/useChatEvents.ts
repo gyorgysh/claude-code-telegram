@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, openHealthSocket, type ApprovalView, type ChatMessage, type ChatView } from "../api.ts";
+import { api, openHealthSocket, type ApprovalView, type AskQuestionView, type ChatMessage, type ChatView } from "../api.ts";
 
 export interface ChatStream {
   id: string;
@@ -20,6 +20,9 @@ type ChatMsg =
 /** The approval-queue broadcast pushed whenever the pending set changes. */
 type ApprovalsMsg = { type: "approvals"; approvals: ApprovalView[] };
 
+/** The ask-queue broadcast pushed whenever the pending question set changes. */
+type AsksMsg = { type: "asks"; asks: AskQuestionView[] };
+
 /** Subscribe to the shared chat stream over /ws and track the live conversation
  *  (mirrored from the main Telegram chat): messages, the in-flight turn, busy. */
 export function useChatEvents(onAuthError: () => void) {
@@ -28,6 +31,7 @@ export function useChatEvents(onAuthError: () => void) {
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<ChatView | null>(null);
   const [approvals, setApprovals] = useState<ApprovalView[]>([]);
+  const [asks, setAsks] = useState<AskQuestionView[]>([]);
   const retryRef = useRef<ReturnType<typeof setTimeout>>();
 
   const refresh = useCallback(() => {
@@ -38,6 +42,7 @@ export function useChatEvents(onAuthError: () => void) {
         setMessages(v.messages);
         setBusy(v.busy);
         setApprovals(v.approvals ?? []);
+        setAsks(v.asks ?? []);
       })
       .catch((e) => {
         if (e?.name === "AuthError") onAuthError();
@@ -62,6 +67,10 @@ export function useChatEvents(onAuthError: () => void) {
         const t = (parsed as { type?: string }).type;
         if (t === "approvals") {
           setApprovals((parsed as ApprovalsMsg).approvals);
+          return;
+        }
+        if (t === "asks") {
+          setAsks((parsed as AsksMsg).asks);
           return;
         }
         if (t !== "chat") return;
@@ -106,5 +115,5 @@ export function useChatEvents(onAuthError: () => void) {
     };
   }, []);
 
-  return { messages, stream, busy, view, setView, approvals, refresh };
+  return { messages, stream, busy, view, setView, approvals, asks, refresh };
 }

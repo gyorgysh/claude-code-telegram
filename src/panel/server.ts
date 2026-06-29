@@ -89,6 +89,7 @@ import { isActive } from "../core/activity.js";
 import { getUpdateStatus, checkForUpdate, runUpdate, runRestore } from "../core/updateControl.js";
 import { recentAudit } from "../core/audit.js";
 import { approvalQueue, APPROVAL_ACTIONS } from "../core/approvals.js";
+import { askQueue } from "../core/askQueue.js";
 import { push } from "../core/push.js";
 import { sessions } from "../session/manager.js";
 import { ptyManager } from "../core/ptyManager.js";
@@ -135,6 +136,8 @@ export async function startPanel(): Promise<(() => Promise<void>) | undefined> {
   taskDelegator.start((m) => hub.broadcast(m));
   // Wire approval queue updates to all panel clients.
   approvalQueue.start((m) => hub.broadcast(m));
+  // Wire pending AskUserQuestion prompts to all panel clients.
+  askQueue.start((m) => hub.broadcast(m));
   // Wire the PTY terminal session to all clients.
   ptyManager.start((m) => hub.broadcast(m));
   // Wire remote-access tunnel state changes to all clients.
@@ -678,6 +681,29 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
     if (!APPROVAL_ACTIONS.has(action)) return reply.code(400).send({ error: "invalid action" });
     const ok = approvalQueue.resolve(id, action);
     if (!ok) return reply.code(409).send({ error: "approval expired or unknown" });
+    return { ok: true };
+  });
+
+  // Pending AskUserQuestion prompts (mirrored from the main Telegram chat) and
+  // the endpoint to answer them from the panel — settles the same blocking
+  // promise the Telegram inline buttons settle.
+  app.get("/api/asks", async () => ({ asks: askQueue.list() }));
+  app.post("/api/asks/resolve", async (req, reply) => {
+    const { id, optionIndices, text } = (req.body ?? {}) as {
+      id?: string;
+      optionIndices?: unknown;
+      text?: unknown;
+    };
+    if (!id) return reply.code(400).send({ error: "id required" });
+    const idxs = Array.isArray(optionIndices)
+      ? optionIndices.filter((n): n is number => typeof n === "number" && Number.isInteger(n) && n >= 0)
+      : undefined;
+    const answer = { optionIndices: idxs, text: typeof text === "string" ? text : undefined };
+    if ((!idxs || idxs.length === 0) && !answer.text?.trim()) {
+      return reply.code(400).send({ error: "optionIndices or text required" });
+    }
+    const ok = askQueue.resolve(id, answer);
+    if (!ok) return reply.code(409).send({ error: "question expired or unknown" });
     return { ok: true };
   });
 

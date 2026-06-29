@@ -5,6 +5,7 @@ import { escapeHtml } from "./formatting.js";
 import { log } from "../logger.js";
 import { isHexId, CALLBACK_MAX_BYTES } from "./callback.js";
 import { t, langForChat } from "./i18n/index.js";
+import { askQueue } from "../core/askQueue.js";
 
 /** One option of an AskUserQuestion question. */
 interface AskOption {
@@ -52,7 +53,10 @@ const BTN_MAX = 60;
 export class AskQuestionManager {
   private pending = new Map<string, PendingQuestion>();
 
-  constructor(private tg: Telegram) {}
+  constructor(private tg: Telegram) {
+    // Let the panel answer the same pending questions the Telegram buttons settle.
+    askQueue.attach((id, answer) => this.resolveFromPanel(id, answer));
+  }
 
   /**
    * Ask all questions in an AskUserQuestion tool input and return a formatted
@@ -98,6 +102,7 @@ export class AskQuestionManager {
       const entry = this.pending.get(id);
       if (!entry) return;
       this.pending.delete(id);
+      askQueue.remove(id);
       const fallback = question.options[0]?.label ?? t("ask_no_answer");
       log.warn("AskUserQuestion timed out — using default", { chatId, header: question.header });
       void this.tg
@@ -122,6 +127,18 @@ export class AskQuestionManager {
       awaitingText: false,
       resolve,
       timeout,
+    });
+
+    // Mirror the question into the panel so the President can answer it from the
+    // browser too (the same promise the Telegram buttons settle).
+    askQueue.add({
+      id,
+      chatId,
+      header: question.header,
+      question: question.question,
+      multiSelect: question.multiSelect,
+      options: question.options.map((o) => ({ label: o.label, description: o.description })),
+      ts: Date.now(),
     });
   }
 
@@ -230,12 +247,40 @@ export class AskQuestionManager {
     return false;
   }
 
+  /**
+   * Resolve a pending question from the panel. `optionIndices` taps option
+   * buttons by index (one for single-select, any number for multiSelect);
+   * `text` answers the free-text "Other" path. Returns true if a matching
+   * pending question was found and resolved. Mirrors the Telegram callback flow
+   * in resolve(), settling the same promise.
+   */
+  resolveFromPanel(id: string, answer: { optionIndices?: number[]; text?: string }): boolean {
+    const entry = this.pending.get(id);
+    if (!entry) return false;
+    const { question } = entry;
+    const text = answer.text?.trim();
+    if (text) {
+      void this.finalize(id, text);
+      return true;
+    }
+    const idxs = (answer.optionIndices ?? []).filter((i) => question.options[i]);
+    if (idxs.length === 0) return false;
+    if (!question.multiSelect) {
+      void this.finalize(id, question.options[idxs[0]].label);
+      return true;
+    }
+    const labels = [...new Set(idxs)].sort((a, b) => a - b).map((i) => question.options[i].label);
+    void this.finalize(id, labels.join(", "));
+    return true;
+  }
+
   /** Clear the keyboard, post a confirmation, and resolve the question promise. */
   private async finalize(id: string, answer: string): Promise<void> {
     const entry = this.pending.get(id);
     if (!entry) return;
     clearTimeout(entry.timeout);
     this.pending.delete(id);
+    askQueue.remove(id);
     await this.tg
       .editMessageReplyMarkup(entry.chatId, entry.messageId, undefined, undefined)
       .catch(() => {});

@@ -596,6 +596,23 @@ export interface ApprovalView {
   ts: number;
 }
 
+/** One option of a pending AskUserQuestion prompt. */
+export interface AskOptionView {
+  label: string;
+  description?: string;
+}
+
+/** A pending AskUserQuestion prompt, mirrored from the main Telegram chat. */
+export interface AskQuestionView {
+  id: string;
+  chatId: number;
+  header: string;
+  question: string;
+  multiSelect: boolean;
+  options: AskOptionView[];
+  ts: number;
+}
+
 export interface ChatView {
   messages: ChatMessage[];
   cwd: string;
@@ -608,6 +625,8 @@ export interface ChatView {
   allowedBashCmds: string[];
   /** Tool-call approvals currently awaiting a decision. */
   approvals: ApprovalView[];
+  /** AskUserQuestion prompts currently awaiting an answer. */
+  asks: AskQuestionView[];
 }
 
 /** Snapshot of an interactive chat with one specific worker / Lead. */
@@ -1002,6 +1021,8 @@ export const api = {
     req<ChatView>("PUT", "/api/chat/settings", s),
   resolveApproval: (approvalId: string, allow: boolean) =>
     req<{ ok: boolean }>("POST", "/api/chat/approve", { approvalId, allow }),
+  resolveAsk: (id: string, answer: { optionIndices?: number[]; text?: string }) =>
+    req<{ ok: boolean }>("POST", "/api/asks/resolve", { id, ...answer }),
 
   // Per-agent interactive chat (talk to a specific worker / Lead).
   agentChat: (id: string) => get<AgentChatView>(`/api/agent-chat/${id}`),

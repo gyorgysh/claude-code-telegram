@@ -2,6 +2,7 @@ import { config } from "../config.js";
 import { sessions } from "../session/manager.js";
 import { chatBridge, mainChatId, type BridgeMessage } from "./chatBridge.js";
 import { approvalQueue, type ApprovalChoice } from "./approvals.js";
+import { askQueue } from "./askQueue.js";
 import { PLANNING_PREAMBLE } from "./planningMode.js";
 import { audit } from "./audit.js";
 
@@ -52,6 +53,8 @@ export class ChatManager {
       // Pending tool-call approvals can be resolved from the panel too (the same
       // promises the Telegram buttons settle).
       approvals: approvalQueue.list(),
+      // Pending AskUserQuestion prompts, answerable from the panel.
+      asks: askQueue.list(),
     };
   }
 

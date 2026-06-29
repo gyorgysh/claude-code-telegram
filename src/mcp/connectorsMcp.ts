@@ -35,6 +35,15 @@ const WRITE_TOOLS = new Set<string>([
   "applemail_send",
   "applemail_delete_message",
   "applemail_flag_message",
+  // Slack
+  "slack_post_message",
+  "slack_reply_thread",
+  "slack_upload_file",
+  // GitHub
+  "github_create_issue",
+  "github_comment_issue",
+  "github_create_pr",
+  "github_put_file",
 ]);
 
 /**
@@ -73,6 +82,8 @@ const ICLOUD_IMAP_HOST = "imap.mail.me.com";
 const ICLOUD_IMAP_PORT = 993;
 const ICLOUD_SMTP_HOST = "smtp.mail.me.com";
 const ICLOUD_SMTP_PORT = 587;
+const SLACK_BASE = "https://slack.com/api";
+const GITHUB_BASE = "https://api.github.com";
 
 /** Resolve the live, enabled credential for a connector id, or undefined. */
 function credentialFor(id: string): string | undefined {
@@ -1357,6 +1368,401 @@ function appleMailMcp(credential: string, scope: ConnectorScope) {
 }
 
 // ---------------------------------------------------------------------------
+// Slack (Web API)
+// ---------------------------------------------------------------------------
+
+interface SlackResponse {
+  ok: boolean;
+  error?: string;
+  [k: string]: unknown;
+}
+
+/**
+ * Slack returns HTTP 200 even on logical failures, with `{ ok: false, error }`.
+ * Normalise that into the same short error string the other connectors use.
+ */
+function slackError(data: SlackResponse): string {
+  return `Slack error: ${data.error ?? "unknown"}`;
+}
+
+interface SlackChannel {
+  id?: string;
+  name?: string;
+  is_private?: boolean;
+  is_archived?: boolean;
+  num_members?: number;
+}
+
+interface SlackMessage {
+  ts?: string;
+  user?: string;
+  text?: string;
+  thread_ts?: string;
+}
+
+function slackMcp(token: string, scope: ConnectorScope) {
+  const authHeaders = { Authorization: `Bearer ${token}` };
+  const jsonHeaders = { ...authHeaders, "Content-Type": "application/json; charset=utf-8" };
+
+  /** GET a Slack method with query params. */
+  async function slackGet(method: string, params: Record<string, string>): Promise<SlackResponse> {
+    const qs = new URLSearchParams(params).toString();
+    const res = await fetch(`${SLACK_BASE}/${method}${qs ? `?${qs}` : ""}`, { headers: authHeaders });
+    if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+    return (await res.json()) as SlackResponse;
+  }
+
+  /** POST a Slack method with a JSON body. */
+  async function slackPost(method: string, body: Record<string, unknown>): Promise<SlackResponse> {
+    const res = await fetch(`${SLACK_BASE}/${method}`, {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+    return (await res.json()) as SlackResponse;
+  }
+
+  return createSdkMcpServer({
+    name: "slack",
+    version: "1.0.0",
+    tools: scopeTools([
+      tool(
+        "slack_list_channels",
+        "List Slack channels the bot can see (public and, if invited, private). " +
+          "Returns channel ids and names.",
+        {
+          limit: z.number().int().min(1).max(200).optional().describe("Max channels (default 100)."),
+          includePrivate: z.boolean().optional().describe("Include private channels (default true)."),
+        },
+        async (a) => {
+          const types = a.includePrivate === false ? "public_channel" : "public_channel,private_channel";
+          const data = await slackGet("conversations.list", {
+            limit: String(a.limit ?? 100),
+            exclude_archived: "true",
+            types,
+          });
+          if (!data.ok) return text(slackError(data));
+          const channels = (data.channels as SlackChannel[] | undefined) ?? [];
+          const lines = channels.map(
+            (c) => `- #${c.name ?? "?"} · id ${c.id}${c.is_private ? " (private)" : ""}${c.num_members != null ? ` · ${c.num_members} members` : ""}`,
+          );
+          return text(lines.join("\n") || "No channels.");
+        },
+      ),
+      tool(
+        "slack_history",
+        "Fetch recent messages from a Slack channel by id. Returns message timestamps " +
+          "(ts), authors, and text.",
+        {
+          channel: z.string().describe("Channel id (from slack_list_channels)."),
+          limit: z.number().int().min(1).max(100).optional().describe("Number of recent messages (default 20)."),
+        },
+        async (a) => {
+          const data = await slackGet("conversations.history", {
+            channel: a.channel,
+            limit: String(a.limit ?? 20),
+          });
+          if (!data.ok) return text(slackError(data));
+          const msgs = (data.messages as SlackMessage[] | undefined) ?? [];
+          const lines = msgs.map((m) => `- ts ${m.ts} · ${m.user ?? "?"}: ${(m.text ?? "").slice(0, 300)}`);
+          return text(lines.join("\n") || "No messages.");
+        },
+      ),
+      tool(
+        "slack_search",
+        "Search Slack message history with the standard Slack search syntax " +
+          '(e.g. "in:#general from:@alice invoice"). Requires a token with search scope.',
+        {
+          query: z.string().describe("Slack search query."),
+          count: z.number().int().min(1).max(50).optional().describe("Max matches (default 20)."),
+        },
+        async (a) => {
+          const data = await slackGet("search.messages", { query: a.query, count: String(a.count ?? 20) });
+          if (!data.ok) return text(slackError(data));
+          const matches = ((data.messages as { matches?: (SlackMessage & { channel?: { name?: string } })[] } | undefined)?.matches) ?? [];
+          const lines = matches.map(
+            (m) => `- #${m.channel?.name ?? "?"} · ts ${m.ts} · ${m.user ?? "?"}: ${(m.text ?? "").slice(0, 300)}`,
+          );
+          return text(lines.join("\n") || "No matches.");
+        },
+      ),
+      tool(
+        "slack_post_message",
+        "Post a message to a Slack channel or DM. Provide a channel id (or #name " +
+          "for public channels). Returns the new message timestamp (ts).",
+        {
+          channel: z.string().describe("Channel id or #name."),
+          text: z.string().describe("Message text (Slack mrkdwn supported)."),
+        },
+        async (a) => {
+          const data = await slackPost("chat.postMessage", { channel: a.channel, text: a.text });
+          if (!data.ok) return text(slackError(data));
+          return text(`Posted to ${a.channel}. ts: ${String(data.ts ?? "unknown")}.`);
+        },
+      ),
+      tool(
+        "slack_reply_thread",
+        "Reply to an existing Slack message in its thread.",
+        {
+          channel: z.string().describe("Channel id."),
+          threadTs: z.string().describe("The parent message ts to thread under."),
+          text: z.string(),
+        },
+        async (a) => {
+          const data = await slackPost("chat.postMessage", {
+            channel: a.channel,
+            text: a.text,
+            thread_ts: a.threadTs,
+          });
+          if (!data.ok) return text(slackError(data));
+          return text(`Replied in thread ${a.threadTs}. ts: ${String(data.ts ?? "unknown")}.`);
+        },
+      ),
+      tool(
+        "slack_upload_file",
+        "Upload a text snippet/file to a Slack channel via the external-upload flow.",
+        {
+          channel: z.string().describe("Channel id to share the file into."),
+          filename: z.string(),
+          content: z.string().describe("File text content."),
+          title: z.string().optional(),
+        },
+        async (a) => {
+          const bytes = Buffer.byteLength(a.content, "utf-8");
+          // Step 1: get a signed upload URL (this method takes query params).
+          const urlData = await slackGet("files.getUploadURLExternal", {
+            filename: a.filename,
+            length: String(bytes),
+          });
+          if (!urlData.ok) return text(slackError(urlData));
+          const uploadUrl = String(urlData.upload_url ?? "");
+          const fileId = String(urlData.file_id ?? "");
+          if (!uploadUrl || !fileId) return text("Slack error: missing upload URL.");
+          // Step 2: PUT the content to the signed URL.
+          const putRes = await fetch(uploadUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/octet-stream" },
+            body: a.content,
+          });
+          if (!putRes.ok) return text(`Slack upload failed: HTTP ${putRes.status}`);
+          // Step 3: complete the upload and share into the channel.
+          const done = await slackPost("files.completeUploadExternal", {
+            files: [{ id: fileId, title: a.title ?? a.filename }],
+            channel_id: a.channel,
+          });
+          if (!done.ok) return text(slackError(done));
+          return text(`Uploaded ${a.filename} to ${a.channel}. file id: ${fileId}.`);
+        },
+      ),
+    ], scope),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// GitHub (REST API v3)
+// ---------------------------------------------------------------------------
+
+interface GitHubRepo {
+  full_name?: string;
+  private?: boolean;
+  description?: string;
+  default_branch?: string;
+  open_issues_count?: number;
+}
+
+interface GitHubIssue {
+  number?: number;
+  title?: string;
+  state?: string;
+  html_url?: string;
+  user?: { login?: string };
+  pull_request?: unknown;
+}
+
+function githubMcp(token: string, scope: ConnectorScope) {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "MyHQ-connector",
+  };
+
+  return createSdkMcpServer({
+    name: "github",
+    version: "1.0.0",
+    tools: scopeTools([
+      tool(
+        "github_list_repos",
+        "List repositories the authenticated user can access. Returns full names, " +
+          "visibility, and default branches.",
+        {
+          limit: z.number().int().min(1).max(100).optional().describe("Max repos (default 30)."),
+          sort: z.enum(["created", "updated", "pushed", "full_name"]).optional(),
+        },
+        async (a) => {
+          const params = new URLSearchParams({
+            per_page: String(a.limit ?? 30),
+            sort: a.sort ?? "updated",
+          });
+          const res = await fetch(`${GITHUB_BASE}/user/repos?${params}`, { headers });
+          if (!res.ok) return text(await asError(res));
+          const repos = (await res.json()) as GitHubRepo[];
+          const lines = repos.map(
+            (r) => `- ${r.full_name}${r.private ? " (private)" : ""} · default ${r.default_branch ?? "?"}${r.open_issues_count != null ? ` · ${r.open_issues_count} open` : ""}`,
+          );
+          return text(lines.join("\n") || "No repositories.");
+        },
+      ),
+      tool(
+        "github_list_issues",
+        "List issues (and optionally pull requests) for a repo. Returns numbers, " +
+          "titles, state, and author.",
+        {
+          owner: z.string(),
+          repo: z.string(),
+          state: z.enum(["open", "closed", "all"]).optional().describe("Default open."),
+          limit: z.number().int().min(1).max(100).optional(),
+        },
+        async (a) => {
+          const params = new URLSearchParams({
+            state: a.state ?? "open",
+            per_page: String(a.limit ?? 30),
+          });
+          const res = await fetch(`${GITHUB_BASE}/repos/${encodeURIComponent(a.owner)}/${encodeURIComponent(a.repo)}/issues?${params}`, { headers });
+          if (!res.ok) return text(await asError(res));
+          const issues = (await res.json()) as GitHubIssue[];
+          const lines = issues.map(
+            (i) => `- #${i.number} [${i.pull_request ? "PR" : "issue"}/${i.state}] ${i.title ?? ""} · @${i.user?.login ?? "?"}`,
+          );
+          return text(lines.join("\n") || "No issues.");
+        },
+      ),
+      tool(
+        "github_get_file",
+        "Read a file's contents from a repo at a given path (and optional ref).",
+        {
+          owner: z.string(),
+          repo: z.string(),
+          path: z.string().describe("File path within the repo."),
+          ref: z.string().optional().describe("Branch, tag, or commit SHA (default: default branch)."),
+        },
+        async (a) => {
+          const params = a.ref ? `?ref=${encodeURIComponent(a.ref)}` : "";
+          const res = await fetch(
+            `${GITHUB_BASE}/repos/${encodeURIComponent(a.owner)}/${encodeURIComponent(a.repo)}/contents/${a.path.split("/").map(encodeURIComponent).join("/")}${params}`,
+            { headers },
+          );
+          if (!res.ok) return text(await asError(res));
+          const data = (await res.json()) as { content?: string; encoding?: string; size?: number };
+          if (data.encoding === "base64" && data.content) {
+            const decoded = Buffer.from(data.content, "base64").toString("utf-8");
+            return text(decoded.slice(0, 8000) + (decoded.length > 8000 ? "\n[truncated]" : ""));
+          }
+          return text(`(${data.size ?? 0} bytes; non-text or empty file)`);
+        },
+      ),
+      tool(
+        "github_create_issue",
+        "Open a new issue in a repo.",
+        {
+          owner: z.string(),
+          repo: z.string(),
+          title: z.string(),
+          body: z.string().optional(),
+          labels: z.array(z.string()).optional(),
+        },
+        async (a) => {
+          const res = await fetch(`${GITHUB_BASE}/repos/${encodeURIComponent(a.owner)}/${encodeURIComponent(a.repo)}/issues`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ title: a.title, body: a.body, labels: a.labels }),
+          });
+          if (!res.ok) return text(await asError(res));
+          const issue = (await res.json()) as GitHubIssue;
+          return text(`Created issue #${issue.number}${issue.html_url ? ` · ${issue.html_url}` : ""}.`);
+        },
+      ),
+      tool(
+        "github_comment_issue",
+        "Add a comment to an existing issue or pull request.",
+        {
+          owner: z.string(),
+          repo: z.string(),
+          number: z.number().int().describe("Issue or PR number."),
+          body: z.string(),
+        },
+        async (a) => {
+          const res = await fetch(`${GITHUB_BASE}/repos/${encodeURIComponent(a.owner)}/${encodeURIComponent(a.repo)}/issues/${a.number}/comments`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ body: a.body }),
+          });
+          if (!res.ok) return text(await asError(res));
+          const c = (await res.json()) as { html_url?: string };
+          return text(`Commented on #${a.number}${c.html_url ? ` · ${c.html_url}` : ""}.`);
+        },
+      ),
+      tool(
+        "github_create_pr",
+        "Open a pull request from a head branch into a base branch.",
+        {
+          owner: z.string(),
+          repo: z.string(),
+          title: z.string(),
+          head: z.string().describe("Source branch (e.g. \"feature-x\" or \"user:branch\")."),
+          base: z.string().describe("Target branch (e.g. \"main\")."),
+          body: z.string().optional(),
+          draft: z.boolean().optional(),
+        },
+        async (a) => {
+          const res = await fetch(`${GITHUB_BASE}/repos/${encodeURIComponent(a.owner)}/${encodeURIComponent(a.repo)}/pulls`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ title: a.title, head: a.head, base: a.base, body: a.body, draft: a.draft }),
+          });
+          if (!res.ok) return text(await asError(res));
+          const pr = (await res.json()) as { number?: number; html_url?: string };
+          return text(`Opened PR #${pr.number}${pr.html_url ? ` · ${pr.html_url}` : ""}.`);
+        },
+      ),
+      tool(
+        "github_put_file",
+        "Create or update a file in a repo (commits directly to a branch). To update " +
+          "an existing file you must pass its current blob sha.",
+        {
+          owner: z.string(),
+          repo: z.string(),
+          path: z.string(),
+          content: z.string().describe("New file content (plain text)."),
+          message: z.string().describe("Commit message."),
+          branch: z.string().optional().describe("Target branch (default: default branch)."),
+          sha: z.string().optional().describe("Existing file blob sha (required when updating)."),
+        },
+        async (a) => {
+          const res = await fetch(
+            `${GITHUB_BASE}/repos/${encodeURIComponent(a.owner)}/${encodeURIComponent(a.repo)}/contents/${a.path.split("/").map(encodeURIComponent).join("/")}`,
+            {
+              method: "PUT",
+              headers,
+              body: JSON.stringify({
+                message: a.message,
+                content: Buffer.from(a.content, "utf-8").toString("base64"),
+                branch: a.branch,
+                sha: a.sha,
+              }),
+            },
+          );
+          if (!res.ok) return text(await asError(res));
+          const data = (await res.json()) as { commit?: { sha?: string; html_url?: string } };
+          return text(`Committed ${a.path}${data.commit?.html_url ? ` · ${data.commit.html_url}` : ""}.`);
+        },
+      ),
+    ], scope),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
 
@@ -1381,6 +1787,10 @@ export function buildConnectorMcps(): Record<string, McpServer> {
   if (appleCalCred) out["apple-calendar"] = appleCalendarMcp(appleCalCred, connectorScope("apple-calendar"));
   const appleMailCred = credentialFor("apple-mail");
   if (appleMailCred) out["apple-mail"] = appleMailMcp(appleMailCred, connectorScope("apple-mail"));
+  const slackToken = credentialFor("slack");
+  if (slackToken) out.slack = slackMcp(slackToken, connectorScope("slack"));
+  const githubToken = credentialFor("github");
+  if (githubToken) out.github = githubMcp(githubToken, connectorScope("github"));
   if (Object.keys(out).length) {
     log.debug("Connector MCPs enabled", {
       connectors: Object.keys(out).map((id) => `${id}:${connectorScope(id)}`),
@@ -1390,4 +1800,4 @@ export function buildConnectorMcps(): Record<string, McpServer> {
 }
 
 /** Names of the live connectors that have wired MCP servers (for the panel). */
-export const LIVE_CONNECTORS = ["notion", "gcal", "gmail", "gdrive", "apple-calendar", "apple-mail"] as const;
+export const LIVE_CONNECTORS = ["notion", "gcal", "gmail", "gdrive", "apple-calendar", "apple-mail", "slack", "github"] as const;

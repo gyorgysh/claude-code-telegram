@@ -9,8 +9,7 @@ const FILE = "connectors.json";
  * contributing tools to every interactive/delegated run once enabled with a
  * vault-attached credential. The rest are placeholders ("coming-soon"): the
  * registration surface + credential slot exist so the panel can show what's
- * planned, but no MCP server is wired yet. Telegram is our channel, so Slack is
- * intentionally absent.
+ * planned, but no MCP server is wired yet.
  */
 /**
  * Access scope for a connector's tools:
@@ -41,6 +40,8 @@ export const CONNECTORS: ConnectorDef[] = [
   { id: "gdrive", name: "Google Drive", description: "List, read, create, update, move, share, and delete Drive files.", credential: "Google OAuth access token (drive scope)", status: "live", hasWrite: true },
   { id: "apple-calendar", name: "Apple Calendar", description: "List calendars and events, create, update, and delete events via iCloud CalDAV.", credential: "iCloud email:app-specific-password", status: "live", hasWrite: true },
   { id: "apple-mail", name: "Apple Mail", description: "List folders, read and search messages, send and delete email via iCloud IMAP/SMTP.", credential: "iCloud email:app-specific-password", status: "live", hasWrite: true },
+  { id: "slack", name: "Slack", description: "List channels, read and search messages; post messages, reply in threads, and upload files via the Slack Web API.", credential: "Slack bot token (xoxb-…)", status: "live", hasWrite: true },
+  { id: "github", name: "GitHub", description: "List repos, issues and PRs, read file contents; create/comment on issues, open PRs, and push files.", credential: "GitHub personal access token (ghp_… / fine-grained)", status: "live", hasWrite: true },
 ];
 
 interface ConnectorConfig {

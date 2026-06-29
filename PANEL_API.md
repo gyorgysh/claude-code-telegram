@@ -100,8 +100,10 @@ curl -X POST -H "$AUTH" -H "Content-Type: application/json" $BASE/api/tasks \
 curl -X PATCH -H "$AUTH" -H "Content-Type: application/json" $BASE/api/tasks/<id> \
   -d '{ "column": "doing", "priority": "high" }'
 
-# Delegate a card to an autonomous agent run
-curl -X POST -H "$AUTH" $BASE/api/tasks/<id>/delegate
+# Delegate a card to an autonomous agent run.
+# Optional { "leadId": "<worker-id>" } body routes the run under a specific Lead; omit to auto-route.
+curl -X POST -H "$AUTH" -H "Content-Type: application/json" $BASE/api/tasks/<id>/delegate \
+  -d '{ "leadId": "<worker-id>" }'
 
 # Stop a delegated run
 curl -X POST -H "$AUTH" $BASE/api/tasks/<id>/stop
@@ -544,6 +546,7 @@ A few more endpoints exist, mostly mirroring panel views:
 - `GET /api/logs/search`: cross-file event search over every retained file (`?q=&level=&hours=72&limit=`), merged into one oldest-first timeline.
 - `GET /api/logs/summary`: usage insights (`?hours=72`) — most-used tools and shell commands tallied from persisted "Tool use" entries.
 - `GET /api/update`, `POST /api/update/check|run|restore`: in-panel update check, apply, and rollback.
+- `GET /api/update/changelog`: the locally served `CHANGELOG.md` (`{ content }`); used as the Updates view's fallback when GitHub is unreachable.
 - `GET /api/connectors`, `PUT /api/connectors/<id>`: the external-connector catalogue. All six (Notion, Google Calendar, Gmail, Google Drive, Apple Calendar, Apple Mail) are live; `PUT` takes `{ enabled, secretId, scope }` where `scope` is `read` (default) or `write` (gates the write tools).
 - `GET /api/chat`, `POST /api/chat/send|stop|clear|approve`, `PUT /api/chat/settings`: the panel's own Claude chat session (talks to Atlas).
 - `GET /api/agent-chat/<id>`, `POST /api/agent-chat/<id>/send|stop|clear`, `PUT /api/agent-chat/<id>/settings`: an interactive chat with a specific worker/Lead by id.

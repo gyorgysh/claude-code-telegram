@@ -865,7 +865,10 @@ function Card({
   const [blockedBy, setBlockedBy] = useState<string[]>(task.blockedBy ?? []);
   const isDone = task.column.toLowerCase().includes("done") || task.column === "archive";
   const [delegateOpen, setDelegateOpen] = useState(!isDone);
-  const [notesOpen, setNotesOpen] = useState(!isDone);
+  const [notesOpen, setNotesOpen] = useState(false);
+  // Notes worth offering an expand toggle for: long enough or multi-line that
+  // the clamped `max-h-16` preview would hide part of the formatted content.
+  const needsClamp = task.notes.length > 140 || task.notes.includes("\n");
   const [fullLogOpen, setFullLogOpen] = useState(false);
   const [liveLogOpen, setLiveLogOpen] = useState(false);
   const liveLogRef = useRef<HTMLDivElement>(null);
@@ -1021,23 +1024,34 @@ function Card({
           }}
         >
           <div className="text-sm text-fg">{task.title}</div>
-          {task.notes && isDone && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setNotesOpen((o) => !o); }}
-              className="mt-1 flex items-center gap-1 text-xs text-fg-faint hover:text-fg-dim"
-            >
-              {t("tasks_notes_toggle")}{" "}
-              {notesOpen ? (
-                <ChevronUp size={12} className="opacity-50" />
-              ) : (
-                <ChevronDown size={12} className="opacity-50" />
+          {task.notes && (
+            <>
+              {/* Inline markdown preview on every card. Notes can be long and now
+                  render markdown (0.5.3), so clamp by default and offer an
+                  expand/collapse toggle to read the formatted notes without
+                  opening the edit form. Done cards start collapsed; others open. */}
+              {(isDone || needsClamp) && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setNotesOpen((o) => !o); }}
+                  className="mt-1 flex items-center gap-1 text-xs text-fg-faint hover:text-fg-dim"
+                  aria-expanded={notesOpen}
+                >
+                  {notesOpen ? t("tasks_notes_collapse") : t("tasks_notes_expand")}{" "}
+                  {notesOpen ? (
+                    <ChevronUp size={12} className="opacity-50" />
+                  ) : (
+                    <ChevronDown size={12} className="opacity-50" />
+                  )}
+                </button>
               )}
-            </button>
-          )}
-          {task.notes && (!isDone || notesOpen) && (
-            <div className={`mt-1 text-xs text-fg-dim ${notesOpen ? "" : "max-h-16 overflow-hidden"}`}>
-              <Markdown text={task.notes} />
-            </div>
+              {(notesOpen || !isDone) && (
+                <div
+                  className={`mt-1 text-xs text-fg-dim ${notesOpen ? "" : "max-h-16 overflow-hidden"}`}
+                >
+                  <Markdown text={task.notes} />
+                </div>
+              )}
+            </>
           )}
           {task.parentId && <div className="mt-1 text-xs text-fg-faint">{t("tasks_subtask")}</div>}
           {task.blockingIds && task.blockingIds.length > 0 && (

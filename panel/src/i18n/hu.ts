@@ -652,6 +652,8 @@ export const hu: Translations = {
   tasks_card_title_placeholder: "Kártya címe…",
   tasks_notes_placeholder: "Jegyzetek…",
   tasks_notes_toggle: "Megjegyzések",
+  tasks_notes_expand: "Megjegyzések",
+  tasks_notes_collapse: "Megjegyzések elrejtése",
   tasks_click_rename: "Kattints az átnevezéshez",
   tasks_edit_card: "Kártya szerkesztése",
   tasks_select_card: "Kártya kijelölése",

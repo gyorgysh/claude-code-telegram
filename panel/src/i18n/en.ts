@@ -648,6 +648,8 @@ export const en = {
   tasks_card_title_placeholder: "Card title…",
   tasks_notes_placeholder: "Notes…",
   tasks_notes_toggle: "Notes",
+  tasks_notes_expand: "Notes",
+  tasks_notes_collapse: "Hide notes",
   tasks_click_rename: "Click to rename",
   tasks_edit_card: "Edit card",
   tasks_select_card: "Select card",

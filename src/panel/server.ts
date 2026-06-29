@@ -67,6 +67,7 @@ import { suggestions } from "../core/suggestions.js";
 import { getStatus } from "../core/status.js";
 import { heartbeat } from "../core/heartbeat.js";
 import { listConnectors, setConnector } from "../core/connectors.js";
+import { listWebhookTools, createWebhookTool, updateWebhookTool, deleteWebhookTool } from "../core/webhookTools.js";
 import { vault, importProviderSecrets, resolveSecret, vaultUsages } from "../core/vault.js";
 import { backupManifest, exportBackup, importBackup } from "../core/backup.js";
 import {
@@ -1048,6 +1049,20 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
     });
     if (!updated) return reply.code(404).send({ error: "not found" });
     return updated;
+  });
+
+  // --- generic webhook tools (custom HTTP endpoints exposed as MCP tools) ---
+  app.get("/api/webhook-tools", async () => ({ tools: listWebhookTools() }));
+  app.post("/api/webhook-tools", async (req) => createWebhookTool((req.body ?? {}) as never));
+  app.put("/api/webhook-tools/:id", async (req, reply) => {
+    const updated = updateWebhookTool((req.params as { id: string }).id, (req.body ?? {}) as never);
+    if (!updated) return reply.code(404).send({ error: "not found" });
+    return updated;
+  });
+  app.delete("/api/webhook-tools/:id", async (req, reply) => {
+    const ok = deleteWebhookTool((req.params as { id: string }).id);
+    if (!ok) return reply.code(404).send({ error: "not found" });
+    return { ok: true };
   });
 
   // --- secret vault ---

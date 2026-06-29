@@ -26,6 +26,7 @@ const MemoryView     = lazy(() => import("./components/Memory.tsx").then((m) => 
 const VaultView      = lazy(() => import("./components/Vault.tsx").then((m) => ({ default: m.VaultView })));
 const BackupView     = lazy(() => import("./components/Backup.tsx").then((m) => ({ default: m.BackupView })));
 const ConnectorsView = lazy(() => import("./components/Connectors.tsx").then((m) => ({ default: m.ConnectorsView })));
+const WebhookToolsView = lazy(() => import("./components/WebhookTools.tsx").then((m) => ({ default: m.WebhookToolsView })));
 const UpdatesView    = lazy(() => import("./components/Updates.tsx").then((m) => ({ default: m.UpdatesView })));
 const TasksView      = lazy(() => import("./components/Tasks.tsx").then((m) => ({ default: m.TasksView })));
 const InboxView      = lazy(() => import("./components/Inbox.tsx").then((m) => ({ default: m.InboxView })));
@@ -307,7 +308,12 @@ export function App() {
             {tab === "memory" && <MemoryView onAuthError={onAuthError} />}
             {tab === "vault" && <VaultView onAuthError={onAuthError} />}
             {tab === "backup" && <BackupView onAuthError={onAuthError} />}
-            {tab === "connectors" && <ConnectorsView onAuthError={onAuthError} onGoto={select} />}
+            {tab === "connectors" && (
+              <div className="space-y-4">
+                <ConnectorsView onAuthError={onAuthError} onGoto={select} />
+                <WebhookToolsView onAuthError={onAuthError} />
+              </div>
+            )}
             {tab === "prompt" && <PromptView_ onAuthError={onAuthError} />}
             {tab === "logs" && <LogsView onAuthError={onAuthError} />}
             {tab === "sessions" && <SessionsView onAuthError={onAuthError} />}

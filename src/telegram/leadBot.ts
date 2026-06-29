@@ -9,6 +9,7 @@ import { createTasksMcp } from "../mcp/tasks.js";
 import { skillsMcp } from "../mcp/skills.js";
 import { createCrewMcp } from "../mcp/crew.js";
 import { buildConnectorMcps } from "../mcp/connectorsMcp.js";
+import { webhookMcps } from "../mcp/webhookMcp.js";
 import { hasPendingAsk, resolveAsk } from "../core/crewAsk.js";
 import { SessionManager } from "../session/manager.js";
 import { isAuthorized } from "../auth.js";
@@ -108,7 +109,7 @@ export class LeadBot {
         systemPromptAppend: append,
         permissionMode: s.autonomy === "full" ? "bypassPermissions" : "default",
         abortController: s.abort,
-        mcpServers: { memory: memoryMcp, tasks: createTasksMcp({ createdBy: lead.id }), skills: skillsMcp, crew: crewMcp, ...buildConnectorMcps() },
+        mcpServers: { memory: memoryMcp, tasks: createTasksMcp({ createdBy: lead.id }), skills: skillsMcp, crew: crewMcp, ...buildConnectorMcps(), ...webhookMcps() },
         canUseTool: async (name, input) => {
           if (name === "AskUserQuestion") {
             log.info("AskUserQuestion intercepted (lead)", { leadId: lead.id, chatId });

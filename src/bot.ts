@@ -12,6 +12,7 @@ import { selfUpdateMcp } from "./mcp/selfUpdate.js";
 import { selfUpdate } from "./core/selfUpdate.js";
 import { createCrewMcp } from "./mcp/crew.js";
 import { buildConnectorMcps } from "./mcp/connectorsMcp.js";
+import { webhookMcps } from "./mcp/webhookMcp.js";
 import { TelegramStreamer, type Streamer } from "./telegram/streamer.js";
 import { DraftStreamer } from "./telegram/draftStreamer.js";
 import { RichDraftStreamer } from "./telegram/richDraftStreamer.js";
@@ -713,6 +714,7 @@ async function handleUserPrompt(
         self_update: selfUpdateMcp,
         crew: crewMcp,
         ...buildConnectorMcps(),
+        ...webhookMcps(),
       },
       canUseTool,
       onText: (delta) => {

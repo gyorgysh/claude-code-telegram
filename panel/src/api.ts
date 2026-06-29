@@ -483,6 +483,29 @@ export interface Connector {
   scope: ConnectorScope;
 }
 
+export type WebhookParamIn = "query" | "header" | "body" | "path";
+
+export interface WebhookParam {
+  name: string;
+  in: WebhookParamIn;
+  description?: string;
+  required?: boolean;
+}
+
+export interface WebhookTool {
+  id: string;
+  name: string;
+  description: string;
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  url: string;
+  params: WebhookParam[];
+  headers: Record<string, string>;
+  enabled: boolean;
+  createdAt: number;
+}
+
+export type WebhookToolInput = Partial<Omit<WebhookTool, "id" | "createdAt">>;
+
 export type HeartbeatMode = "off" | "alert" | "active";
 export type HeartbeatSignalKey = "cpu" | "mem" | "swap" | "disk" | "stale" | "spend" | "calendar";
 export interface HeartbeatConfig {
@@ -948,6 +971,11 @@ export const api = {
   connectors: () => get<{ connectors: Connector[] }>("/api/connectors"),
   saveConnector: (id: string, c: { secretId?: string; enabled?: boolean; scope?: ConnectorScope }) =>
     req<Connector>("PUT", `/api/connectors/${id}`, c),
+
+  webhookTools: () => get<{ tools: WebhookTool[] }>("/api/webhook-tools"),
+  createWebhookTool: (t: WebhookToolInput) => req<WebhookTool>("POST", "/api/webhook-tools", t),
+  updateWebhookTool: (id: string, t: WebhookToolInput) => req<WebhookTool>("PUT", `/api/webhook-tools/${id}`, t),
+  deleteWebhookTool: (id: string) => req<{ ok: true }>("DELETE", `/api/webhook-tools/${id}`),
 
   heartbeat: () => get<HeartbeatView>("/api/heartbeat"),
   saveHeartbeat: (c: Partial<HeartbeatConfig>) => req<HeartbeatView>("PUT", "/api/heartbeat", c),

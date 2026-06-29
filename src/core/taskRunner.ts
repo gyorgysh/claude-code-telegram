@@ -6,6 +6,7 @@ import { createTasksMcp } from "../mcp/tasks.js";
 import { skillsMcp } from "../mcp/skills.js";
 import { selfUpdateMcp } from "../mcp/selfUpdate.js";
 import { buildConnectorMcps } from "../mcp/connectorsMcp.js";
+import { webhookMcps } from "../mcp/webhookMcp.js";
 import { getTask, setDelegate, updateTask, listTasks, archiveTask, prepareRetry, getTaskRunConfig, blockingPrereqs, consumeResumeSession } from "./tasks.js";
 import { memory } from "./memory.js";
 import { workers, type Worker } from "./workers.js";
@@ -393,7 +394,7 @@ export class TaskDelegator {
         // crash this skipped was actually a corrupt-memory bug (now fixed in
         // memory.ts), not the project CLAUDE.md.
         abortController: abort,
-        mcpServers: { memory: memoryMcp, tasks: createTasksMcp({ createdBy: lead?.id ?? "atlas" }), skills: skillsMcp, self_update: selfUpdateMcp, ...buildConnectorMcps() },
+        mcpServers: { memory: memoryMcp, tasks: createTasksMcp({ createdBy: lead?.id ?? "atlas" }), skills: skillsMcp, self_update: selfUpdateMcp, ...buildConnectorMcps(), ...webhookMcps() },
         canUseTool: async (name, input) => {
           if (isDryRun() && DRY_RUN_TOOLS.includes(name as (typeof DRY_RUN_TOOLS)[number])) {
             const what = dryRunDescription(name, input);

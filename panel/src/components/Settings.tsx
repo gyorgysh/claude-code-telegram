@@ -946,7 +946,7 @@ function PlanBudgetSettings({ onAuthError }: { onAuthError: () => void }) {
                 </div>
               ))}
               {probe.probedAt && (
-                <p className="text-[10px] text-fg-faint">{t("plan_last_checked").replace("{time}", new Date(probe.probedAt).toLocaleTimeString())}</p>
+                <p className="text-xs text-fg-faint">{t("plan_last_checked").replace("{time}", new Date(probe.probedAt).toLocaleTimeString())}</p>
               )}
             </div>
           )}
@@ -1386,15 +1386,19 @@ function ProvidersSettings({ onAuthError }: { onAuthError: () => void }) {
     >
       <p className="mb-3 text-sm text-fg-dim">{t("settings_providers_desc")}</p>
 
-      {/* Embeddings header: mode (Auto / Manual / Off) + active backend + refresh */}
+      {/* Embeddings header: mode (Auto / Manual / Off) + probe-result chip + refresh */}
       {embeddings && (
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Label>{t("settings_embeddings")}</Label>
-            {active && currentMode !== "off" && (
-              <Badge tone="green">
-                {t("emb_active_backend").replace("{backend}", active === "ollama" ? "Ollama" : "LM Studio")}
-              </Badge>
+            {currentMode !== "off" && (
+              active === "ollama" ? (
+                <Badge tone="green">{t("emb_status_ollama")}</Badge>
+              ) : active === "lmstudio" ? (
+                <Badge tone="green">{t("emb_status_lmstudio")}</Badge>
+              ) : currentMode === "auto" ? (
+                <Badge tone="amber">{t("emb_status_keyword_only")}</Badge>
+              ) : null
             )}
           </div>
           <div className="flex items-center gap-3">
@@ -1544,31 +1548,38 @@ function ProvidersSettings({ onAuthError }: { onAuthError: () => void }) {
       )}
 
       {/* Manual embeddings endpoint (for custom / non-detected servers) */}
-      {embeddings && !envLocked && currentMode === "manual" && (
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">
-          <div>
-            <Label>{t("settings_emb_provider")}</Label>
-            <Select value={embProvider} onChange={(e) => setEmbProvider(e.target.value as "ollama" | "openai")}>
-              <option value="ollama">Ollama</option>
-              <option value="openai">OpenAI / LM Studio</option>
-            </Select>
+      {/* Also shown in auto mode as an optional override so the user can force */}
+      {/* a specific endpoint without restarting or switching to Manual mode.   */}
+      {embeddings && !envLocked && (currentMode === "manual" || currentMode === "auto") && (
+        <div className="mt-4">
+          {currentMode === "auto" && (
+            <div className="mb-2">
+              <p className="text-xs font-medium text-fg-dim">{t("emb_override_label")}</p>
+              <p className="text-xs text-fg-faint">{t("emb_override_hint")}</p>
+            </div>
+          )}
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div>
+              <Label>{t("settings_emb_provider")}</Label>
+              <Select value={embProvider} onChange={(e) => setEmbProvider(e.target.value as "ollama" | "openai")}>
+                <option value="ollama">Ollama</option>
+                <option value="openai">OpenAI / LM Studio</option>
+              </Select>
+            </div>
+            <div>
+              <Label>{t("settings_emb_base_url")}</Label>
+              <Input value={embBaseUrl} onChange={(e) => setEmbBaseUrl(e.target.value)} placeholder="http://localhost:11434" />
+            </div>
+            <div>
+              <Label>{t("settings_emb_model")}</Label>
+              <Input value={embModel} onChange={(e) => setEmbModel(e.target.value)} placeholder="nomic-embed-text" />
+            </div>
           </div>
-          <div>
-            <Label>{t("settings_emb_base_url")}</Label>
-            <Input value={embBaseUrl} onChange={(e) => setEmbBaseUrl(e.target.value)} placeholder="http://localhost:11434" />
+          <div className="mt-3 flex items-center gap-2">
+            <Button onClick={saveManual} disabled={busy === "emb"}>
+              {busy === "emb" ? t("saving") : t("save")}
+            </Button>
           </div>
-          <div>
-            <Label>{t("settings_emb_model")}</Label>
-            <Input value={embModel} onChange={(e) => setEmbModel(e.target.value)} placeholder="nomic-embed-text" />
-          </div>
-        </div>
-      )}
-
-      {embeddings && !envLocked && currentMode === "manual" && (
-        <div className="mt-3 flex items-center gap-2">
-          <Button onClick={saveManual} disabled={busy === "emb"}>
-            {busy === "emb" ? t("saving") : t("save")}
-          </Button>
         </div>
       )}
     </Card>

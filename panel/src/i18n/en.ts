@@ -780,6 +780,8 @@ export const en = {
   workers_webhook: "Webhook URL (optional)",
   workers_webhook_placeholder: "https://hooks.example.com/...",
   workers_webhook_hint: "POSTed a JSON outcome (name, summary, cost, status) when a run completes.",
+  workers_avatar_label: "Avatar",
+  workers_avatar_shuffle: "Shuffle",
   workers_name: "Name",
   workers_run_agent: "Run agent",
   workers_run_agent_tooltip: "Runs the agent once. You confirm the prompt and working directory first.",

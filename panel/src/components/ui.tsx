@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { CheckCircle2, XCircle, Info, X, type LucideIcon } from "lucide-react";
 import { useI18n } from "../lib/useI18n";
 import { actOnToast, dismissToast, useToasts, type ToastVariant } from "../lib/useToast.ts";
+import { avatarSrc, resolveAvatarSlug } from "../lib/avatar.ts";
 
 export function Card({
   title,
@@ -341,6 +342,38 @@ export function Skeleton({ className = "" }: { className?: string }) {
     <div
       aria-hidden
       className={`animate-pulse rounded bg-surface-2 ${className}`}
+    />
+  );
+}
+
+/**
+ * A circular agent avatar. Resolves the worker's avatar slug (explicit or a
+ * deterministic default derived from its id) to a curated SVG and renders it
+ * clipped to a circle. `size` is the pixel diameter.
+ */
+export function Avatar({
+  id,
+  avatar,
+  size = 32,
+  className = "",
+  alt = "",
+}: {
+  id: string;
+  avatar?: string;
+  size?: number;
+  className?: string;
+  alt?: string;
+}) {
+  const slug = resolveAvatarSlug(id, avatar);
+  return (
+    <img
+      src={avatarSrc(slug)}
+      width={size}
+      height={size}
+      alt={alt}
+      draggable={false}
+      className={`shrink-0 rounded-full bg-surface-2 object-cover ring-1 ring-line ${className}`}
+      style={{ width: size, height: size }}
     />
   );
 }

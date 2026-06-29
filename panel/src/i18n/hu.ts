@@ -784,6 +784,8 @@ export const hu: Translations = {
   workers_webhook: "Webhook URL (opcionális)",
   workers_webhook_placeholder: "https://hooks.example.com/...",
   workers_webhook_hint: "A futás végén JSON eredményt (név, összegzés, költség, állapot) POST-ol erre az URL-re.",
+  workers_avatar_label: "Avatár",
+  workers_avatar_shuffle: "Csere",
   workers_name: "Név",
   workers_run_agent: "Ügynök futtatása",
   workers_run_agent_tooltip: "Egyszer futtatja az ügynököt. Előbb megerősíted a promptot és a munkakönyvtárat.",

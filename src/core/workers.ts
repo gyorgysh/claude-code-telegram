@@ -55,6 +55,9 @@ export interface Worker {
   updatedAt: number;
   lastRunAt?: number;
   lastRunId?: string;
+  /** Avatar slug (e.g. "panda") from the curated set in panel/public/avatars.
+   *  When unset, the panel derives a deterministic default from the worker id. */
+  avatar?: string;
   // MyHQ hierarchy fields
   role?: "lead" | "assistant";
   portfolio?: string; // e.g. "Finance", "DevOps", "Research"
@@ -206,6 +209,7 @@ export class WorkerManager {
       autonomy: input.autonomy || undefined,
       language: input.language?.trim() || undefined,
       webhookUrl: input.webhookUrl?.trim() || undefined,
+      avatar: input.avatar?.trim() || undefined,
       createdAt: now,
       updatedAt: now,
     };
@@ -236,6 +240,7 @@ export class WorkerManager {
     if (input.autonomy !== undefined) w.autonomy = input.autonomy || undefined;
     if (input.language !== undefined) w.language = input.language.trim() || undefined;
     if (input.webhookUrl !== undefined) w.webhookUrl = input.webhookUrl.trim() || undefined;
+    if (input.avatar !== undefined) w.avatar = input.avatar.trim() || undefined;
     w.updatedAt = Date.now();
     this.persist();
     audit("worker.update", { id });
@@ -514,6 +519,7 @@ export interface WorkerInput {
   autonomy?: Autonomy;
   language?: string;
   webhookUrl?: string;
+  avatar?: string;
 }
 
 function parseSchedule(when?: string): WorkerSchedule | undefined {

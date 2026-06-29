@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Worker, type MainAgent, type DelegationRecord } from "../api.ts";
-import { Card, Empty, Badge, InfoCard, Skeleton } from "./ui.tsx";
+import { Card, Empty, Badge, InfoCard, Skeleton, Avatar } from "./ui.tsx";
 import { CrewArt } from "./onboarding.tsx";
 import { relTime } from "../lib/format.ts";
 import { useI18n } from "../lib/useI18n.ts";
@@ -207,6 +207,8 @@ export function CrewView({
         <div key={lead.id}>
           <CrewNode
             icon="◆"
+            avatarId={lead.id}
+            avatar={lead.avatar}
             title={lead.name}
             role={lead.portfolio ? `${lead.portfolio} ${t("crew_role_lead")}` : t("crew_role_lead")}
             subtitle={lead.model || t("crew_default_model")}
@@ -227,6 +229,8 @@ export function CrewView({
               <CrewNode
                 key={a.id}
                 icon="◇"
+                avatarId={a.id}
+                avatar={a.avatar}
                 title={a.name}
                 role={a.portfolio || t("crew_role_assistant")}
                 subtitle={a.model || t("crew_default_model")}
@@ -246,6 +250,8 @@ export function CrewView({
           <CrewNode
             key={a.id}
             icon="◇"
+            avatarId={a.id}
+            avatar={a.avatar}
             title={a.name}
             role={a.portfolio || t("crew_role_assistant")}
             subtitle={a.model || t("crew_default_model")}
@@ -266,6 +272,8 @@ export function CrewView({
             <CrewNode
               key={w.id}
               icon="·"
+              avatarId={w.id}
+              avatar={w.avatar}
               title={w.name}
               role={w.portfolio || t("crew_role_specialist")}
               subtitle={w.model || t("crew_default_model")}
@@ -578,6 +586,8 @@ type Tone = "amber" | "accent" | "blue" | "zinc";
 
 function CrewNode({
   icon,
+  avatarId,
+  avatar,
   title,
   role,
   subtitle,
@@ -592,6 +602,10 @@ function CrewNode({
   onWebChat,
 }: {
   icon: string;
+  /** When set, render the worker's circular avatar instead of the `icon` glyph. */
+  avatarId?: string;
+  /** Explicit avatar slug; falls back to a deterministic default from avatarId. */
+  avatar?: string;
   title: string;
   /** The agent's portfolio / domain (e.g. "Web Design & UI", "President"),
    *  rendered as an always-visible role chip below the name so the Crew tab
@@ -641,7 +655,11 @@ function CrewNode({
           <div className="h-px w-4 bg-line" />
         </div>
       )}
-      <div className={`shrink-0 w-5 text-center text-sm ${toneClass[tone]}`}>{icon}</div>
+      {avatarId ? (
+        <Avatar id={avatarId} avatar={avatar} size={32} alt={title} className="shrink-0" />
+      ) : (
+        <div className={`shrink-0 w-5 text-center text-sm ${toneClass[tone]}`}>{icon}</div>
+      )}
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-medium text-fg">{title}</span>

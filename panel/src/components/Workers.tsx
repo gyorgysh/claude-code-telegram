@@ -12,7 +12,9 @@ import { useWorkerEvents, type LiveRun } from "../lib/useWorkerEvents.ts";
 import { roleLabel } from "../lib/agentRole.ts";
 import { useI18n } from "../lib/useI18n.ts";
 import type { TranslationKey } from "../i18n/en.ts";
-import { Badge, Button, Card, Empty, InfoCard, Input, Label, Select, TextArea } from "./ui.tsx";
+import { Avatar, Badge, Button, Card, Empty, InfoCard, Input, Label, Select, TextArea } from "./ui.tsx";
+import { useAvatarList, resolveAvatarSlug, AVATAR_SLUGS } from "../lib/avatar.ts";
+import { RefreshCw } from "lucide-react";
 import { RunLog } from "./RunLog.tsx";
 import { CrewArt } from "./onboarding.tsx";
 import { ms, relTime, usd } from "../lib/format.ts";
@@ -36,6 +38,7 @@ const emptyForm = {
   autonomy: "full" as Autonomy,
   language: "",
   webhookUrl: "",
+  avatar: "",
 };
 type Form = typeof emptyForm;
 
@@ -291,6 +294,7 @@ function WorkerRow({
   return (
     <Card>
       <div className="flex flex-wrap items-center gap-2">
+        <Avatar id={worker.id} avatar={worker.avatar} size={32} alt={worker.name} />
         <span className="font-medium text-fg">{worker.name}</span>
         {worker.role === "lead" && <Badge tone="blue">{t("workers_lead")}</Badge>}
         {worker.role === "assistant" && <Badge tone="zinc">{t("workers_assistant")}</Badge>}
@@ -388,6 +392,7 @@ function WorkerRow({
             skills={skills}
             providers={providers}
             workers={workers}
+            seedId={worker.id}
             initial={{
               name: worker.name,
               cwd: worker.cwd,
@@ -405,6 +410,7 @@ function WorkerRow({
               autonomy: worker.autonomy ?? "full",
               language: worker.language ?? "",
               webhookUrl: worker.webhookUrl ?? "",
+              avatar: worker.avatar ?? "",
             }}
             enabled={worker.enabled}
             onCancel={() => setEditing(false)}
@@ -611,6 +617,7 @@ function WorkerWizard({
         autonomy: (c.autonomy ?? "full") as Autonomy,
         language: String(c.language ?? ""),
         webhookUrl: "",
+        avatar: String(c.avatar ?? ""),
       }));
       setConfigs(forms);
       setCreated(new Set());
@@ -833,6 +840,11 @@ function WizardConfigEditor({
 
   return (
     <div className="space-y-3">
+      <AvatarPicker
+        id={form.name || "new-worker"}
+        value={form.avatar}
+        onChange={(slug) => onChange({ avatar: slug })}
+      />
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <Label>{t("workers_name")}</Label>
@@ -981,11 +993,57 @@ function LiveOutput({ live }: { live?: LiveRun }) {
   );
 }
 
+/**
+ * Avatar picker: shows the worker's current avatar at ~80px and a Shuffle button
+ * that cycles to the next slug in the curated set. No upload — only the cycle.
+ * `id` seeds the deterministic default so the preview matches the row/Crew view
+ * when no explicit avatar is set yet.
+ */
+function AvatarPicker({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  onChange: (slug: string) => void;
+}) {
+  const { t } = useI18n();
+  const list = useAvatarList();
+  // Slugs to cycle through: the fetched set when loaded, else the embedded list.
+  const slugs = list.length > 0 ? list.map((a) => a.slug) : [...AVATAR_SLUGS];
+  // The slug shown now (explicit value or the deterministic default for this id).
+  const current = resolveAvatarSlug(id, value);
+  const shuffle = () => {
+    const i = slugs.indexOf(current);
+    const next = slugs[(i + 1) % slugs.length] ?? slugs[0];
+    onChange(next);
+  };
+  const label = list.find((a) => a.slug === current)?.label ?? current;
+
+  return (
+    <div>
+      <Label>{t("workers_avatar_label")}</Label>
+      <div className="mt-1 flex items-center gap-3">
+        <Avatar id={id} avatar={value} size={80} alt={label} />
+        <div className="flex flex-col items-start gap-1.5">
+          <Button onClick={shuffle} className="inline-flex items-center gap-1.5">
+            <RefreshCw className="h-3.5 w-3.5" />
+            {t("workers_avatar_shuffle")}
+          </Button>
+          <span className="text-xs text-fg-faint">{label}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function WorkerForm({
   skills,
   providers,
   workers,
   initial,
+  seedId,
   enabled: initialEnabled = true,
   onCancel,
   onSubmit,
@@ -995,6 +1053,9 @@ function WorkerForm({
   providers: NamedProvider[];
   workers: Worker[];
   initial: Form;
+  /** Stable id seeding the avatar's deterministic default (worker id when
+   *  editing; absent for a brand-new worker, where the default is fixed). */
+  seedId?: string;
   enabled?: boolean;
   onCancel: () => void;
   onSubmit: (form: Form, enabled: boolean) => Promise<void>;
@@ -1048,6 +1109,11 @@ function WorkerForm({
 
   return (
     <div className="space-y-3">
+      <AvatarPicker
+        id={seedId || "new-worker"}
+        value={form.avatar}
+        onChange={(slug) => setForm({ ...form, avatar: slug })}
+      />
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <Label>{t("workers_name")}</Label>

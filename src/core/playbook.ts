@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { getPersonality, WORK_FILE } from "../prompt.js";
@@ -11,6 +12,36 @@ export interface PromptView {
   /** Current playbook contents (empty string if the file doesn't exist yet). */
   work: string;
   exists: boolean;
+  /** The shipped default playbook (git-tracked template), if it can be read. */
+  defaultWork?: string;
+  /** Whether the live playbook matches the shipped default (false = customized). */
+  matchesDefault?: boolean;
+}
+
+/**
+ * The playbook ships as a git-tracked template (`work.md`) that users are meant
+ * to customize per-box. Reading the committed blob lets us tell the user whether
+ * their live file is the untouched default or has drifted, so they can restore
+ * it if a change looks accidental. Returns undefined when git/the blob is
+ * unavailable (e.g. tarball install) — the UI just hides the indicator then.
+ */
+function readDefaultPlaybook(): string | undefined {
+  try {
+    const out = execFileSync("git", ["show", "HEAD:work.md"], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      timeout: 5000,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return out;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Normalize for comparison: ignore trailing-whitespace/newline noise. */
+function normalize(s: string): string {
+  return s.replace(/\r\n/g, "\n").replace(/[ \t]+$/gm, "").trimEnd();
 }
 
 export function getPrompt(): PromptView {
@@ -24,7 +55,19 @@ export function getPrompt(): PromptView {
       /* unreadable — surface as empty */
     }
   }
-  return { personality: getPersonality(), workFile: WORK_FILE, work, exists };
+  const defaultWork = readDefaultPlaybook();
+  const matchesDefault =
+    defaultWork === undefined
+      ? undefined
+      : normalize(work) === normalize(defaultWork);
+  return {
+    personality: getPersonality(),
+    workFile: WORK_FILE,
+    work,
+    exists,
+    defaultWork,
+    matchesDefault,
+  };
 }
 
 /** Overwrite the operator playbook. Takes effect on the next turn (re-read live). */
@@ -33,4 +76,13 @@ export function savePlaybook(content: string): PromptView {
   writeFileSync(WORK_FILE, content);
   audit("prompt.save", { workFile: WORK_FILE, bytes: content.length });
   return getPrompt();
+}
+
+/** Restore the operator playbook to the shipped default template. */
+export function restorePlaybook(): PromptView {
+  const def = readDefaultPlaybook();
+  if (def === undefined) {
+    throw new Error("Shipped default playbook is unavailable (no git checkout).");
+  }
+  return savePlaybook(def);
 }

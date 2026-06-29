@@ -192,16 +192,44 @@ function readFromFile(): StoredCredentials | null {
   }
 }
 
+/**
+ * Linux: newer Claude CLI builds store the token in the system keyring (GNOME
+ * Keyring / KWallet via libsecret) instead of a plaintext file. Read it back
+ * with `secret-tool` if that CLI is present. The CLI stores the same JSON blob
+ * ({ claudeAiOauth }) under the "Claude Code-credentials" service label.
+ */
+async function readFromSecretTool(): Promise<StoredCredentials | null> {
+  try {
+    const { stdout } = await execFileAsync(
+      "secret-tool",
+      ["lookup", "service", "Claude Code-credentials"],
+      { timeout: 5000 },
+    );
+    const trimmed = stdout.trim();
+    if (!trimmed) return null;
+    return JSON.parse(trimmed) as StoredCredentials;
+  } catch {
+    return null;
+  }
+}
+
 async function readStoredCredentials(): Promise<StoredCredentials | null> {
-  // The Claude CLI keeps its OAuth token in the macOS Keychain on darwin and in
-  // ~/.claude/.credentials.json on Windows/Linux. Prefer the Keychain on macOS,
-  // then fall back to the file on every platform (covers macOS installs that
-  // wrote the file too, and all non-macOS hosts).
+  // The Claude CLI keeps its OAuth token in the macOS Keychain on darwin, in
+  // ~/.claude/.credentials.json on Windows/Linux, and (newer Linux builds) in
+  // the libsecret system keyring. Try the platform-native store first, then
+  // fall back to the file on every platform (covers macOS installs that wrote
+  // the file too, and all non-macOS hosts).
   if (process.platform === "darwin") {
     const fromKeychain = await readFromKeychain();
     if (fromKeychain?.claudeAiOauth) return fromKeychain;
   }
-  return readFromFile();
+  const fromFile = readFromFile();
+  if (fromFile?.claudeAiOauth) return fromFile;
+  if (process.platform === "linux") {
+    const fromKeyring = await readFromSecretTool();
+    if (fromKeyring?.claudeAiOauth) return fromKeyring;
+  }
+  return fromFile;
 }
 
 /** Get a valid access token, refreshing via `claude auth status` if expired. */

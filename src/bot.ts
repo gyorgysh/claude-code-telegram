@@ -310,6 +310,12 @@ export function buildBot(): Telegraf {
   // via onRecurrenceFire (registered by the panel server) when the panel is up.
   startRecurrenceTicker();
 
+  // Recover kanban cards left "queued"/"running" by a crash or restart: their
+  // in-memory run state is gone, so mark them as a stale error the user can
+  // retry, rather than leaving them stuck on the board forever.
+  const recovered = taskDelegator.reconcileStuck();
+  if (recovered) log.info("Reconciled stuck tasks on boot", { count: recovered });
+
   // --- Heartbeat: proactive host/kanban monitoring (off unless enabled) ---
   const alertTargets = [...allowedUserIds];
 

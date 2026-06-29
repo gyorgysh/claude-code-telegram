@@ -216,13 +216,13 @@ export function WorkersView({
         </Card>
       )}
 
-      {workers.length === 0 && !creating ? (
+      {workers.length === 0 && !creating && !wizarding ? (
         <Empty
           icon={<CrewArt />}
           title={t("workers_empty")}
           action={
-            <Button variant="primary" onClick={() => setCreating(true)}>
-              {t("workers_new")}
+            <Button variant="primary" onClick={() => setWizarding(true)}>
+              {t("workers_wizard")}
             </Button>
           }
         >

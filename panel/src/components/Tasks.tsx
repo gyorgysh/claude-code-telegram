@@ -948,6 +948,12 @@ function Card({
   const stop = async () => {
     await api.stopTask(task.id).catch(() => {});
   };
+  const unstick = async () => {
+    // Clear a card jammed in queued/running/error (e.g. orphaned by a crash):
+    // aborts any run, drops it from the queue, and clears the delegation.
+    await api.unstickTask(task.id).catch(() => {});
+    onChange();
+  };
   const moveTo = async (column: Column) => {
     await api.updateTask(task.id, { column }).catch(() => {});
     onChange();
@@ -1170,6 +1176,15 @@ function Card({
               {running && (
                 <button onClick={stop} className="text-xs text-critical-fg hover:underline">
                   {t("stop")}
+                </button>
+              )}
+              {!running && dstatus === "queued" && (
+                <button
+                  onClick={unstick}
+                  className="text-xs text-fg-dim hover:text-fg hover:underline"
+                  title={t("tasks_unstick_title")}
+                >
+                  {t("tasks_unqueue")}
                 </button>
               )}
             </div>

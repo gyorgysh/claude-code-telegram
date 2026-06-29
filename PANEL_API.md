@@ -123,6 +123,12 @@ curl -X POST -H "$AUTH" $BASE/api/tasks/<id>/stop
 # Retry a failed delegated run (resets to backlog, clears delegate state, re-delegates)
 curl -X POST -H "$AUTH" $BASE/api/tasks/<id>/retry
 
+# Unstick a card jammed in queued/running/error (e.g. orphaned by a crash):
+# aborts any live run, drops it from the queue, and clears its delegation
+# WITHOUT re-running it. Cards left "queued"/"running" by a restart are also
+# auto-reconciled to a retryable error on boot.
+curl -X POST -H "$AUTH" $BASE/api/tasks/<id>/unstick
+
 # Get / update delegation run settings (timeoutMs, maxConcurrent)
 curl -H "$AUTH" $BASE/api/tasks/config
 curl -X PUT -H "$AUTH" -H "Content-Type: application/json" $BASE/api/tasks/config \
@@ -500,10 +506,15 @@ curl -X POST -H "$AUTH" $BASE/api/usage-probe/run
 ### Playbook and maintenance
 
 ```bash
-# Read or write this operator playbook (work.md) and the read-only personality
+# Read or write this operator playbook (work.md) and the read-only personality.
+# The GET response also includes `defaultWork` (the shipped git template) and
+# `matchesDefault` (false = the live playbook has been customized).
 curl -H "$AUTH" $BASE/api/prompt
 curl -X PUT -H "$AUTH" -H "Content-Type: application/json" $BASE/api/prompt \
   -d '{ "work": "# Work Playbook\n..." }'
+
+# Restore the playbook to the shipped default (overwrites work.md)
+curl -X POST -H "$AUTH" $BASE/api/prompt/restore
 
 # Maintenance status, and trigger a compaction/pruning pass now
 curl -H "$AUTH" $BASE/api/maintenance

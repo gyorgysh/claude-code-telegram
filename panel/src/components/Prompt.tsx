@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, AuthError, type PromptView } from "../api.ts";
-import { Button, Card, Empty, TextArea } from "./ui.tsx";
+import { Badge, Button, Card, Empty, Modal, TextArea } from "./ui.tsx";
 import { useI18n } from "../lib/useI18n.ts";
 
 export function PromptView_({ onAuthError }: { onAuthError: () => void }) {
@@ -12,6 +12,8 @@ export function PromptView_({ onAuthError }: { onAuthError: () => void }) {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPersona, setShowPersona] = useState(false);
+  const [confirmRestore, setConfirmRestore] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   useEffect(() => {
     api
@@ -44,17 +46,52 @@ export function PromptView_({ onAuthError }: { onAuthError: () => void }) {
     }
   };
 
+  const restore = async () => {
+    setRestoring(true);
+    setError(null);
+    try {
+      const next = await api.restorePrompt();
+      setData(next);
+      setWork(next.work);
+      setDirty(false);
+      setConfirmRestore(false);
+    } catch (e) {
+      if (e instanceof AuthError) return onAuthError();
+      setError(String(e));
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  // Live drift: compare the in-editor text against the shipped default, so the
+  // badge reflects unsaved edits too (not just what's persisted on disk).
+  const knowsDefault = data.defaultWork !== undefined;
+  const isCustomized = knowsDefault
+    ? normalizePlaybook(work) !== normalizePlaybook(data.defaultWork ?? "")
+    : false;
+
   return (
     <div className="space-y-4">
       <Card
         title={t("prompt_playbook_title")}
         right={
-          <span className="font-mono text-xs text-fg-faint" title={data.workFile}>
-            {data.exists ? "work.md" : t("prompt_work_new")}
-          </span>
+          <div className="flex items-center gap-2">
+            {knowsDefault &&
+              (isCustomized ? (
+                <Badge tone="amber">{t("prompt_status_customized")}</Badge>
+              ) : (
+                <Badge tone="green">{t("prompt_status_default")}</Badge>
+              ))}
+            <span className="font-mono text-xs text-fg-faint" title={data.workFile}>
+              {data.exists ? "work.md" : t("prompt_work_new")}
+            </span>
+          </div>
         }
       >
         <p className="mb-3 text-sm text-fg-dim">{t("prompt_desc")}</p>
+        {knowsDefault && isCustomized && (
+          <p className="mb-3 text-xs text-warn-fg">{t("prompt_customized_hint")}</p>
+        )}
         <TextArea
           rows={18}
           value={work}
@@ -68,10 +105,30 @@ export function PromptView_({ onAuthError }: { onAuthError: () => void }) {
           <Button variant="primary" onClick={save} disabled={saving || !dirty}>
             {saving ? t("saving") : t("prompt_save")}
           </Button>
+          {knowsDefault && isCustomized && (
+            <Button onClick={() => setConfirmRestore(true)} disabled={restoring}>
+              {t("prompt_restore")}
+            </Button>
+          )}
           {saved && <span className="text-xs text-ok-fg">{t("saved")}</span>}
           {dirty && !saved && <span className="text-xs text-fg-faint">{t("prompt_unsaved")}</span>}
         </div>
       </Card>
+
+      {confirmRestore && (
+        <Modal onClose={() => setConfirmRestore(false)} size="sm" closeButton>
+          <h3 className="mb-2 text-sm font-semibold text-fg">{t("prompt_restore_confirm_title")}</h3>
+          <p className="mb-4 text-sm text-fg-dim">{t("prompt_restore_confirm_body")}</p>
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => setConfirmRestore(false)} disabled={restoring}>
+              {t("cancel")}
+            </Button>
+            <Button variant="primary" onClick={restore} disabled={restoring}>
+              {restoring ? t("saving") : t("prompt_restore")}
+            </Button>
+          </div>
+        </Modal>
+      )}
 
       <Card
         title={t("prompt_personality_title")}
@@ -92,4 +149,10 @@ export function PromptView_({ onAuthError }: { onAuthError: () => void }) {
       </Card>
     </div>
   );
+}
+
+/** Mirror of the backend's normalize(): ignore CRLF and trailing whitespace so a
+ *  cosmetic diff doesn't flag the playbook as customized. */
+function normalizePlaybook(s: string): string {
+  return s.replace(/\r\n/g, "\n").replace(/[ \t]+$/gm, "").replace(/\s+$/, "");
 }

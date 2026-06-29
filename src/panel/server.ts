@@ -31,7 +31,7 @@ import { getHealth } from "../core/health.js";
 import { listSessions, listSchedules, usageSummary } from "../core/snapshot.js";
 import { agentUsage } from "../core/agentUsage.js";
 import { isValidWebhookUrl } from "../core/webhook.js";
-import { getPrompt, savePlaybook } from "../core/playbook.js";
+import { getPrompt, restorePlaybook, savePlaybook } from "../core/playbook.js";
 import { listSkills, createSkill, updateSkill, deleteSkill } from "../core/skills.js";
 import { listClaudeFiles, readClaudeFile, writeClaudeFile } from "../core/claudeFiles.js";
 import {
@@ -983,6 +983,13 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
     const { content } = (req.body ?? {}) as { content?: string };
     return savePlaybook(typeof content === "string" ? content : "");
   });
+  app.post("/api/prompt/restore", async (_req, reply) => {
+    try {
+      return restorePlaybook();
+    } catch (err) {
+      return reply.code(409).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
 
   // --- prompt library (skills) ---
   app.get("/api/skills", async (req) => {
@@ -1399,6 +1406,14 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
     const r = taskDelegator.retry((req.params as { id: string }).id);
     if (!r.ok) return reply.code(409).send({ error: r.error });
     return { ok: true, retryCount: r.retryCount };
+  });
+  // Unstick a card jammed in a queued/running/error state (e.g. orphaned by a
+  // crash): abort any live run, drop it from the queue, and clear its
+  // delegation without re-running it.
+  app.post("/api/tasks/:id/unstick", async (req, reply) => {
+    const ok = taskDelegator.unstick((req.params as { id: string }).id);
+    if (!ok) return reply.code(404).send({ error: "not found" });
+    return { ok: true };
   });
   app.post("/api/tasks", async (req) => {
     const body = (req.body ?? {}) as Parameters<typeof createTask>[0];

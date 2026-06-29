@@ -196,6 +196,10 @@ export interface PromptView {
   workFile: string;
   work: string;
   exists: boolean;
+  /** Shipped default playbook (git-tracked template), if readable. */
+  defaultWork?: string;
+  /** Whether the live playbook matches the shipped default (false = customized). */
+  matchesDefault?: boolean;
 }
 
 export interface ClaudeFile {
@@ -946,6 +950,7 @@ export const api = {
 
   prompt: () => get<PromptView>("/api/prompt"),
   savePrompt: (content: string) => req<PromptView>("PUT", "/api/prompt", { content }),
+  restorePrompt: () => req<PromptView>("POST", "/api/prompt/restore"),
 
   skills: () => get<{ skills: Skill[] }>("/api/skills"),
   createSkill: (s: Partial<Skill>) => req<Skill>("POST", "/api/skills", s),
@@ -985,6 +990,7 @@ export const api = {
   stopTask: (id: string) => req<{ ok: boolean }>("POST", `/api/tasks/${id}/stop`),
   retryTask: (id: string) =>
     req<{ ok: boolean; retryCount?: number }>("POST", `/api/tasks/${id}/retry`),
+  unstickTask: (id: string) => req<{ ok: boolean }>("POST", `/api/tasks/${id}/unstick`),
   pauseQueue: () => req<QueueState>("POST", "/api/tasks/queue/pause"),
   resumeQueue: () => req<QueueState>("POST", "/api/tasks/queue/resume"),
   clearQueue: () => req<{ cleared: number; paused: boolean }>("POST", "/api/tasks/queue/clear"),

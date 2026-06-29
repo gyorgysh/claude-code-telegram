@@ -313,6 +313,58 @@ export class TaskDelegator {
     return { ...r, retryCount: task.retryCount };
   }
 
+  /**
+   * Boot-time recovery for stuck cards. The wait queue, blocked set, and active
+   * runs all live in memory only, so a crash/restart leaves any card persisted
+   * as "queued" or "running" orphaned — there's no run behind it, yet the board
+   * shows it stuck forever. Mark each such card as a stale error (preserving its
+   * session token so the existing Retry button can Resume it) so the user has a
+   * clear, actionable state. Called once on startup, before anything is
+   * delegated, so genuinely-active in-memory runs are never touched.
+   */
+  reconcileStuck(): number {
+    let fixed = 0;
+    for (const task of listTasks()) {
+      const status = task.delegate?.status;
+      if (status !== "queued" && status !== "running") continue;
+      if (this.active.has(task.id) || this.isQueued(task.id) || this.blocked.has(task.id)) continue;
+      setDelegate(task.id, {
+        status: "error",
+        runId: task.delegate?.runId ?? "",
+        startedAt: task.delegate?.startedAt ?? Date.now(),
+        endedAt: Date.now(),
+        error: "Interrupted by a restart before it finished. Retry to run it again.",
+        sessionId: task.delegate?.sessionId,
+      });
+      fixed++;
+      log.warn("Recovered stuck task after restart", { taskId: task.id, title: task.title, was: status });
+    }
+    if (fixed) audit("task.reconcile", { count: fixed });
+    return fixed;
+  }
+
+  /**
+   * Manually clear a card out of a stuck/bad delegation state (queued, running,
+   * error, or stopped): drop it from the in-memory queue/blocked set, abort any
+   * live run, and clear the delegation so the card returns to a plain,
+   * non-delegated state in its current column. Unlike retry() this does NOT
+   * re-delegate or bump retryCount — it just unsticks the card so the user can
+   * act on it. Returns false if the card doesn't exist.
+   */
+  unstick(id: string): boolean {
+    const task = getTask(id);
+    if (!task) return false;
+    this.blocked.delete(id);
+    const qi = this.queue.findIndex((q) => q.id === id);
+    if (qi >= 0) this.queue.splice(qi, 1);
+    this.active.get(id)?.abort();
+    setDelegate(id, undefined);
+    const t = getTask(id);
+    this.broadcast({ type: "task", event: "end", taskId: id, runId: "", delegate: t?.delegate, column: t?.column });
+    audit("task.unstick", { id });
+    return true;
+  }
+
   private async execute(
     id: string,
     title: string,

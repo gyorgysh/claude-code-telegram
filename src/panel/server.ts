@@ -1458,6 +1458,32 @@ Respond with ONLY a JSON array, no markdown fences, no explanation. Example form
     if (!approvalId) return reply.code(400).send({ error: "approvalId required" });
     return { ok: chat.resolveApproval(approvalId, Boolean(allow)) };
   });
+  // React to an assistant message: a thumbs-up files the response as a durable
+  // memory (so the agent reuses it); a thumbs-down lands a suggestion in the
+  // president's inbox flagging it as unhelpful. Text comes from the client (the
+  // bubble it already has) so this needs no message lookup.
+  app.post("/api/chat/react", async (req, reply) => {
+    const { reaction, text } = (req.body ?? {}) as { reaction?: string; text?: string };
+    const body = typeof text === "string" ? text.trim() : "";
+    if (!body) return reply.code(400).send({ error: "text required" });
+    if (reaction === "up") {
+      const snippet = body.length > 280 ? `${body.slice(0, 277)}…` : body;
+      memory.create({ text: snippet, tags: ["chat-feedback", "helpful"], salience: 0.6 });
+      return { ok: true, kind: "memory" };
+    }
+    if (reaction === "down") {
+      const title = body.split("\n")[0]?.slice(0, 80) || "Unhelpful chat response";
+      suggestions.add({
+        fromAgentId: "panel",
+        fromAgentName: "Panel feedback",
+        title: `Unhelpful response: ${title}`,
+        detail: `The president marked this chat response as unhelpful:\n\n${body}`,
+        category: "chat-feedback",
+      });
+      return { ok: true, kind: "suggestion" };
+    }
+    return reply.code(400).send({ error: "reaction must be up or down" });
+  });
 
   // --- per-agent interactive chat (talk to a specific worker / Lead) ---
   app.get("/api/agent-chat/:id", async (req, reply) => {

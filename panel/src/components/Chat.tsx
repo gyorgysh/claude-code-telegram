@@ -7,7 +7,8 @@ import { Markdown } from "../lib/markdown.tsx";
 import { roleLabel } from "../lib/agentRole.ts";
 import { avatarPng64Src, resolveAvatarSlug } from "../lib/avatar.ts";
 import { Button } from "./ui.tsx";
-import { Settings2, Plus, ClipboardList, Zap, ShieldCheck, HelpCircle, Pencil } from "lucide-react";
+import { toast } from "../lib/useToast.ts";
+import { Settings2, Plus, ClipboardList, Zap, ShieldCheck, HelpCircle, Pencil, ThumbsUp, ThumbsDown } from "lucide-react";
 
 /** Sentinel id for the main Atlas chat (the Telegram-mirrored session). */
 const ATLAS = "atlas";
@@ -1263,7 +1264,60 @@ function Bubble({
         >
           {m.error ? body : <Markdown text={body} />}
         </div>
+        {!m.error && m.text && <ReactionRow text={m.text} />}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Thumbs up/down feedback under an assistant message. Up files the response as a
+ * durable memory; down lands a suggestion in the president's inbox. Once a
+ * reaction is sent the row collapses to the chosen state so it can't be spammed.
+ */
+function ReactionRow({ text }: { text: string }) {
+  const { t } = useI18n();
+  const [done, setDone] = useState<"up" | "down" | null>(null);
+  const [pending, setPending] = useState(false);
+
+  const react = async (reaction: "up" | "down") => {
+    if (pending || done) return;
+    setPending(true);
+    try {
+      await api.reactToMessage(reaction, text);
+      setDone(reaction);
+      toast.success(reaction === "up" ? t("chat_react_saved") : t("chat_react_filed"));
+    } catch {
+      toast.error(t("chat_react_error"));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <div className="ml-1 flex items-center gap-1">
+      <button
+        onClick={() => void react("up")}
+        disabled={pending || done !== null}
+        title={t("chat_react_helpful")}
+        aria-label={t("chat_react_helpful")}
+        className={`rounded p-1 transition-colors disabled:cursor-default ${
+          done === "up" ? "text-accent" : "text-fg-faint hover:text-fg disabled:hover:text-fg-faint"
+        }`}
+      >
+        <ThumbsUp size={13} />
+      </button>
+      <button
+        onClick={() => void react("down")}
+        disabled={pending || done !== null}
+        title={t("chat_react_unhelpful")}
+        aria-label={t("chat_react_unhelpful")}
+        className={`rounded p-1 transition-colors disabled:cursor-default ${
+          done === "down" ? "text-critical-fg" : "text-fg-faint hover:text-fg disabled:hover:text-fg-faint"
+        }`}
+      >
+        <ThumbsDown size={13} />
+      </button>
     </div>
   );
 }

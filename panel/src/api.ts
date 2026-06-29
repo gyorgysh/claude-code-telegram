@@ -1049,6 +1049,8 @@ export const api = {
     req<{ ok: boolean }>("POST", "/api/chat/approve", { approvalId, allow }),
   resolveAsk: (id: string, answer: { optionIndices?: number[]; text?: string }) =>
     req<{ ok: boolean }>("POST", "/api/asks/resolve", { id, ...answer }),
+  reactToMessage: (reaction: "up" | "down", text: string) =>
+    req<{ ok: boolean; kind: string }>("POST", "/api/chat/react", { reaction, text }),
 
   // Per-agent interactive chat (talk to a specific worker / Lead).
   agentChat: (id: string) => get<AgentChatView>(`/api/agent-chat/${id}`),

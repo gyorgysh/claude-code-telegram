@@ -77,6 +77,8 @@ export const en = {
   // Common actions
   save: "Save",
   cancel: "Cancel",
+  confirm: "Confirm",
+  close: "Close",
   delete: "Delete",
   edit: "Edit",
   new: "New",

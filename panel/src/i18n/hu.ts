@@ -79,6 +79,8 @@ export const hu: Translations = {
   // Általános műveletek
   save: "Mentés",
   cancel: "Mégse",
+  confirm: "Megerősítés",
+  close: "Bezárás",
   delete: "Törlés",
   edit: "Szerkesztés",
   new: "Új",

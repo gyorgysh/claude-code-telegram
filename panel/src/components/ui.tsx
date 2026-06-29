@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CheckCircle2, XCircle, Info, X, type LucideIcon } from "lucide-react";
 import { useI18n } from "../lib/useI18n";
 import { actOnToast, dismissToast, useToasts, type ToastVariant } from "../lib/useToast.ts";
@@ -415,6 +415,187 @@ export function Callout({
         )}
       </div>
       <div className="text-fg-dim">{children}</div>
+    </div>
+  );
+}
+
+/** A modal dialog: full-screen backdrop, centred card, escape-to-close, and a
+ *  focus trap that keeps Tab cycling within the dialog. Mount it conditionally
+ *  (i.e. `{open && <Modal …/>}`) — it assumes it is only rendered when open.
+ *  `onClose` fires on backdrop click, Escape, and the optional close button. */
+export function Modal({
+  onClose,
+  children,
+  className = "",
+  labelledBy,
+  closeButton = false,
+  size = "lg",
+}: {
+  onClose: () => void;
+  children: ReactNode;
+  className?: string;
+  /** id of the element that titles the dialog, for `aria-labelledby`. */
+  labelledBy?: string;
+  /** Render a small ✕ in the top-right corner. */
+  closeButton?: boolean;
+  size?: "sm" | "md" | "lg";
+}) {
+  const { t } = useI18n();
+  const ref = useRef<HTMLDivElement>(null);
+  const maxW = size === "sm" ? "max-w-sm" : size === "md" ? "max-w-md" : "max-w-lg";
+
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null;
+    // Focus the first focusable element (or the dialog itself) on open.
+    const node = ref.current;
+    const focusables = node?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+    );
+    (focusables && focusables.length ? focusables[0] : node)?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab" || !node) return;
+      const items = node.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea, input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      prev?.focus?.();
+    };
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby={labelledBy}>
+      <button aria-label={t("close")} tabIndex={-1} onClick={onClose} className="absolute inset-0 bg-black/40" />
+      <div
+        ref={ref}
+        tabIndex={-1}
+        className={`relative z-10 w-full ${maxW} rounded-2xl border border-line bg-surface shadow-xl outline-none ${className}`}
+      >
+        {closeButton && (
+          <button
+            onClick={onClose}
+            aria-label={t("close")}
+            className="absolute right-3 top-3 z-10 text-fg-faint transition-colors hover:text-fg-muted"
+          >
+            <X className="h-4 w-4" strokeWidth={2} />
+          </button>
+        )}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** A confirmation dialog built on Modal: title, description, and Cancel/Confirm
+ *  buttons (Confirm uses the danger variant by default). Replaces native
+ *  `confirm()` so destructive actions match the rest of the UI. */
+export function ConfirmDialog({
+  title,
+  description,
+  confirmLabel,
+  cancelLabel,
+  danger = true,
+  busy = false,
+  onConfirm,
+  onCancel,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  confirmLabel?: ReactNode;
+  cancelLabel?: ReactNode;
+  /** Confirm button uses the danger variant (default true). */
+  danger?: boolean;
+  /** Disable buttons while the action runs. */
+  busy?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <Modal onClose={onCancel} size="sm" labelledBy="confirm-dialog-title">
+      <div className="p-4">
+        <h3 id="confirm-dialog-title" className="text-sm font-semibold text-fg">
+          {title}
+        </h3>
+        {description && <p className="mt-2 text-sm text-fg-dim">{description}</p>}
+        <div className="mt-4 flex justify-end gap-2">
+          <Button onClick={onCancel} disabled={busy}>
+            {cancelLabel ?? t("cancel")}
+          </Button>
+          <Button variant={danger ? "danger" : "primary"} onClick={onConfirm} disabled={busy}>
+            {confirmLabel ?? t("confirm")}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** A popover: an absolutely-positioned card anchored to a trigger element, with
+ *  click-outside and escape to dismiss. Wrap the trigger and pass `open`/`onClose`;
+ *  the panel is positioned relative to the wrapper, so the wrapper must be the
+ *  trigger's offset parent. `align` controls horizontal edge alignment. */
+export function Popover({
+  open,
+  onClose,
+  trigger,
+  children,
+  align = "end",
+  className = "",
+  panelClassName = "",
+}: {
+  open: boolean;
+  onClose: () => void;
+  trigger: ReactNode;
+  children: ReactNode;
+  align?: "start" | "end";
+  className?: string;
+  panelClassName?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, onClose]);
+  return (
+    <div ref={ref} className={`relative ${className}`}>
+      {trigger}
+      {open && (
+        <div
+          role="dialog"
+          className={`absolute top-full z-40 mt-1 min-w-[12rem] rounded-lg border border-line bg-surface p-1 shadow-xl ${align === "end" ? "right-0" : "left-0"} ${panelClassName}`}
+        >
+          {children}
+        </div>
+      )}
     </div>
   );
 }

@@ -105,7 +105,13 @@ SUDO=""
 need_sudo() {
   [ -n "$SUDO" ] && return 0
   if [ "$(id -u)" -eq 0 ]; then SUDO=""
-  elif command -v sudo >/dev/null 2>&1; then SUDO="sudo"
+  elif command -v sudo >/dev/null 2>&1; then
+    SUDO="sudo"
+    say ""
+    say "${B}This step needs administrator access (sudo).${R}"
+    say "You will be prompted for your password. When you type it, nothing will appear"
+    say "on screen — that is normal. Just type your password and press ${B}Enter${R}."
+    say ""
   else die "Need root for this step but 'sudo' isn't available. Re-run as root."; fi
 }
 

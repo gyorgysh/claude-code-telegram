@@ -307,4 +307,19 @@ export type Config = z.infer<typeof schema>;
 
 export const config = parseConfig();
 
+/**
+ * Map retired model IDs to their current replacements so users who have an old
+ * value in their .env or mainAgent.json are silently upgraded. Preserves any ID
+ * that isn't in the map unchanged.
+ */
+const MODEL_ALIASES: Record<string, string> = {
+  "claude-sonnet-4-6": "claude-sonnet-5",
+  "claude-sonnet-4-5": "claude-sonnet-5",
+  "claude-sonnet-4-5-20250929": "claude-sonnet-5",
+};
+
+export function normalizeModelId(model: string): string {
+  return MODEL_ALIASES[model] ?? model;
+}
+
 export const allowedUserIds = new Set<number>(config.ALLOWED_USER_IDS);

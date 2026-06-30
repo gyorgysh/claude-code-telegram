@@ -1,5 +1,5 @@
 import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
-import { config } from "../config.js";
+import { config, normalizeModelId } from "../config.js";
 import { systemPrompt } from "../prompt.js";
 import { memory, formatMemoriesForPrompt } from "../core/memory.js";
 import { activityBegin, activityEnd } from "../core/activity.js";
@@ -162,7 +162,7 @@ export async function runTurn(opts: RunOptions): Promise<RunResult> {
       options: {
         cwd: opts.cwd,
         resume: opts.resume,
-        model: opts.model ?? config.CLAUDE_MODEL,
+        model: normalizeModelId(opts.model ?? config.CLAUDE_MODEL),
         // Only override the child env when asked (e.g. a local-model provider);
         // otherwise the SDK defaults to process.env.
         env: opts.env ? { ...process.env, ...opts.env } : undefined,

@@ -706,6 +706,7 @@ async function handleUserPrompt(
       env: mainRun.env,
       crew,
       pendingSuggestions,
+      knownPaths: mainRun.knownPaths,
       persona: mainRun.persona,
       language: session.language ?? mainRun.defaultLanguage,
       // Dry-run forces the gate on (default mode) even in full autonomy, so the

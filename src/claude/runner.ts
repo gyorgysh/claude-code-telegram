@@ -77,6 +77,8 @@ export interface RunOptions {
   crew?: string;
   /** Pending suggestion-inbox digest (main agent only) for Atlas to triage. */
   pendingSuggestions?: string;
+  /** Named directory shortcuts injected into the system prompt (main agent only). */
+  knownPaths?: Array<{ label: string; path: string }>;
   /**
    * Character and tone override (persona). Injected into the system prompt after
    * the base personality block, before work.md and worker instructions.
@@ -166,6 +168,7 @@ export async function runTurn(opts: RunOptions): Promise<RunResult> {
           opts.persona,
           opts.language,
           opts.pendingSuggestions,
+          opts.knownPaths,
         ),
         permissionMode: opts.permissionMode,
         includePartialMessages: true,

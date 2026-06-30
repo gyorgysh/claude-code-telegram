@@ -144,6 +144,7 @@ export function systemPrompt(
   persona?: string,
   language?: string,
   pendingSuggestions?: string,
+  knownPaths?: Array<{ label: string; path: string }>,
 ): { type: "preset"; preset: "claude_code"; append: string } {
   let append = getPersonality();
 
@@ -170,6 +171,11 @@ export function systemPrompt(
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+
+  if (knownPaths?.length) {
+    const lines = knownPaths.map((p) => `- **${p.label}**: \`${p.path}\``).join("\n");
+    append += `\n\n# Known directories\nThese are the key folders on this machine. Use them as starting points when working with files or projects.\n\n${lines}`;
   }
   if (memories?.trim()) {
     // Memory text is agent/API-writable, so treat it as untrusted data: the

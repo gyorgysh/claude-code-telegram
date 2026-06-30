@@ -38,6 +38,7 @@ export function SettingsView({ onAuthError }: { onAuthError: () => void }) {
       <ServiceControl onAuthError={onAuthError} />
       <LanguageSettings onAuthError={onAuthError} />
       <MainAgentSettings onAuthError={onAuthError} />
+      <KnownPathsSettings onAuthError={onAuthError} />
       <ProvidersSettings onAuthError={onAuthError} />
       <PlanBudgetSettings onAuthError={onAuthError} />
       <NotificationsSettings onAuthError={onAuthError} />
@@ -751,6 +752,120 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
           {t("settings_new_context")}
         </Button>
         {dirty && <span className="text-xs text-warn-fg">{t("settings_unsaved")}</span>}
+      </div>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Known Paths — named directory shortcuts injected into the system prompt
+// ---------------------------------------------------------------------------
+
+function KnownPathsSettings({ onAuthError }: { onAuthError: () => void }) {
+  const { t } = useI18n();
+  const [paths, setPaths] = useState<Array<{ label: string; path: string }>>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [newPath, setNewPath] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = () =>
+    api
+      .agent()
+      .then((a) => {
+        setPaths(a.knownPaths ?? []);
+        setLoaded(true);
+      })
+      .catch((e) => e instanceof AuthError && onAuthError());
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const save = async (next: Array<{ label: string; path: string }>) => {
+    setBusy(true);
+    try {
+      const a = await api.saveAgent({ knownPaths: next });
+      setPaths(a.knownPaths ?? []);
+      toast.success(t("saved"));
+    } catch (e) {
+      if (e instanceof AuthError) return onAuthError();
+      toast.error(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const add = async () => {
+    const label = newLabel.trim();
+    const path = newPath.trim();
+    if (!label || !path) return;
+    const next = [...paths, { label, path }];
+    setNewLabel("");
+    setNewPath("");
+    await save(next);
+  };
+
+  const remove = async (idx: number) => {
+    await save(paths.filter((_, i) => i !== idx));
+  };
+
+  return (
+    <Card title={t("settings_known_paths")}>
+      <p className="mb-4 text-sm text-fg-dim">{t("settings_known_paths_desc")}</p>
+
+      {!loaded ? (
+        <div className="space-y-2">
+          <Skeleton className="h-9 w-full rounded-lg" />
+          <Skeleton className="h-9 w-full rounded-lg" />
+        </div>
+      ) : paths.length > 0 ? (
+        <ul className="mb-4 space-y-2">
+          {paths.map((p, i) => (
+            <li
+              key={i}
+              className="flex items-center gap-3 rounded-lg border border-line bg-surface-2 px-3 py-2"
+            >
+              <span className="w-28 shrink-0 text-sm font-medium text-fg">{p.label}</span>
+              <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg-faint" title={p.path}>
+                {p.path}
+              </span>
+              <Button variant="danger" disabled={busy} onClick={() => remove(i)}>
+                {t("remove")}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mb-4 text-sm text-fg-faint">{t("settings_known_paths_empty")}</p>
+      )}
+
+      <div className="flex flex-wrap items-end gap-2 border-t border-line pt-4">
+        <div className="w-28 shrink-0">
+          <Label>{t("settings_known_paths_label")}</Label>
+          <Input
+            value={newLabel}
+            onChange={(e) => setNewLabel(e.target.value)}
+            placeholder={t("settings_known_paths_label_ph")}
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <Label>{t("settings_known_paths_path")}</Label>
+          <Input
+            value={newPath}
+            onChange={(e) => setNewPath(e.target.value)}
+            placeholder={t("settings_known_paths_path_ph")}
+            onKeyDown={(e) => e.key === "Enter" && add()}
+          />
+        </div>
+        <Button
+          variant="primary"
+          disabled={!newLabel.trim() || !newPath.trim() || busy}
+          onClick={add}
+        >
+          {t("add")}
+        </Button>
       </div>
     </Card>
   );

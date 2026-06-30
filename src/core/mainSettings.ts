@@ -60,6 +60,12 @@ interface MainSettings {
   fallbackModel?: string;
   /** Usage percent (any window) at/above which fallback engages (default 95). */
   fallbackThreshold?: number;
+  /**
+   * Named directory shortcuts injected into the system prompt so the agent
+   * knows where key folders are without the user repeating it. Each entry is
+   * a { label, path } pair, e.g. { label: "Projects", path: "/Users/me/dev" }.
+   */
+  knownPaths?: Array<{ label: string; path: string }>;
 }
 
 /** Mutating tools intercepted by dry-run (echoed, not executed). */
@@ -117,6 +123,7 @@ export function mainSettingsView() {
     fallbackThreshold: s.fallbackThreshold ?? DEFAULT_FALLBACK_THRESHOLD,
     degraded: degradedState(),
     botUsername: botUsername ?? "",
+    knownPaths: s.knownPaths ?? [],
   };
 }
 
@@ -130,6 +137,7 @@ export function setMainSettings(patch: {
   fallbackProviderId?: string;
   fallbackModel?: string;
   fallbackThreshold?: number;
+  knownPaths?: Array<{ label: string; path: string }>;
 }): void {
   const s = load();
   if (patch.model !== undefined) s.model = patch.model.trim() || undefined;
@@ -144,6 +152,13 @@ export function setMainSettings(patch: {
   if (patch.fallbackThreshold !== undefined) {
     const n = Math.round(patch.fallbackThreshold);
     s.fallbackThreshold = Number.isFinite(n) ? Math.min(100, Math.max(50, n)) : undefined;
+  }
+  if (patch.knownPaths !== undefined) {
+    // Sanitise: keep only entries with non-empty label and path.
+    const clean = patch.knownPaths
+      .map((e) => ({ label: e.label.trim(), path: e.path.trim() }))
+      .filter((e) => e.label && e.path);
+    s.knownPaths = clean.length ? clean : undefined;
   }
   saveJson<MainFile>(FILE, { version: 1, settings: s });
   audit("mainAgent.update", {
@@ -163,6 +178,7 @@ export function resolveMainRun(): {
   persona?: string;
   autonomy: Autonomy;
   defaultLanguage?: string;
+  knownPaths?: Array<{ label: string; path: string }>;
 } {
   const s = load();
   const provider = s.providerId ? getProvider(s.providerId) : undefined;
@@ -179,6 +195,7 @@ export function resolveMainRun(): {
     persona: s.persona || undefined,
     autonomy: s.autonomy ?? "standard",
     defaultLanguage: s.defaultLanguage || undefined,
+    knownPaths: s.knownPaths?.length ? s.knownPaths : undefined,
   };
 }
 

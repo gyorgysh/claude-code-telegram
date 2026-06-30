@@ -400,7 +400,10 @@ function ProfileCard({
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-semibold text-fg">{name}</span>
           {roleBadge && (
-            <span className="rounded bg-surface-2 px-1.5 py-0.5 text-xs font-medium text-fg-dim">
+            <span
+              className="max-w-[18ch] truncate rounded bg-surface-2 px-1.5 py-0.5 text-xs font-medium text-fg-dim"
+              title={roleBadge}
+            >
               {roleBadge}
             </span>
           )}
@@ -785,7 +788,7 @@ function ChatPane({
                 <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-semibold tracking-wide text-accent border border-accent/20">
                   {agentName}
                 </span>
-                {agentRole && <span className="text-xs text-fg-dim">{agentRole}</span>}
+                {agentRole && <span className="max-w-[18ch] truncate text-xs text-fg-dim" title={agentRole}>{agentRole}</span>}
               </div>
             )}
             <div className="max-w-full rounded-2xl rounded-tl-sm bg-surface px-4 py-2.5 text-sm">

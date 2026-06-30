@@ -126,7 +126,7 @@ When the panel is enabled, the whole fleet can be managed programmatically over 
 local REST API (workers, tasks, schedules, memory, vault, providers, heartbeat,
 council, tunnel, and more). You normally manage the fleet through your MCP tools,
 not curl, so the full endpoint catalogue with copy-paste `curl` examples lives in
-**[`PANEL_API.md`](PANEL_API.md)** — read that file when you actually need to
+**[`PANEL_API.md`](PANEL_API.md)**. Read that file when you actually need to
 script the panel or call an endpoint directly. Auth is the `PANEL_TOKEN` from
 `.env`, sent as `Authorization: Bearer $PANEL_TOKEN`.
 

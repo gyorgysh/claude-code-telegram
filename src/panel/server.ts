@@ -662,6 +662,7 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
       fallbackProviderId,
       fallbackModel,
       fallbackThreshold,
+      knownPaths,
     } = (req.body ?? {}) as {
       model?: string;
       providerId?: string;
@@ -672,6 +673,7 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
       fallbackProviderId?: string;
       fallbackModel?: string;
       fallbackThreshold?: number;
+      knownPaths?: Array<{ label: string; path: string }>;
     };
     setMainSettings({
       model,
@@ -683,6 +685,7 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
       fallbackProviderId,
       fallbackModel,
       fallbackThreshold,
+      knownPaths,
     });
     return mainSettingsView();
   });

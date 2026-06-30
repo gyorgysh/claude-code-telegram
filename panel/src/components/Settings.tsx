@@ -11,7 +11,7 @@ import { ConnectorsView } from "./Connectors.tsx";
 import { PromptView_ } from "./Prompt.tsx";
 import { SkillsView } from "./Skills.tsx";
 
-const MODEL_SUGGESTIONS = ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-8"];
+const MODEL_SUGGESTIONS = ["claude-haiku-4-5-20251001", "claude-sonnet-5", "claude-opus-4-8"];
 
 const PERSONA_PRESETS: Array<{ labelKey: TranslationKey; value: string }> = [
   { labelKey: "settings_persona_concise", value: "Concise and direct. Lead with the result, skip preamble, use short sentences." },

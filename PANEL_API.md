@@ -48,7 +48,7 @@ curl -X POST -H "$AUTH" -H "Content-Type: application/json" $BASE/api/workers \
 #   role          "lead" | "assistant" (omit for specialist)
 #   portfolio     domain description shown to Atlas in the crew roster
 #   parentId      id of the Lead this Assistant reports to
-#   model         model id override (e.g. "claude-sonnet-4-6")
+#   model         model id override (e.g. "claude-sonnet-5")
 #   providerId    id of a saved provider preset (for local models)
 #   systemPrompt  extra domain knowledge appended to the system prompt
 #   skillId       id of a saved skill whose body augments the system prompt

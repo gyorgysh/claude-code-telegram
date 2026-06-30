@@ -375,11 +375,11 @@ function Configure-Env {
         Write-Host "  Which Claude model should the bot use by default?" -ForegroundColor Cyan
         Write-Host "  Don't overthink it — you can change this anytime later in the panel or with /model in Telegram." -ForegroundColor DarkGray
         Write-Host "    1) Opus   - most capable           (claude-opus-4-8)   [recommended]"
-        Write-Host "    2) Sonnet - faster, well-balanced  (claude-sonnet-4-6)"
+        Write-Host "    2) Sonnet - faster, well-balanced  (claude-sonnet-5)"
         Write-Host "    3) Haiku  - fastest and cheapest   (claude-haiku-4-5-20251001)"
         Write-Host "    4) Enter a custom model name"
         switch (Ask "Choose 1-4" "1") {
-            "2"     { $model = "claude-sonnet-4-6" }
+            "2"     { $model = "claude-sonnet-5" }
             "3"     { $model = "claude-haiku-4-5-20251001" }
             "4"     { $model = Ask "Custom model name" "claude-opus-4-8" }
             default { $model = "claude-opus-4-8" }

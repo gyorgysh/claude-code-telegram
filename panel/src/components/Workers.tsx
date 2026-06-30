@@ -68,7 +68,7 @@ const PROVIDER_KIND_LABEL: Record<ProviderKind, string> = {
 // Suggested Anthropic model ids (free-text, so local model names work too).
 const MODEL_SUGGESTIONS = [
   "claude-haiku-4-5-20251001",
-  "claude-sonnet-4-6",
+  "claude-sonnet-5",
   "claude-opus-4-8",
 ];
 

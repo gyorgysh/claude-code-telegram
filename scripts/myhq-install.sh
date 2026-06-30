@@ -419,11 +419,11 @@ configure_env() {
     printf '\n%s\n' "${B}Which Claude model should the bot use by default?${R}" >"${TTY:-/dev/stdout}"
     printf '%s\n' "${DIM}Don't overthink it — you can change this anytime later in the panel or with /model in Telegram.${R}" >"${TTY:-/dev/stdout}"
     printf '%s\n' "  ${B}1)${R} Opus   ${DIM}- most capable           (claude-opus-4-8)${R}  ${DIM}[recommended]${R}" >"${TTY:-/dev/stdout}"
-    printf '%s\n' "  ${B}2)${R} Sonnet ${DIM}- faster, well-balanced  (claude-sonnet-4-6)${R}" >"${TTY:-/dev/stdout}"
+    printf '%s\n' "  ${B}2)${R} Sonnet ${DIM}- faster, well-balanced  (claude-sonnet-5)${R}" >"${TTY:-/dev/stdout}"
     printf '%s\n' "  ${B}3)${R} Haiku  ${DIM}- fastest and cheapest   (claude-haiku-4-5-20251001)${R}" >"${TTY:-/dev/stdout}"
     printf '%s\n' "  ${B}4)${R} Enter a custom model name" >"${TTY:-/dev/stdout}"
     case "$(ask "Choose 1-4" "1")" in
-      2) model="claude-sonnet-4-6" ;;
+      2) model="claude-sonnet-5" ;;
       3) model="claude-haiku-4-5-20251001" ;;
       4) model="$(ask "Custom model name" "claude-opus-4-8")" ;;
       *) model="claude-opus-4-8" ;;

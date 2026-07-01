@@ -582,31 +582,22 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
 
       <div className="space-y-2">
         <Accordion id="agent-model" title={t("settings_section_model")} defaultOpen badge={dirtyDot}>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <Label>{t("provider")}</Label>
-              <Select value={providerId} onChange={(e) => setProviderId(e.target.value)}>
-                <option value="">{t("settings_anthropic_default")}</option>
-                {agent.providers.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Label>{t("model")}</Label>
-              <ModelSelect
-                value={model}
-                onChange={setModel}
-                suggestions={providerId ? [] : MODEL_SUGGESTIONS}
-                onFetch={providerId ? fetchModels : undefined}
-                fetchLabel={t("fetch")}
-                placeholder={providerId ? t("settings_model_local") : t("settings_model_default")}
-              />
-            </div>
-          </div>
-          <div className="mt-3">
+          <div className="mb-3">
             <Label>{t("settings_ai_backend")}</Label>
-            <Select value={backendId} onChange={(e) => setBackendId(e.target.value)}>
+            <Select
+              value={backendId}
+              onChange={(e) => {
+                const v = e.target.value;
+                setBackendId(v);
+                // Provider/model only mean anything for the Claude backend —
+                // clear them so a stale Claude model id can't be sent to a
+                // different backend's CLI (which would reject it).
+                if (v) {
+                  setModel("");
+                  setProviderId("");
+                }
+              }}
+            >
               <option value="">{t("settings_ai_backend_default")}</option>
               {agent.backends
                 .filter((b) => b.id !== "claude-agent-sdk")
@@ -616,6 +607,32 @@ function MainAgentSettings({ onAuthError }: { onAuthError: () => void }) {
             </Select>
             <p className="mt-1 text-xs text-fg-dim">{t("settings_ai_backend_hint")}</p>
           </div>
+          {backendId ? (
+            <p className="text-xs text-fg-dim">{t("settings_ai_backend_no_model")}</p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label>{t("provider")}</Label>
+                <Select value={providerId} onChange={(e) => setProviderId(e.target.value)}>
+                  <option value="">{t("settings_anthropic_default")}</option>
+                  {agent.providers.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <Label>{t("model")}</Label>
+                <ModelSelect
+                  value={model}
+                  onChange={setModel}
+                  suggestions={providerId ? [] : MODEL_SUGGESTIONS}
+                  onFetch={providerId ? fetchModels : undefined}
+                  fetchLabel={t("fetch")}
+                  placeholder={providerId ? t("settings_model_local") : t("settings_model_default")}
+                />
+              </div>
+            </div>
+          )}
         </Accordion>
 
         <Accordion id="agent-identity" title={t("settings_section_identity")}>

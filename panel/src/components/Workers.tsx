@@ -1360,7 +1360,13 @@ function WorkerForm({
           <Label>{t("workers_ai_backend")}</Label>
           <Select
             value={form.backendId}
-            onChange={(e) => setForm({ ...form, backendId: e.target.value })}
+            onChange={(e) => {
+              const v = e.target.value;
+              // Provider/model only mean anything for the Claude backend —
+              // clear them so a stale Claude model id can't be sent to a
+              // different backend's CLI (which would reject it).
+              setForm(v ? { ...form, backendId: v, providerId: "", model: "" } : { ...form, backendId: v });
+            }}
           >
             <option value="">{t("workers_ai_backend_default")}</option>
             {backends
@@ -1373,36 +1379,46 @@ function WorkerForm({
           </Select>
           <p className="mt-1 text-xs text-fg-faint">{t("workers_ai_backend_hint")}</p>
         </div>
-        <div>
-          <Label>{t("workers_provider")}</Label>
-          <Select
-            value={form.providerId}
-            onChange={(e) => setForm({ ...form, providerId: e.target.value })}
-          >
-            <option value="">{t("workers_anthropic_default")}</option>
-            {providers.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div>
-          <Label>{t("workers_model")}</Label>
-          <ModelSelect
-            value={form.model}
-            onChange={(model) => setForm({ ...form, model })}
-            suggestions={form.providerId ? [] : MODEL_SUGGESTIONS}
-            onFetch={form.providerId ? fetchModels : undefined}
-            fetchLabel={t("fetch")}
-            placeholder={form.providerId ? t("workers_model_local") : t("workers_model_default")}
-          />
-          {!form.providerId && (
-            <p className="mt-1 text-xs text-fg-faint">
-              {t("workers_model_hint")} {t("workers_model_hint_url")}
-            </p>
-          )}
-        </div>
+        {form.backendId && (
+          <div>
+            <Label>{t("workers_model")}</Label>
+            <p className="mt-1 text-xs text-fg-faint">{t("workers_ai_backend_no_model")}</p>
+          </div>
+        )}
+        {!form.backendId && (
+          <>
+            <div>
+              <Label>{t("workers_provider")}</Label>
+              <Select
+                value={form.providerId}
+                onChange={(e) => setForm({ ...form, providerId: e.target.value })}
+              >
+                <option value="">{t("workers_anthropic_default")}</option>
+                {providers.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label>{t("workers_model")}</Label>
+              <ModelSelect
+                value={form.model}
+                onChange={(model) => setForm({ ...form, model })}
+                suggestions={form.providerId ? [] : MODEL_SUGGESTIONS}
+                onFetch={form.providerId ? fetchModels : undefined}
+                fetchLabel={t("fetch")}
+                placeholder={form.providerId ? t("workers_model_local") : t("workers_model_default")}
+              />
+              {!form.providerId && (
+                <p className="mt-1 text-xs text-fg-faint">
+                  {t("workers_model_hint")} {t("workers_model_hint_url")}
+                </p>
+              )}
+            </div>
+          </>
+        )}
         <div>
           <Label>{t("workers_skill")}</Label>
           <Select

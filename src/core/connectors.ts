@@ -4,10 +4,13 @@ import { audit } from "./audit.js";
 const FILE = "connectors.json";
 
 /**
- * Catalog of external MCP connectors. All twelve are **live** (Notion, Google
- * Calendar, Gmail, Google Drive, Apple Calendar, Apple Mail, Slack, GitHub,
- * Unreal Engine, Unity, PostgreSQL, SQLite): each is wired to a real MCP server
- * in `src/mcp/connectorsMcp.ts`, contributing tools to every interactive/delegated
+ * Catalog of external MCP connectors, grouped into four `category` buckets for
+ * the panel's filter tabs: `productivity` (Notion, Google Calendar, Gmail,
+ * Google Drive, Apple Calendar, Apple Mail, Slack), `dev` (GitHub, Unreal
+ * Engine, Unity), `database` (PostgreSQL, SQLite), and `image` (Recraft,
+ * Ideogram, Replicate, fal.ai, Local Stable Diffusion). All are **live**: each
+ * is wired to a real MCP server in `src/mcp/connectorsMcp.ts` (image-gen tools
+ * in `src/mcp/imageGenMcp.ts`), contributing tools to every interactive/delegated
  * run once enabled. Most connectors require a vault-attached credential; the
  * Unreal Engine connector is credential-free (SSE to local editor), the
  * Unity connector credential is the path to the mcp-unity server script, the
@@ -24,6 +27,9 @@ const FILE = "connectors.json";
  */
 export type ConnectorScope = "read" | "write";
 
+/** Broad grouping used for panel category filter tabs. */
+export type ConnectorCategory = "productivity" | "dev" | "database" | "image";
+
 export interface ConnectorDef {
   id: string;
   name: string;
@@ -36,21 +42,28 @@ export interface ConnectorDef {
    * ignore the scope toggle (nothing to gate); the panel hides the control.
    */
   hasWrite: boolean;
+  /** Grouping for the panel's category filter tabs. */
+  category: ConnectorCategory;
 }
 
 export const CONNECTORS: ConnectorDef[] = [
-  { id: "notion", name: "Notion", description: "Search, read, and create Notion pages/databases.", credential: "Notion integration token", status: "live", hasWrite: true },
-  { id: "gcal", name: "Google Calendar", description: "List and create calendar events.", credential: "Google OAuth access token", status: "live", hasWrite: true },
-  { id: "gmail", name: "Gmail", description: "List, read, send, draft, label, and delete Gmail messages.", credential: "Google OAuth access token (gmail + gmail.send scope)", status: "live", hasWrite: true },
-  { id: "gdrive", name: "Google Drive", description: "List, read, create, update, move, share, and delete Drive files.", credential: "Google OAuth access token (drive scope)", status: "live", hasWrite: true },
-  { id: "apple-calendar", name: "Apple Calendar", description: "List calendars and events, create, update, and delete events via iCloud CalDAV.", credential: "iCloud email:app-specific-password", status: "live", hasWrite: true },
-  { id: "apple-mail", name: "Apple Mail", description: "List folders, read and search messages, send and delete email via iCloud IMAP/SMTP.", credential: "iCloud email:app-specific-password", status: "live", hasWrite: true },
-  { id: "slack", name: "Slack", description: "List channels, read and search messages; post messages, reply in threads, and upload files via the Slack Web API.", credential: "Slack bot token (xoxb-…)", status: "live", hasWrite: true },
-  { id: "github", name: "GitHub", description: "List repos, issues and PRs, read file contents; create/comment on issues, open PRs, and push files.", credential: "GitHub personal access token (ghp_… / fine-grained)", status: "live", hasWrite: true },
-  { id: "unreal-engine", name: "Unreal Engine", description: "Control a running Unreal Engine 5.8+ editor via the built-in MCP plugin (no credential needed; enable the plugin and toggle this on).", credential: "Editor MCP URL (optional override; defaults to http://127.0.0.1:8000/mcp)", status: "live", hasWrite: true },
-  { id: "unity", name: "Unity", description: "Control a running Unity Editor via the mcp-unity package (CoderGamester). Requires Node.js 18+.", credential: "Absolute path to mcp-unity server script (e.g. /path/to/project/Library/PackageCache/com.gamelovers.mcp-unity@<hash>/Server~/build/index.js)", status: "live", hasWrite: true },
-  { id: "postgres", name: "PostgreSQL", description: "Inspect and query a PostgreSQL database: list tables, describe schemas, run read-only SELECTs (and, with write scope, mutating statements).", credential: "PostgreSQL connection string (postgresql://user:pass@host:5432/db)", status: "live", hasWrite: true },
-  { id: "sqlite", name: "SQLite", description: "Inspect and query a local SQLite database file: list tables, describe schemas, run read-only SELECTs (and, with write scope, mutating statements).", credential: "Absolute path to the SQLite database file (e.g. /path/to/app.db)", status: "live", hasWrite: true },
+  { id: "notion", name: "Notion", description: "Search, read, and create Notion pages/databases.", credential: "Notion integration token", status: "live", hasWrite: true, category: "productivity" },
+  { id: "gcal", name: "Google Calendar", description: "List and create calendar events.", credential: "Google OAuth access token", status: "live", hasWrite: true, category: "productivity" },
+  { id: "gmail", name: "Gmail", description: "List, read, send, draft, label, and delete Gmail messages.", credential: "Google OAuth access token (gmail + gmail.send scope)", status: "live", hasWrite: true, category: "productivity" },
+  { id: "gdrive", name: "Google Drive", description: "List, read, create, update, move, share, and delete Drive files.", credential: "Google OAuth access token (drive scope)", status: "live", hasWrite: true, category: "productivity" },
+  { id: "apple-calendar", name: "Apple Calendar", description: "List calendars and events, create, update, and delete events via iCloud CalDAV.", credential: "iCloud email:app-specific-password", status: "live", hasWrite: true, category: "productivity" },
+  { id: "apple-mail", name: "Apple Mail", description: "List folders, read and search messages, send and delete email via iCloud IMAP/SMTP.", credential: "iCloud email:app-specific-password", status: "live", hasWrite: true, category: "productivity" },
+  { id: "slack", name: "Slack", description: "List channels, read and search messages; post messages, reply in threads, and upload files via the Slack Web API.", credential: "Slack bot token (xoxb-…)", status: "live", hasWrite: true, category: "productivity" },
+  { id: "github", name: "GitHub", description: "List repos, issues and PRs, read file contents; create/comment on issues, open PRs, and push files.", credential: "GitHub personal access token (ghp_… / fine-grained)", status: "live", hasWrite: true, category: "dev" },
+  { id: "unreal-engine", name: "Unreal Engine", description: "Control a running Unreal Engine 5.8+ editor via the built-in MCP plugin (no credential needed; enable the plugin and toggle this on).", credential: "Editor MCP URL (optional override; defaults to http://127.0.0.1:8000/mcp)", status: "live", hasWrite: true, category: "dev" },
+  { id: "unity", name: "Unity", description: "Control a running Unity Editor via the mcp-unity package (CoderGamester). Requires Node.js 18+.", credential: "Absolute path to mcp-unity server script (e.g. /path/to/project/Library/PackageCache/com.gamelovers.mcp-unity@<hash>/Server~/build/index.js)", status: "live", hasWrite: true, category: "dev" },
+  { id: "postgres", name: "PostgreSQL", description: "Inspect and query a PostgreSQL database: list tables, describe schemas, run read-only SELECTs (and, with write scope, mutating statements).", credential: "PostgreSQL connection string (postgresql://user:pass@host:5432/db)", status: "live", hasWrite: true, category: "database" },
+  { id: "sqlite", name: "SQLite", description: "Inspect and query a local SQLite database file: list tables, describe schemas, run read-only SELECTs (and, with write scope, mutating statements).", credential: "Absolute path to the SQLite database file (e.g. /path/to/app.db)", status: "live", hasWrite: true, category: "database" },
+  { id: "recraft", name: "Recraft", description: "Generate images via Recraft: strong at web design assets, icon sets, and isometric/vector illustration.", credential: "Recraft API key", status: "live", hasWrite: false, category: "image" },
+  { id: "ideogram", name: "Ideogram", description: "Generate images via Ideogram: strong at images with correct rendered text (buttons, labels, posters).", credential: "Ideogram API key", status: "live", hasWrite: false, category: "image" },
+  { id: "replicate", name: "Replicate", description: "Generic gateway to hundreds of hosted image models (Flux, SDXL, LoRA fine-tunes, and more) via a model id you supply per generation.", credential: "Replicate API token", status: "live", hasWrite: false, category: "image" },
+  { id: "fal", name: "fal.ai", description: "Fast inference gateway for Flux, SDXL, and other diffusion models via a model id you supply per generation.", credential: "fal.ai API key", status: "live", hasWrite: false, category: "image" },
+  { id: "local_sd", name: "Local Stable Diffusion", description: "Generate images through your own Automatic1111/SD.Next/Forge-compatible server — no API key, no cloud cost.", credential: "Base URL of the local server (e.g. http://127.0.0.1:7860)", status: "live", hasWrite: false, category: "image" },
 ];
 
 interface ConnectorConfig {

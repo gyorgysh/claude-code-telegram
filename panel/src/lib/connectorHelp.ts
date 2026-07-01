@@ -41,6 +41,11 @@ export const CONNECTOR_HELP: Record<string, ConnectorHelpShape> = {
   unity: { steps: 6, readTools: 4, writeTools: 4, tip: true },
   postgres: { steps: 4, readTools: 3, writeTools: 2, tip: true },
   sqlite: { steps: 3, readTools: 3, writeTools: 2, tip: true },
+  recraft: { steps: 3, readTools: 1, writeTools: 0, tip: true },
+  ideogram: { steps: 3, readTools: 1, writeTools: 0, tip: true },
+  replicate: { steps: 3, readTools: 1, writeTools: 0, tip: true },
+  fal: { steps: 3, readTools: 1, writeTools: 0, tip: true },
+  local_sd: { steps: 3, readTools: 1, writeTools: 0, tip: true },
 };
 
 /** Normalise a connector id into the underscore form used in i18n keys. */

@@ -46,6 +46,17 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 
 const get = <T>(path: string) => req<T>("GET", path);
 
+/** Fetch a binary response (e.g. an image) with the same Bearer-header auth as
+ *  `req`/`get`. REST routes only accept the token via the Authorization header
+ *  (unlike the `/ws` handshake, which also allows `?token=`), so binary assets
+ *  must be fetched and turned into an object URL rather than linked directly. */
+async function reqBlob(path: string): Promise<Blob> {
+  const res = await fetch(path, { headers: authHeaders() });
+  if (res.status === 401) throw new AuthError("unauthorized");
+  if (!res.ok) throw new ApiError(res.status, `${path} → ${res.status}`);
+  return res.blob();
+}
+
 /** Validate a token by hitting /api/me; returns true if accepted. */
 export async function checkToken(token: string): Promise<boolean> {
   const res = await fetch("/api/me", { headers: { authorization: `Bearer ${token}` } });
@@ -529,6 +540,8 @@ export type ConnectorScope = "read" | "write";
 
 export type ConnectorTokenStatus = "none" | "ok" | "expiring" | "expired";
 
+export type ConnectorCategory = "productivity" | "dev" | "database" | "image";
+
 export interface Connector {
   id: string;
   name: string;
@@ -536,6 +549,7 @@ export interface Connector {
   credential: string;
   status: "live" | "coming-soon";
   hasWrite: boolean;
+  category: ConnectorCategory;
   secretId?: string;
   enabled: boolean;
   scope: ConnectorScope;
@@ -543,6 +557,28 @@ export interface Connector {
   expiresAt?: number;
   /** Derived credential freshness from `expiresAt`. */
   tokenStatus: ConnectorTokenStatus;
+}
+
+export type ImageProviderId = "recraft" | "ideogram" | "replicate" | "fal" | "local_sd";
+
+export interface GalleryImage {
+  id: string;
+  provider: string;
+  prompt: string;
+  tags: string[];
+  createdAt: number;
+  path: string;
+  width?: number;
+  height?: number;
+  sourceChat?: number;
+}
+
+export interface GalleryFilter {
+  tag?: string;
+  provider?: string;
+  from?: number;
+  to?: number;
+  q?: string;
 }
 
 export type WebhookParamIn = "query" | "header" | "body" | "path";
@@ -1099,6 +1135,31 @@ export const api = {
     id: string,
     c: { secretId?: string; enabled?: boolean; scope?: ConnectorScope; expiresAt?: number | null },
   ) => req<Connector>("PUT", `/api/connectors/${id}`, c),
+
+  gallery: (filter?: GalleryFilter) => {
+    const qs = new URLSearchParams();
+    if (filter?.tag) qs.set("tag", filter.tag);
+    if (filter?.provider) qs.set("provider", filter.provider);
+    if (filter?.from) qs.set("from", String(filter.from));
+    if (filter?.to) qs.set("to", String(filter.to));
+    if (filter?.q) qs.set("q", filter.q);
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return get<{ images: GalleryImage[]; tags: string[] }>(`/api/gallery${suffix}`);
+  },
+  galleryImage: (id: string) => get<GalleryImage>(`/api/gallery/${id}`),
+  galleryImageBlob: (id: string) => reqBlob(`/api/gallery/${id}/file`),
+  saveGalleryImageTags: (id: string, tags: string[]) => req<GalleryImage>("PUT", `/api/gallery/${id}`, { tags }),
+  deleteGalleryImage: (id: string) => req<{ ok: boolean }>("DELETE", `/api/gallery/${id}`),
+  generateGalleryImage: (body: {
+    providerId: ImageProviderId;
+    prompt: string;
+    size?: string;
+    style?: string;
+    model?: string;
+    negativePrompt?: string;
+    steps?: number;
+    extraInput?: Record<string, unknown>;
+  }) => req<GalleryImage>("POST", "/api/gallery/generate", body),
 
   webhookTools: () => get<{ tools: WebhookTool[] }>("/api/webhook-tools"),
   createWebhookTool: (t: WebhookToolInput) => req<WebhookTool>("POST", "/api/webhook-tools", t),

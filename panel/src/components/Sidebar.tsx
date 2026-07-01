@@ -34,6 +34,7 @@ import {
   Contrast,
   Power,
   Menu,
+  Images,
   type LucideIcon,
 } from "lucide-react";
 
@@ -55,6 +56,7 @@ export type Tab =
   | "vault"
   | "backup"
   | "connectors"
+  | "gallery"
   | "updates"
   | "logs"
   | "sessions"
@@ -136,6 +138,7 @@ export const NAV: Group[] = [
       { id: "memory", labelKey: "nav_memory", icon: Brain, hintKey: "nav_memory_hint" },
       { id: "vault", labelKey: "nav_vault", icon: KeyRound, hintKey: "nav_vault_hint" },
       { id: "connectors", labelKey: "nav_connectors", icon: Plug, hintKey: "nav_connectors_hint" },
+      { id: "gallery", labelKey: "nav_gallery", icon: Images, hintKey: "nav_gallery_hint" },
       { id: "prompt", labelKey: "nav_prompt", icon: MessageSquareQuote, hintKey: "nav_prompt_hint" },
       { id: "templates", labelKey: "nav_templates", icon: FileText, hintKey: "nav_templates_hint" },
       { id: "skills", labelKey: "nav_skills", icon: Sparkles, hintKey: "nav_skills_hint" },

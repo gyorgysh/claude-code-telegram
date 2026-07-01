@@ -1,12 +1,19 @@
 import { useEffect, useState } from "react";
 import { HelpCircle, X } from "lucide-react";
-import { api, AuthError, type Connector, type ConnectorScope, type SecretView } from "../api.ts";
+import {
+  api,
+  AuthError,
+  type Connector,
+  type ConnectorCategory,
+  type ConnectorScope,
+  type SecretView,
+} from "../api.ts";
 import { Badge, Button, Card, Empty, Label, Modal, Select } from "./ui.tsx";
 import { ConnectorsArt } from "./onboarding.tsx";
 import { useI18n } from "../lib/useI18n.ts";
 import type { TranslationKey } from "../i18n/en.ts";
 import { errorMessage } from "../lib/errorMessage.ts";
-import { getConnectorIcon } from "../lib/connectorIcons.ts";
+import { getConnectorIcon, getConnectorFallbackIcon } from "../lib/connectorIcons.ts";
 import { CONNECTOR_HELP, connectorHelpKeys } from "../lib/connectorHelp.ts";
 import type { Tab } from "./Sidebar.tsx";
 
@@ -33,6 +40,7 @@ function ConnectorInfoModal({
   const keys = shape ? connectorHelpKeys(connector.id, shape) : null;
   const tk = (key: string) => t(key as TranslationKey);
   const icon = getConnectorIcon(connector.id);
+  const fallbackIcon = !icon ? getConnectorFallbackIcon(connector.id) : undefined;
 
   return (
     <Modal onClose={onClose} size="md" labelledBy="conn-info-title" closeButton={false}>
@@ -52,6 +60,14 @@ function ConnectorInfoModal({
               >
                 <path d={icon.path} />
               </svg>
+            )}
+            {fallbackIcon && (
+              <fallbackIcon.Icon
+                className="h-6 w-6 shrink-0"
+                style={{ color: `#${fallbackIcon.hex}` }}
+                strokeWidth={1.75}
+                aria-hidden="true"
+              />
             )}
             <h2 id="conn-info-title" className="text-base font-semibold text-fg">
               {connector.name}
@@ -172,12 +188,23 @@ function ConnectorInfoModal({
 
 // ─── Main view ──────────────────────────────────────────────────────────────
 
+type CategoryFilter = "all" | ConnectorCategory;
+
+const CATEGORY_TABS: { id: CategoryFilter; labelKey: TranslationKey }[] = [
+  { id: "all", labelKey: "connectors_category_all" },
+  { id: "productivity", labelKey: "connectors_category_productivity" },
+  { id: "dev", labelKey: "connectors_category_dev" },
+  { id: "database", labelKey: "connectors_category_database" },
+  { id: "image", labelKey: "connectors_category_image" },
+];
+
 export function ConnectorsView({ onAuthError, onGoto }: { onAuthError: () => void; onGoto?: (t: Tab) => void }) {
   const { t } = useI18n();
   const [connectors, setConnectors] = useState<Connector[]>([]);
   const [secrets, setSecrets] = useState<SecretView[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [infoConnector, setInfoConnector] = useState<Connector | null>(null);
+  const [category, setCategory] = useState<CategoryFilter>("all");
 
   const load = () =>
     Promise.all([api.connectors(), api.vault()])
@@ -215,6 +242,8 @@ export function ConnectorsView({ onAuthError, onGoto }: { onAuthError: () => voi
 
   const noneConfigured = connectors.length > 0 && !connectors.some((c) => c.secretId);
   const noSecrets = secrets.length === 0;
+  const filteredConnectors =
+    category === "all" ? connectors : connectors.filter((c) => c.category === category);
 
   return (
     <Card title={t("connectors_title")}>
@@ -226,6 +255,20 @@ export function ConnectorsView({ onAuthError, onGoto }: { onAuthError: () => voi
         </Empty>
       ) : (
         <>
+          <div className="mb-3 flex flex-wrap items-center gap-1 rounded-lg border border-line bg-surface p-1">
+            {CATEGORY_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setCategory(tab.id)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  category === tab.id ? "bg-accent text-accent-fg" : "text-fg-muted hover:bg-surface-2"
+                }`}
+              >
+                {t(tab.labelKey)}
+              </button>
+            ))}
+          </div>
           {noneConfigured && (
             <div className="mb-3 flex flex-col gap-2 rounded-lg border border-accent/30 bg-accent/5 p-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -240,9 +283,10 @@ export function ConnectorsView({ onAuthError, onGoto }: { onAuthError: () => voi
             </div>
           )}
           <div className="grid gap-3 sm:grid-cols-2">
-          {connectors.map((c) => {
+          {filteredConnectors.map((c) => {
             const live = c.status === "live";
             const icon = getConnectorIcon(c.id);
+            const fallbackIcon = !icon ? getConnectorFallbackIcon(c.id) : undefined;
             const shape = CONNECTOR_HELP[c.id];
             const helpKeys = shape ? connectorHelpKeys(c.id, shape) : null;
             const description = helpKeys ? t(helpKeys.summary as TranslationKey) : c.description;
@@ -278,6 +322,14 @@ export function ConnectorsView({ onAuthError, onGoto }: { onAuthError: () => voi
                       >
                         <path d={icon.path} />
                       </svg>
+                    )}
+                    {fallbackIcon && (
+                      <fallbackIcon.Icon
+                        className="h-5 w-5 shrink-0"
+                        style={{ color: `#${fallbackIcon.hex}` }}
+                        strokeWidth={1.75}
+                        aria-hidden="true"
+                      />
                     )}
                     <span className="font-medium text-fg">{c.name}</span>
                   </div>

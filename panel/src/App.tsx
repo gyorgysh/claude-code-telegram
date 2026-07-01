@@ -32,6 +32,7 @@ const MemoryView     = lazy(() => import("./components/Memory.tsx").then((m) => 
 const VaultView      = lazy(() => import("./components/Vault.tsx").then((m) => ({ default: m.VaultView })));
 const BackupView     = lazy(() => import("./components/Backup.tsx").then((m) => ({ default: m.BackupView })));
 const ConnectorsView = lazy(() => import("./components/Connectors.tsx").then((m) => ({ default: m.ConnectorsView })));
+const GalleryView    = lazy(() => import("./components/Gallery.tsx").then((m) => ({ default: m.GalleryView })));
 const WebhookToolsView = lazy(() => import("./components/WebhookTools.tsx").then((m) => ({ default: m.WebhookToolsView })));
 const UpdatesView    = lazy(() => import("./components/Updates.tsx").then((m) => ({ default: m.UpdatesView })));
 const TasksView      = lazy(() => import("./components/Tasks.tsx").then((m) => ({ default: m.TasksView })));
@@ -386,6 +387,7 @@ export function App() {
                 <WebhookToolsView onAuthError={onAuthError} />
               </div>
             )}
+            {tab === "gallery" && <GalleryView onAuthError={onAuthError} onGoto={select} />}
             {tab === "prompt" && <PromptView_ onAuthError={onAuthError} />}
             {tab === "logs" && <LogsView onAuthError={onAuthError} />}
             {tab === "sessions" && <SessionsView onAuthError={onAuthError} />}

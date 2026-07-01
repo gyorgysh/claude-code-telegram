@@ -9,7 +9,9 @@ import {
   siUnrealengine,
   siPostgresql,
   siSqlite,
+  siReplicate,
 } from "simple-icons";
+import { PenTool, Type, Zap, HardDrive, type LucideIcon } from "lucide-react";
 
 export type ConnectorIcon = {
   path: string;
@@ -58,10 +60,30 @@ const ICON_MAP: Record<string, ConnectorIcon> = {
   "unreal-engine": siUnrealengine,
   postgres: siPostgresql,
   sqlite: siSqlite,
+  replicate: siReplicate,
 };
 
 export function getConnectorIcon(id: string): ConnectorIcon | undefined {
   const icon = ICON_MAP[id];
   if (!icon) return undefined;
   return MONOCHROME_IDS.has(id) ? { ...icon, monochrome: true } : icon;
+}
+
+/**
+ * Fallback glyph for connectors with no real brand mark in `simple-icons`
+ * (small/newer AI image APIs). Not a logo — a themed Lucide icon + accent
+ * colour that hints at what the service does, so the card still reads at a
+ * glance instead of showing blank space.
+ */
+export type ConnectorFallbackIcon = { Icon: LucideIcon; hex: string };
+
+const FALLBACK_ICON_MAP: Record<string, ConnectorFallbackIcon> = {
+  recraft: { Icon: PenTool, hex: "6E56CF" }, // vector/icon illustration
+  ideogram: { Icon: Type, hex: "1A1A1A" }, // rendered-text-in-image
+  fal: { Icon: Zap, hex: "7C3AED" }, // fast inference
+  local_sd: { Icon: HardDrive, hex: "10B981" }, // self-hosted/local server
+};
+
+export function getConnectorFallbackIcon(id: string): ConnectorFallbackIcon | undefined {
+  return FALLBACK_ICON_MAP[id];
 }

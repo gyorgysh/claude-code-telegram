@@ -76,6 +76,8 @@ import { suggestions } from "../core/suggestions.js";
 import { getStatus } from "../core/status.js";
 import { heartbeat } from "../core/heartbeat.js";
 import { listConnectors, setConnector } from "../core/connectors.js";
+import { listImages, getImage, updateImage, deleteImage, listTags, type GalleryImage } from "../core/gallery.js";
+import { generateImage, ImageGenError, type ImageProviderId } from "../core/imageGen.js";
 import { listWebhookTools, createWebhookTool, updateWebhookTool, deleteWebhookTool } from "../core/webhookTools.js";
 import { getBranding, setBranding, brandingUnlocked, effectiveBranding } from "../core/branding.js";
 import { searchConversations } from "../core/conversationSearch.js";
@@ -1251,6 +1253,82 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
     });
     if (!updated) return reply.code(404).send({ error: "not found" });
     return updated;
+  });
+
+  // --- image gallery (generated images from Recraft/Ideogram etc.) ---
+  app.get("/api/gallery", async (req) => {
+    const q = req.query as { tag?: string; provider?: string; from?: string; to?: string; q?: string };
+    const images = await listImages({
+      tag: q.tag || undefined,
+      provider: q.provider || undefined,
+      from: q.from ? Number(q.from) : undefined,
+      to: q.to ? Number(q.to) : undefined,
+      q: q.q || undefined,
+    });
+    return { images, tags: listTags() };
+  });
+  app.get("/api/gallery/:id", async (req, reply) => {
+    const image = getImage((req.params as { id: string }).id);
+    if (!image) return reply.code(404).send({ error: "not found" });
+    return image;
+  });
+  app.get("/api/gallery/:id/file", async (req, reply) => {
+    const image = getImage((req.params as { id: string }).id);
+    if (!image) return reply.code(404).send({ error: "not found" });
+    const full = dataPath(image.path);
+    if (!existsSync(full)) return reply.code(404).send({ error: "file missing" });
+    const ext = image.path.split(".").pop()?.toLowerCase();
+    const contentType =
+      ext === "svg" ? "image/svg+xml" : ext === "webp" ? "image/webp" : ext === "jpg" || ext === "jpeg" ? "image/jpeg" : "image/png";
+    reply.header("content-type", contentType).header("cache-control", "private, max-age=31536000, immutable");
+    return reply.send(readFileSync(full));
+  });
+  app.put("/api/gallery/:id", async (req, reply) => {
+    const body = (req.body ?? {}) as { tags?: string[] };
+    const updated = updateImage((req.params as { id: string }).id, { tags: body.tags });
+    if (!updated) return reply.code(404).send({ error: "not found" });
+    return updated;
+  });
+  app.delete("/api/gallery/:id", async (req, reply) => {
+    const ok = deleteImage((req.params as { id: string }).id);
+    if (!ok) return reply.code(404).send({ error: "not found" });
+    return { ok: true };
+  });
+  app.post("/api/gallery/generate", async (req, reply) => {
+    const body = (req.body ?? {}) as {
+      providerId?: string;
+      prompt?: string;
+      size?: string;
+      style?: string;
+      model?: string;
+      negativePrompt?: string;
+      steps?: number;
+      extraInput?: Record<string, unknown>;
+    };
+    const validProviders = ["recraft", "ideogram", "replicate", "fal", "local_sd"];
+    if (!body.providerId || !validProviders.includes(body.providerId)) {
+      return reply.code(400).send({ error: `providerId must be one of: ${validProviders.join(", ")}` });
+    }
+    if (!body.prompt || !body.prompt.trim()) return reply.code(400).send({ error: "prompt is required" });
+    if ((body.providerId === "replicate" || body.providerId === "fal") && !body.model?.trim()) {
+      return reply.code(400).send({ error: "model is required for the Replicate/fal.ai connectors" });
+    }
+    try {
+      const image: GalleryImage = await generateImage({
+        providerId: body.providerId as ImageProviderId,
+        prompt: body.prompt,
+        size: body.size,
+        style: body.style,
+        model: body.model,
+        negativePrompt: body.negativePrompt,
+        steps: body.steps,
+        extraInput: body.extraInput,
+      });
+      return image;
+    } catch (err) {
+      const msg = err instanceof ImageGenError ? err.message : err instanceof Error ? err.message : "generation failed";
+      return reply.code(400).send({ error: msg });
+    }
   });
 
   // --- generic webhook tools (custom HTTP endpoints exposed as MCP tools) ---

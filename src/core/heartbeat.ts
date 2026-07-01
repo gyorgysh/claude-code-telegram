@@ -157,6 +157,17 @@ export interface HeartbeatDeps {
  * autonomous agent turn so the agent can investigate and act, messaging only
  * when noteworthy. Cadence is `config.intervalMs`, polled on a 60s tick.
  */
+/** Fill in fields missing from a config persisted before they were introduced. */
+function normalizeConfig(c: HeartbeatConfig): HeartbeatConfig {
+  if (!Array.isArray(c.mutedSignals)) c.mutedSignals = [];
+  if (typeof c.spendAlertEnabled !== "boolean") c.spendAlertEnabled = false;
+  if (typeof c.calendarEnabled !== "boolean") c.calendarEnabled = false;
+  if (typeof c.calendarWindowMin !== "number") c.calendarWindowMin = 720;
+  if (typeof c.calendarLeadMin !== "number") c.calendarLeadMin = 30;
+  if (!c.anomaly || typeof c.anomaly !== "object") c.anomaly = { ...ANOMALY_DEFAULTS };
+  return c;
+}
+
 export class HeartbeatManager {
   private state = loadJson<HeartbeatFile>(FILE, {
     version: 1,
@@ -167,6 +178,10 @@ export class HeartbeatManager {
   private timer?: ReturnType<typeof setInterval>;
   private deps?: HeartbeatDeps;
   private running = false;
+
+  constructor() {
+    normalizeConfig(this.state.config);
+  }
 
   start(deps: HeartbeatDeps): void {
     this.deps = deps;
@@ -217,12 +232,7 @@ export class HeartbeatManager {
       if (typeof p.workEnd === "string" && isHHMM(p.workEnd)) a.workEnd = p.workEnd;
       c.anomaly = a;
     }
-    // Ensure fields exist on legacy configs loaded from disk.
-    if (!Array.isArray(c.mutedSignals)) c.mutedSignals = [];
-    if (typeof c.calendarEnabled !== "boolean") c.calendarEnabled = false;
-    if (typeof c.calendarWindowMin !== "number") c.calendarWindowMin = 720;
-    if (typeof c.calendarLeadMin !== "number") c.calendarLeadMin = 30;
-    if (!c.anomaly || typeof c.anomaly !== "object") c.anomaly = { ...ANOMALY_DEFAULTS };
+    normalizeConfig(c);
     this.persist();
     audit("heartbeat.config", { mode: c.mode, intervalMs: c.intervalMs });
     return c;

@@ -243,6 +243,10 @@ export function ConnectorsView({ onAuthError, onGoto }: { onAuthError: () => voi
           {connectors.map((c) => {
             const live = c.status === "live";
             const icon = getConnectorIcon(c.id);
+            const shape = CONNECTOR_HELP[c.id];
+            const helpKeys = shape ? connectorHelpKeys(c.id, shape) : null;
+            const description = helpKeys ? t(helpKeys.summary as TranslationKey) : c.description;
+            const credential = helpKeys ? t(helpKeys.credential as TranslationKey) : c.credential;
             return (
               <div key={c.id} className="rounded-lg border border-line p-3">
                 <div className="flex items-center justify-between">
@@ -299,10 +303,10 @@ export function ConnectorsView({ onAuthError, onGoto }: { onAuthError: () => voi
                     </button>
                   </div>
                 </div>
-                <p className="mt-1 text-sm text-fg-dim">{c.description}</p>
+                <p className="mt-1 text-sm text-fg-dim">{description}</p>
                 <p className="mt-2 text-xs text-fg-faint">
                   {t("connectors_needs").replace("{credential}", "")}
-                  <span className="font-medium text-fg-dim">{c.credential}</span>
+                  <span className="font-medium text-fg-dim">{credential}</span>
                 </p>
                 <div className="mt-2">
                   <Label>{t("connectors_credential")}</Label>

@@ -18,6 +18,7 @@ import { leadBots } from "./telegram/leadBotManager.js";
 import { log } from "./logger.js";
 import { registerIdleGate, whenSettled } from "./core/activity.js";
 import { acquireInstanceLock } from "./core/singleton.js";
+import { withRetry, isTelegramAuthError } from "./core/retry.js";
 
 async function main(): Promise<void> {
   // Ensure the working directory exists. ~/MyHQ-Workspace is the unified
@@ -93,7 +94,24 @@ async function main(): Promise<void> {
     });
   }
 
-  const me = await bot.telegram.getMe();
+  // Telegram's API occasionally blips (ECONNRESET etc.) right at boot; retry
+  // transient failures a few times before treating startup as fatal. A bad
+  // token (401/404) fails fast instead of wasting ~30s retrying.
+  const retryTelegram = <T>(fn: () => Promise<T>, label: string) =>
+    withRetry(fn, {
+      attempts: 4,
+      baseMs: 1000,
+      maxMs: 10_000,
+      shouldRetry: (err) => !isTelegramAuthError(err),
+      onRetry: (err, attempt, delayMs) =>
+        log.warn(`${label} failed, retrying`, {
+          attempt,
+          delayMs,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+    });
+
+  const me = await retryTelegram(() => bot.telegram.getMe(), "getMe");
   // Record the main bot's @username so the panel Crew view can show Atlas's
   // t.me link (mirrors how Lead bots capture theirs via setBotUsername).
   if (me.username) setMainBotUsername(me.username);
@@ -106,7 +124,7 @@ async function main(): Promise<void> {
     auth: config.ANTHROPIC_API_KEY ? "api-key" : "cli-login",
   });
 
-  await bot.telegram.setMyCommands([
+  await retryTelegram(() => bot.telegram.setMyCommands([
     { command: "new", description: "Start a fresh conversation" },
     { command: "cd", description: "Change working directory" },
     { command: "pwd", description: "Show current directory" },
@@ -127,7 +145,7 @@ async function main(): Promise<void> {
     { command: "council", description: "Put an idea to a Lead council vote" },
     { command: "restore", description: "Restore code to latest GitHub commit (keeps data)" },
     { command: "help", description: "Show help" },
-  ]);
+  ]), "setMyCommands");
 
   const shutdown = (signal: "SIGINT" | "SIGTERM") => {
     log.info(`${signal} — shutting down`);

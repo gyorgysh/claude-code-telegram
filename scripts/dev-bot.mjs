@@ -24,25 +24,46 @@ const BUSY_RECHECK_MS = 500;
 let child = null;
 let restartTimer = null;
 let busyTimer = null;
+let crashTimer = null;
 let shuttingDown = false;
 // Prevents multiple concurrent applyRestart calls from spawning more than one
 // child. Set to true as soon as a restart is in flight; cleared when the new
 // child is actually running (or on error).
 let restarting = false;
 
+// Crash-loop backoff: consecutive unexpected exits ramp the delay up
+// (2s, 5s, 10s, 20s, capped at 30s) so a persistently broken start doesn't
+// spin-loop, but a single transient blip (e.g. a Telegram network error)
+// recovers fast. Resets once the process survives a full window.
+const CRASH_BACKOFF_MS = [2000, 5000, 10000, 20000, 30000];
+const CRASH_HEALTHY_AFTER_MS = 30_000;
+let consecutiveCrashes = 0;
+let startedAt = 0;
+
 function startChild() {
   restarting = false;
+  startedAt = Date.now();
   child = spawn("tsx", [ENTRY], {
     stdio: "inherit",
     env: { ...process.env, CCT_DEV_GUARD: "1" },
   });
   child.on("exit", (code, signal) => {
     child = null;
-    // If we didn't ask for the restart (it crashed / was stopped externally),
-    // exit too so the failure is visible rather than silently hanging.
-    if (!shuttingDown && signal !== "SIGTERM") {
-      process.exit(code ?? 0);
-    }
+    if (shuttingDown || signal === "SIGTERM") return;
+    // Unexpected exit (crash). Auto-restart with backoff instead of killing
+    // the whole dev session, so a transient startup error doesn't require
+    // manually re-running `npm run dev`.
+    if (Date.now() - startedAt >= CRASH_HEALTHY_AFTER_MS) consecutiveCrashes = 0;
+    const delayMs = CRASH_BACKOFF_MS[Math.min(consecutiveCrashes, CRASH_BACKOFF_MS.length - 1)];
+    consecutiveCrashes += 1;
+    console.log(
+      `[dev] bot exited unexpectedly (code ${code ?? "?"}) — restarting in ${delayMs / 1000}s`,
+    );
+    if (crashTimer) clearTimeout(crashTimer);
+    crashTimer = setTimeout(() => {
+      crashTimer = null;
+      applyRestart();
+    }, delayMs);
   });
 }
 
@@ -91,6 +112,7 @@ function shutdown() {
   restarting = false;
   if (restartTimer) clearTimeout(restartTimer);
   if (busyTimer) clearTimeout(busyTimer);
+  if (crashTimer) clearTimeout(crashTimer);
   if (child) child.kill("SIGTERM");
   process.exit(0);
 }

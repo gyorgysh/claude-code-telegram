@@ -1,10 +1,20 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { api, AuthError, openHealthSocket, type LogEntry, type LogUsageSummary } from "../api.ts";
+import {
+  api,
+  AuthError,
+  openHealthSocket,
+  type LogEntry,
+  type LogUsageSummary,
+  type AuditEvent,
+  type AuditFacets,
+  type Anomaly,
+} from "../api.ts";
 import { Button, Empty, Select } from "./ui.tsx";
 import { LogsArt } from "./onboarding.tsx";
 import { useI18n } from "../lib/useI18n.ts";
 import { errorMessage } from "../lib/errorMessage.ts";
 import { toolIcon, toolIconColor, lifecycleIcon, lifecycleIconColor } from "../lib/toolIcons.tsx";
+import { ShieldAlert, ScrollText } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 type Level = LogEntry["level"];
@@ -28,8 +38,15 @@ const MAX = 2000;
 // Sentinel date value for the "search every retained file (72h)" mode.
 const ALL_FILES = "__all__";
 
-type Tab = "activity" | "logs" | "analytics";
+type Tab = "activity" | "logs" | "analytics" | "audit";
+type AuditSubTab = "log" | "anomalies";
 type TFn = (key: import("../i18n/en.ts").TranslationKey) => string;
+
+/** The resource (segment before the first dot) of an audit action verb. */
+function resourceOf(action: string): string {
+  const dot = action.indexOf(".");
+  return dot === -1 ? action : action.slice(0, dot);
+}
 
 export function LogsView({ onAuthError }: { onAuthError: () => void }) {
   const { t } = useI18n();
@@ -52,9 +69,20 @@ export function LogsView({ onAuthError }: { onAuthError: () => void }) {
   // True while a debounced cross-file/single-file search is in flight.
   const [searching, setSearching] = useState(false);
 
+  // Audit sub-view state (folded in from the standalone Audit tab).
+  const [auditSubTab, setAuditSubTab] = useState<AuditSubTab>("log");
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [auditFacets, setAuditFacets] = useState<AuditFacets>({ actors: [], resources: [], actions: [] });
+  const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
+  const [auditSearch, setAuditSearch] = useState("");
+  const [auditActor, setAuditActor] = useState("");
+  const [auditResource, setAuditResource] = useState("");
+  const [auditAction, setAuditAction] = useState("");
+
   const isAllFiles = selectedDate === ALL_FILES;
   const retryRef = useRef<ReturnType<typeof setTimeout>>();
   const searchRef = useRef<ReturnType<typeof setTimeout>>();
+  const auditSearchRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Fetch available dates for the dropdown.
   useEffect(() => {
@@ -165,6 +193,59 @@ export function LogsView({ onAuthError }: { onAuthError: () => void }) {
     if (tab === "analytics" && !insights && !loadingInsights) loadInsights();
   }, [tab, insights, loadingInsights, loadInsights]);
 
+  // Load the audit facet lists (actors/resources/actions) once, the first
+  // time the Audit tab is opened.
+  useEffect(() => {
+    if (tab !== "audit" || auditFacets.actors.length + auditFacets.resources.length + auditFacets.actions.length > 0)
+      return;
+    api
+      .auditFacets()
+      .then(setAuditFacets)
+      .catch((e) => (e instanceof AuthError ? onAuthError() : undefined));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  // Load anomalies once, the first time the Anomalies sub-tab is opened.
+  useEffect(() => {
+    if (tab !== "audit" || auditSubTab !== "anomalies" || anomalies.length > 0) return;
+    api
+      .auditAnomalies()
+      .then((r) => setAnomalies(r.anomalies))
+      .catch((e) => (e instanceof AuthError ? onAuthError() : setError(errorMessage(e, t))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, auditSubTab]);
+
+  const runAuditSearch = useCallback(() => {
+    api
+      .searchAudit({
+        q: auditSearch.trim() || undefined,
+        actor: auditActor || undefined,
+        resource: auditResource || undefined,
+        action: auditAction || undefined,
+        limit: 1000,
+      })
+      .then((r) => setAuditEvents(r.events))
+      .catch((e) => (e instanceof AuthError ? onAuthError() : setError(errorMessage(e, t))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auditSearch, auditActor, auditResource, auditAction, onAuthError]);
+
+  // Debounced re-query whenever the Audit tab is active and a filter changes.
+  useEffect(() => {
+    if (tab !== "audit") return;
+    clearTimeout(auditSearchRef.current);
+    auditSearchRef.current = setTimeout(runAuditSearch, 250);
+    return () => clearTimeout(auditSearchRef.current);
+  }, [tab, runAuditSearch]);
+
+  const clearAuditFilters = () => {
+    setAuditSearch("");
+    setAuditActor("");
+    setAuditResource("");
+    setAuditAction("");
+  };
+
+  const hasAuditFilters = Boolean(auditSearch || auditActor || auditResource || auditAction);
+
   const toggle = (l: Level) =>
     setHidden((h) => {
       const n = new Set(h);
@@ -188,6 +269,16 @@ export function LogsView({ onAuthError }: { onAuthError: () => void }) {
         </TabButton>
         <TabButton active={tab === "analytics"} onClick={() => setTab("analytics")}>
           {t("logs_tab_analytics")}
+        </TabButton>
+        <TabButton active={tab === "audit"} onClick={() => setTab("audit")}>
+          <span className="flex items-center gap-1.5">
+            {t("logs_tab_audit")}
+            {anomalies.length > 0 && (
+              <span className="rounded-full bg-critical/15 px-1.5 text-xs font-semibold text-critical-fg">
+                {anomalies.length}
+              </span>
+            )}
+          </span>
         </TabButton>
       </div>
 
@@ -224,6 +315,47 @@ export function LogsView({ onAuthError }: { onAuthError: () => void }) {
           onRefresh={loadInsights}
           t={t}
         />
+      )}
+
+      {tab === "audit" && (
+        <>
+          {/* Audit sub-tabs: Log / Anomalies */}
+          <div className="flex items-center gap-1 self-start rounded-lg border border-line bg-surface p-1">
+            <TabButton active={auditSubTab === "log"} onClick={() => setAuditSubTab("log")}>
+              {t("audit_tab_log")}
+            </TabButton>
+            <TabButton active={auditSubTab === "anomalies"} onClick={() => setAuditSubTab("anomalies")}>
+              <span className="flex items-center gap-1.5">
+                {t("audit_tab_anomalies")}
+                {anomalies.length > 0 && (
+                  <span className="rounded-full bg-critical/15 px-1.5 text-xs font-semibold text-critical-fg">
+                    {anomalies.length}
+                  </span>
+                )}
+              </span>
+            </TabButton>
+          </div>
+
+          {auditSubTab === "log" ? (
+            <AuditLogTab
+              events={auditEvents}
+              facets={auditFacets}
+              search={auditSearch}
+              setSearch={setAuditSearch}
+              actor={auditActor}
+              setActor={setAuditActor}
+              resource={auditResource}
+              setResource={setAuditResource}
+              action={auditAction}
+              setAction={setAuditAction}
+              hasFilters={hasAuditFilters}
+              clearFilters={clearAuditFilters}
+              t={t}
+            />
+          ) : (
+            <AuditAnomaliesTab anomalies={anomalies} t={t} />
+          )}
+        </>
       )}
     </div>
   );
@@ -994,5 +1126,211 @@ function AnalyticsTab({
         </div>
       )}
     </div>
+  );
+}
+
+function AuditLogTab({
+  events,
+  facets,
+  search,
+  setSearch,
+  actor,
+  setActor,
+  resource,
+  setResource,
+  action,
+  setAction,
+  hasFilters,
+  clearFilters,
+  t,
+}: {
+  events: AuditEvent[];
+  facets: AuditFacets;
+  search: string;
+  setSearch: (v: string) => void;
+  actor: string;
+  setActor: (v: string) => void;
+  resource: string;
+  setResource: (v: string) => void;
+  action: string;
+  setAction: (v: string) => void;
+  hasFilters: boolean;
+  clearFilters: () => void;
+  t: TFn;
+}) {
+  return (
+    <>
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t("audit_search_placeholder")}
+          className="min-w-0 flex-1 rounded border border-line bg-input px-2 py-1 text-xs text-fg placeholder:text-fg-faint"
+        />
+        <Select
+          value={actor}
+          onChange={(e) => setActor(e.target.value)}
+          aria-label={t("audit_filter_actor")}
+          wrapperClassName="w-auto"
+          className="h-auto min-w-[7rem] py-1 text-xs"
+        >
+          <option value="">{`${t("audit_filter_actor")}: ${t("audit_filter_all")}`}</option>
+          {facets.actors.map((a) => (
+            <option key={a} value={a}>
+              {a}
+            </option>
+          ))}
+        </Select>
+        <Select
+          value={resource}
+          onChange={(e) => setResource(e.target.value)}
+          aria-label={t("audit_filter_resource")}
+          wrapperClassName="w-auto"
+          className="h-auto min-w-[7rem] py-1 text-xs"
+        >
+          <option value="">{`${t("audit_filter_resource")}: ${t("audit_filter_all")}`}</option>
+          {facets.resources.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </Select>
+        <Select
+          value={action}
+          onChange={(e) => setAction(e.target.value)}
+          aria-label={t("audit_filter_action")}
+          wrapperClassName="w-auto"
+          className="h-auto min-w-[8rem] py-1 text-xs"
+        >
+          <option value="">{`${t("audit_filter_action")}: ${t("audit_filter_all")}`}</option>
+          {facets.actions.map((a) => (
+            <option key={a} value={a}>
+              {a}
+            </option>
+          ))}
+        </Select>
+        {hasFilters && (
+          <button
+            onClick={clearFilters}
+            className="rounded border border-line px-2 py-1 text-xs text-fg-muted hover:bg-surface-2"
+          >
+            {t("audit_clear_filters")}
+          </button>
+        )}
+        <span className="tabular ml-auto text-xs text-fg-faint">
+          {t("audit_count").replace("{n}", String(events.length))}
+        </span>
+        <button
+          type="button"
+          disabled={events.length === 0}
+          onClick={() => {
+            const ndjson = events.map((e) => JSON.stringify(e)).join("\n");
+            downloadText(ndjson, `audit-${stamp()}.ndjson`, "application/x-ndjson");
+          }}
+          className="rounded border border-line px-2 py-1 text-xs text-fg-muted hover:bg-surface-2 disabled:opacity-40"
+        >
+          {t("audit_download")}
+        </button>
+      </div>
+
+      {/* Event list */}
+      <div className="flex-1 overflow-auto rounded-xl border border-line bg-surface">
+        {events.length === 0 ? (
+          <Empty icon={<ScrollText className="h-9 w-9 opacity-60" />} title={t("audit_empty")}>
+            {t("audit_empty_desc")}
+          </Empty>
+        ) : (
+          <div className="flex flex-col divide-y divide-line/40">
+            {events.map((e, i) => (
+              <div
+                key={`${e.ts}-${i}`}
+                className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-1.5 hover:bg-surface-2/40"
+              >
+                <span className="mono-xs tabular shrink-0 text-fg-faint">
+                  {new Date(e.ts).toLocaleString()}
+                </span>
+                <span className="shrink-0 rounded-full border border-line bg-surface-2 px-1.5 py-0.5 text-xs font-medium text-fg-muted">
+                  {e.source}
+                </span>
+                <span className="mono-xs shrink-0 text-accent">
+                  <span className="text-fg-faint">{resourceOf(e.action)}.</span>
+                  {e.action.slice(resourceOf(e.action).length + 1)}
+                </span>
+                {e.detail && Object.keys(e.detail).length > 0 && (
+                  <span className="mono-xs min-w-0 flex-1 truncate text-fg-dim" title={JSON.stringify(e.detail)}>
+                    {JSON.stringify(e.detail)}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+const AUDIT_KIND_KEY: Record<Anomaly["kind"], import("../i18n/en.ts").TranslationKey> = {
+  "delete-burst": "audit_anomaly_kind_delete_burst",
+  "vault-offhours": "audit_anomaly_kind_vault_offhours",
+  "new-grant": "audit_anomaly_kind_new_grant",
+};
+
+function AuditAnomaliesTab({ anomalies, t }: { anomalies: Anomaly[]; t: TFn }) {
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-fg-faint">{t("audit_anomaly_hint")}</span>
+      </div>
+      <div className="flex-1 overflow-auto rounded-xl border border-line bg-surface p-3">
+        {anomalies.length === 0 ? (
+          <Empty
+            icon={<ShieldAlert className="h-9 w-9 opacity-60" />}
+            title={t("audit_anomaly_none")}
+          >
+            {t("audit_anomaly_none_desc")}
+          </Empty>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {anomalies.map((a) => {
+              const critical = a.severity === "critical";
+              return (
+                <div
+                  key={a.key}
+                  className={`flex items-start gap-3 rounded-lg border p-3 ${
+                    critical
+                      ? "border-critical/30 bg-critical-subtle"
+                      : "border-warn/30 bg-warn-subtle"
+                  }`}
+                >
+                  <ShieldAlert
+                    className={`mt-0.5 h-5 w-5 shrink-0 ${critical ? "text-critical-fg" : "text-warn-fg"}`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          critical
+                            ? "bg-critical/15 text-critical-fg"
+                            : "bg-warn/15 text-warn-fg"
+                        }`}
+                      >
+                        {t(AUDIT_KIND_KEY[a.kind])}
+                      </span>
+                      <span className="mono-xs tabular text-fg-faint">
+                        {new Date(a.ts).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-fg">{a.text}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </>
   );
 }

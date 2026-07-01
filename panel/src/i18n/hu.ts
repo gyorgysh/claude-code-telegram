@@ -605,6 +605,8 @@ export const hu: Translations = {
 
   // Csevegés
   chat_title: "Csevegés",
+  chat_diff_show: "diff mutatása",
+  chat_diff_hide: "diff elrejtése",
   chat_shared_badge: "Telegrammal megosztva",
   chat_change_cwd: "Munkakönyvtár módosítása",
   chat_clear: "Törlés",

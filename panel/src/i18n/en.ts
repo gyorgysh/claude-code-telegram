@@ -602,6 +602,8 @@ export const en = {
 
   // Chat
   chat_title: "Chat",
+  chat_diff_show: "show diff",
+  chat_diff_hide: "hide diff",
   chat_shared_badge: "shared with Telegram",
   chat_change_cwd: "Change working directory",
   chat_clear: "Clear",

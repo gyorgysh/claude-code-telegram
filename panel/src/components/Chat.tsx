@@ -810,7 +810,7 @@ function ChatPane({
                       onClick={() => setDiffOpen((o) => !o)}
                       className="text-xs text-accent hover:underline"
                     >
-                      {diffOpen ? "hide diff" : "show diff"}
+                      {diffOpen ? t("chat_diff_hide") : t("chat_diff_show")}
                     </button>
                   )}
                 </div>

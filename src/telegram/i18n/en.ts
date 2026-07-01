@@ -44,6 +44,7 @@ export const en = {
     "🔑 Authentication failed. Check ANTHROPIC_API_KEY or re-run the `claude` CLI login, then restart.",
   bot_stopping: "⏹ Stopping…",
   bot_nothing_running: "Nothing is running.",
+  bot_session_expired_retrying: "⚠️ Previous session no longer exists — starting a fresh conversation now.",
 
   // --- permissions.ts: approvals ---
   appr_header_one: "🔐 <b>Permission needed</b>",

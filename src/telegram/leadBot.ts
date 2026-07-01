@@ -2,7 +2,7 @@ import { Telegraf } from "telegraf";
 import type { Telegram } from "telegraf";
 import type { Worker } from "../core/workers.js";
 import { workers } from "../core/workers.js";
-import { runTurn } from "../claude/runner.js";
+import { runTurn, isStaleSession } from "../claude/runner.js";
 import type { ImageInput } from "../claude/runner.js";
 import { memoryMcp } from "../mcp/memory.js";
 import { createTasksMcp } from "../mcp/tasks.js";
@@ -96,6 +96,7 @@ export class LeadBot {
       if (hasPendingAsk(chatId) || asks.hasPending(chatId)) return;
       void tg.sendChatAction(chatId, "typing").catch(() => {});
     }, 4000);
+    let retrying = false;
     try {
       const protocol = getLeadProtocol(lead.name, lead.portfolio);
       const append = [protocol, lead.systemPrompt].filter(Boolean).join("\n\n");
@@ -179,12 +180,26 @@ export class LeadBot {
         }
       }
     } catch (err) {
+      if (isStaleSession(err) && s.sessionId) {
+        // The stored session ID is no longer valid in the CLI. Drop it, inform
+        // the user, and kick off a fresh turn automatically.
+        log.warn("LeadBot stale session — clearing and retrying fresh", { leadId: lead.id, chatId });
+        s.sessionId = undefined;
+        sessions.save();
+        retrying = true;
+        await tg.sendMessage(chatId, t("bot_session_expired_retrying", langForChat(chatId))).catch(() => {});
+        // Re-enter runPrompt without a resume token (fresh start).
+        void this.runPrompt(chatId, tg, sessions, prompt, images);
+        return;
+      }
       log.error("LeadBot turn error", { leadId: lead.id, error: String(err) });
       await tg.sendMessage(chatId, t("bot_action_failed", langForChat(chatId), { detail: err instanceof Error ? err.message : String(err) })).catch(() => {});
     } finally {
-      clearInterval(typing);
-      s.busy = false;
-      s.abort = undefined;
+      if (!retrying) {
+        clearInterval(typing);
+        s.busy = false;
+        s.abort = undefined;
+      }
     }
   }
 

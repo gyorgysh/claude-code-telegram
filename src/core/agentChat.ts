@@ -22,7 +22,7 @@ import { config } from "../config.js";
 import { loadJson, saveJson } from "./jsonStore.js";
 import { PLANNING_PREAMBLE, isPlanningPrompt, stripPlanningPreamble } from "./planningMode.js";
 
-import { runTurn } from "../claude/runner.js";
+import { runTurn, isStaleSession } from "../claude/runner.js";
 import { agentUsage } from "./agentUsage.js";
 import { workers, type Worker } from "./workers.js";
 import { resolveAvatarSlug } from "./avatar.js";
@@ -176,6 +176,7 @@ export class AgentChatManager {
     const agentId = w.id;
     s.busy = true;
     this.broadcast({ type: "agentchat", event: "busy", agentId, busy: true });
+    let retrying = false;
 
     const planning = isPlanningPrompt(text);
     const display = planning ? stripPlanningPreamble(text) : text;
@@ -275,6 +276,17 @@ export class AgentChatManager {
       this.broadcast({ type: "agentchat", event: "end", agentId, message: assistantMsg });
     } catch (err) {
       const stopped = abort.signal.aborted;
+      if (!stopped && isStaleSession(err) && s.resume) {
+        // The stored resume token is no longer valid. Drop it and silently retry
+        // the same prompt as a fresh session so the user doesn't have to resend.
+        log.warn("Agent chat stale session — clearing resume token and retrying fresh", { agentId });
+        s.resume = undefined;
+        this.saveResume();
+        retrying = true;
+        this.broadcast({ type: "agentchat", event: "notice", agentId, text: "Session expired — starting fresh conversation." });
+        void this.runTurnFor(w, s, text);
+        return;
+      }
       const assistantMsg: AgentChatMessage = {
         id: streamId,
         role: "assistant",
@@ -286,9 +298,11 @@ export class AgentChatManager {
       this.broadcast({ type: "agentchat", event: "end", agentId, message: assistantMsg });
       if (!stopped) log.error("Agent chat turn failed", { agentId, error: assistantMsg.text.slice(0, 300) });
     } finally {
-      s.busy = false;
-      s.abort = undefined;
-      this.broadcast({ type: "agentchat", event: "busy", agentId, busy: false });
+      if (!retrying) {
+        s.busy = false;
+        s.abort = undefined;
+        this.broadcast({ type: "agentchat", event: "busy", agentId, busy: false });
+      }
     }
   }
 }

@@ -3,7 +3,7 @@ import { message } from "telegraf/filters";
 import { config, allowedUserIds } from "./config.js";
 import { authMiddleware } from "./auth.js";
 import { registerCommands } from "./commands.js";
-import { AUTO_ALLOWED_TOOLS, runTurn, type PermissionResult } from "./claude/runner.js";
+import { AUTO_ALLOWED_TOOLS, runTurn, isStaleSession, type PermissionResult } from "./claude/runner.js";
 import { createTelegramMcp } from "./mcp/sendFile.js";
 import { memoryMcp } from "./mcp/memory.js";
 import { createTasksMcp } from "./mcp/tasks.js";
@@ -489,6 +489,7 @@ async function handleUserPrompt(
 
   session.busy = true;
   session.abort = new AbortController();
+  let retryStale = false;
 
   const ack = await tg.sendMessage(chatId, t("bot_working", langForChat(chatId))).catch(() => undefined);
   let placeholderId: number | undefined;
@@ -875,6 +876,14 @@ async function handleUserPrompt(
     } else if (stopped) {
       log.info("Turn stopped by user", { chatId, ms: Date.now() - startedAt });
       await tg.sendMessage(chatId, t("bot_stopped", langForChat(chatId))).catch(() => {});
+    } else if (!autonomous && isStaleSession(err) && session.sessionId) {
+      // The stored session ID is stale (CLI no longer has that conversation).
+      // Clear it and re-run the same prompt as a fresh turn automatically.
+      log.warn("Main chat stale session — clearing and retrying fresh", { chatId });
+      session.sessionId = undefined;
+      sessions.save();
+      retryStale = true;
+      await tg.sendMessage(chatId, t("bot_session_expired_retrying", langForChat(chatId))).catch(() => {});
     } else {
       log.error("Turn errored", { chatId, ms: Date.now() - startedAt, error: errText(err) });
       await tg.sendMessage(chatId, friendlyError(err, langForChat(chatId))).catch(() => {});
@@ -903,6 +912,10 @@ async function handleUserPrompt(
     session.busy = false;
     session.abort = undefined;
     if (mirror) chatBridge.mirrorBusy(false);
+    if (retryStale) {
+      // Kick off a fresh turn now that busy is cleared and sessionId is gone.
+      void handleUserPrompt(permissions, loops, asks, chatId, prompt, tg, opts);
+    }
   }
 }
 

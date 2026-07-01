@@ -36,6 +36,7 @@ export const hu: Record<keyof typeof en, string> = {
     "🔑 A hitelesítés sikertelen. Ellenőrizd az ANTHROPIC_API_KEY értékét, vagy futtasd újra a `claude` CLI bejelentkezést, majd indítsd újra.",
   bot_stopping: "⏹ Leállítás…",
   bot_nothing_running: "Semmi nem fut.",
+  bot_session_expired_retrying: "⚠️ Az előző munkamenet már nem létezik — friss beszélgetést indítok.",
 
   // --- permissions.ts: approvals ---
   appr_header_one: "🔐 <b>Engedély szükséges</b>",

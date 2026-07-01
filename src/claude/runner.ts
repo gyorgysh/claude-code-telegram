@@ -297,6 +297,15 @@ export async function runTurn(opts: RunOptions): Promise<RunResult> {
 }
 
 /**
+ * Returns true when the error is a Claude CLI "No conversation found" rejection,
+ * meaning the stored session ID is stale and the caller should drop it and retry.
+ */
+export function isStaleSession(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /no conversation found/i.test(msg);
+}
+
+/**
  * Build a one-shot streaming-input prompt that carries images as inline content
  * blocks so the model sees them directly (rather than via a Read round-trip).
  * `session_id` is a placeholder here — actual resume is driven by the `resume`

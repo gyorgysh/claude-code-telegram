@@ -407,6 +407,14 @@ export class LeadBot {
     return !this.stopped;
   }
 
+  /** True while a turn is mid-flight for this Lead. The watchdog checks this
+   *  before dropping a dead entry, so a died poll doesn't get replaced by a
+   *  fresh instance (and a fresh SessionManager over the same state file)
+   *  while the old instance is still mid-write to session state. */
+  hasActiveTurn(): boolean {
+    return this.sessions.all().some((s) => s.busy);
+  }
+
   stop(signal: "SIGINT" | "SIGTERM"): void {
     this.stopped = true;
     this.bot.stop(signal);

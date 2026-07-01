@@ -66,6 +66,7 @@ import {
 import { taskDelegator, sanitizeCardField } from "../core/taskRunner.js";
 import { TokenBucketLimiter } from "../core/rateLimiter.js";
 import { workers, describeWorkerSchedule, type Worker } from "../core/workers.js";
+import { leadBots } from "../telegram/leadBotManager.js";
 import { readRunLog } from "../core/runLog.js";
 import { chat } from "../core/chat.js";
 import { agentChat } from "../core/agentChat.js";
@@ -1543,6 +1544,17 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
   app.post("/api/workers/:id/stop", async (req) => ({
     ok: workers.stopRun((req.params as { id: string }).id),
   }));
+  // Force a Lead's Telegram bot instance to restart — the watchdog already
+  // self-heals a dead poll within 60s, but this gives a way to force it right
+  // now (e.g. while diagnosing a report of a Lead not responding).
+  app.post("/api/workers/:id/restart-bot", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const worker = workers.list().find((w) => w.id === id);
+    if (!worker || worker.role !== "lead" || !worker.telegramToken || !worker.enabled) {
+      return reply.code(404).send({ error: "not a live Lead bot" });
+    }
+    return { ok: await leadBots.restartOne(id) };
+  });
   app.get("/api/workers/:id/runs", async (req) => ({
     runs: workers.history((req.params as { id: string }).id),
   }));

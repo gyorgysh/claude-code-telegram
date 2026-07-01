@@ -22,7 +22,12 @@ const WATCHDOG_MS = 60_000;
  * (its "already running" check just sees the stale map entry and skips it),
  * so a periodic watchdog re-runs `sync()`, and `sync()` itself now treats a
  * `!bot.isRunning()` entry the same as a missing one: drop it and let the
- * normal "start bots for desired Leads" pass bring it back.
+ * normal "start bots for desired Leads" pass bring it back. A dead entry with
+ * a turn still mid-flight (its poll died, but a message handler that was
+ * already running keeps going independently of polling) is left alone for
+ * one more tick rather than dropped immediately — replacing it would spin up
+ * a second SessionManager over the same state file while the old one is
+ * still mid-write.
  */
 export class LeadBotManager {
   private bots = new Map<string, { bot: LeadBot; tokenRef: string }>();
@@ -46,6 +51,10 @@ export class LeadBotManager {
           log.error("Lead bot stop failed", { leadId: id, error: String(err) });
         }
         this.bots.delete(id);
+      } else if (dead && entry.bot.hasActiveTurn()) {
+        log.warn("Lead bot polling died but a turn is still in flight — deferring restart", {
+          leadId: id,
+        });
       } else if (dead) {
         log.warn("Lead bot polling died — restarting", { leadId: id });
         this.bots.delete(id);
@@ -64,6 +73,23 @@ export class LeadBotManager {
         log.error("Lead bot start failed", { leadId: lead.id, error: String(err) });
       }
     }
+  }
+
+  /** Force one Lead's bot to restart right now (panel "restart" action) — stops
+   *  the current instance if any, unconditionally, then re-syncs to bring a
+   *  fresh one up. Returns false if the Lead isn't a live-listening Lead. */
+  async restartOne(leadId: string): Promise<boolean> {
+    const entry = this.bots.get(leadId);
+    if (entry) {
+      try {
+        entry.bot.stop("SIGTERM");
+      } catch (err) {
+        log.error("Lead bot stop failed", { leadId, error: String(err) });
+      }
+      this.bots.delete(leadId);
+    }
+    await this.sync();
+    return this.bots.has(leadId);
   }
 
   /** Begin the periodic dead-Lead watchdog (idempotent). */

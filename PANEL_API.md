@@ -73,6 +73,11 @@ curl -X POST -H "$AUTH" -H "Content-Type: application/json" $BASE/api/workers/<i
 # Stop a running worker
 curl -X POST -H "$AUTH" $BASE/api/workers/<id>/stop
 
+# Force a Lead's Telegram bot to restart right now (404 if not a live Lead:
+# needs role "lead" + telegramToken + enabled). The watchdog already self-heals
+# a dead poll within 60s on its own; this is for forcing it while diagnosing.
+curl -X POST -H "$AUTH" $BASE/api/workers/<id>/restart-bot
+
 # Delete a worker
 curl -X DELETE -H "$AUTH" $BASE/api/workers/<id>
 

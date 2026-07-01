@@ -32,7 +32,7 @@ import { listSessions, listSchedules, usageSummary } from "../core/snapshot.js";
 import { agentUsage } from "../core/agentUsage.js";
 import { isValidWebhookUrl } from "../core/webhook.js";
 import { getPrompt, restorePlaybook, savePlaybook } from "../core/playbook.js";
-import { listSkills, createSkill, updateSkill, deleteSkill } from "../core/skills.js";
+import { listSkills, createSkill, updateSkill, deleteSkill, exportSkill, importSkill } from "../core/skills.js";
 import {
   listTemplates,
   createTemplate,
@@ -1065,6 +1065,16 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
     if (!deleteSkill((req.params as { id: string }).id))
       return reply.code(404).send({ error: "not found" });
     return { ok: true };
+  });
+  app.get("/api/skills/:id/export", async (req, reply) => {
+    const bundle = exportSkill((req.params as { id: string }).id);
+    if (!bundle) return reply.code(404).send({ error: "not found" });
+    return bundle;
+  });
+  app.post("/api/skills/import", async (req, reply) => {
+    const res = importSkill(req.body);
+    if ("error" in res) return reply.code(400).send({ error: res.error });
+    return res.skill;
   });
 
   // --- prompt templates (reusable turn prompts with {{variable}} slots) ---

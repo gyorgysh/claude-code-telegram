@@ -108,3 +108,65 @@ export function deleteSkill(id: string): boolean {
   audit("skill.delete", { id });
   return true;
 }
+
+/** Marker identifying a file as a MyHQ skill bundle. */
+const BUNDLE_KIND = "myhq.skill";
+
+/** A portable, shareable skill package. Carries only the authoring fields
+ *  (name/description/prompt/cwd); runtime bookkeeping (id, counts, timestamps)
+ *  is regenerated on import. */
+export interface SkillBundle {
+  kind: typeof BUNDLE_KIND;
+  version: 1;
+  exportedAt: number;
+  skill: SkillInput;
+}
+
+/** Package a skill as a shareable bundle. Returns undefined if id is unknown. */
+export function exportSkill(id: string): SkillBundle | undefined {
+  const skill = getSkill(id);
+  if (!skill) return undefined;
+  audit("skill.export", { id, name: skill.name });
+  return {
+    kind: BUNDLE_KIND,
+    version: 1,
+    exportedAt: Date.now(),
+    skill: {
+      name: skill.name,
+      description: skill.description,
+      prompt: skill.prompt,
+      cwd: skill.cwd,
+    },
+  };
+}
+
+/** Validate an untrusted bundle and install it as a new skill. Returns an error
+ *  string instead of throwing on malformed input. Names that collide with an
+ *  existing skill get a " (imported)" suffix so nothing is silently overwritten. */
+export function importSkill(bundle: unknown): { skill: Skill } | { error: string } {
+  if (!bundle || typeof bundle !== "object") return { error: "Not a valid skill bundle." };
+  const b = bundle as Partial<SkillBundle>;
+  if (b.kind !== BUNDLE_KIND) return { error: "File is not a MyHQ skill bundle." };
+  const src = b.skill;
+  if (!src || typeof src !== "object") return { error: "Bundle has no skill payload." };
+  const name = typeof src.name === "string" ? src.name.trim() : "";
+  const prompt = typeof src.prompt === "string" ? src.prompt : "";
+  if (!name || !prompt.trim()) return { error: "Bundle is missing a name or prompt." };
+
+  const taken = new Set(load().map((s) => s.name.toLowerCase()));
+  let finalName = name;
+  if (taken.has(finalName.toLowerCase())) {
+    finalName = `${name} (imported)`;
+    let n = 2;
+    while (taken.has(finalName.toLowerCase())) finalName = `${name} (imported ${n++})`;
+  }
+
+  const skill = createSkill({
+    name: finalName,
+    description: typeof src.description === "string" ? src.description : "",
+    prompt,
+    cwd: typeof src.cwd === "string" ? src.cwd : undefined,
+  });
+  audit("skill.import", { id: skill.id, name: skill.name });
+  return { skill };
+}

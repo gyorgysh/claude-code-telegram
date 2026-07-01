@@ -156,6 +156,10 @@ export const hu: Translations = {
   // Készségek nézet
   skills_title: "Készségek",
   skills_new: "+ Új készség",
+  skills_export: "Exportálás",
+  skills_import: "Importálás",
+  skills_import_bad_file: "Ez a fájl nem érvényes készségcsomag.",
+  skills_import_done: "\u201e{name}\u201d importálva.",
   skills_name: "Név",
   skills_desc: "Leírás",
   skills_body: "Utasítás szövege",

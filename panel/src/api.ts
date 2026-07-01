@@ -353,6 +353,14 @@ export interface Skill {
   updatedAt: number;
 }
 
+/** A portable skill package produced by the export endpoint. */
+export interface SkillBundle {
+  kind: "myhq.skill";
+  version: 1;
+  exportedAt: number;
+  skill: { name: string; description?: string; prompt: string; cwd?: string };
+}
+
 export interface PromptTemplate {
   id: string;
   name: string;
@@ -1076,6 +1084,8 @@ export const api = {
   createSkill: (s: Partial<Skill>) => req<Skill>("POST", "/api/skills", s),
   updateSkill: (id: string, s: Partial<Skill>) => req<Skill>("PUT", `/api/skills/${id}`, s),
   deleteSkill: (id: string) => req<{ ok: boolean }>("DELETE", `/api/skills/${id}`),
+  exportSkill: (id: string) => get<SkillBundle>(`/api/skills/${id}/export`),
+  importSkill: (bundle: unknown) => req<Skill>("POST", "/api/skills/import", bundle),
 
   templates: () => get<{ templates: PromptTemplate[] }>("/api/templates"),
   createTemplate: (t: { name: string; description?: string; body: string }) =>

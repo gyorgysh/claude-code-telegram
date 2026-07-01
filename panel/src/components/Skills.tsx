@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, AuthError, type ClaudeRoot, type Skill } from "../api.ts";
 import { useI18n } from "../lib/useI18n.ts";
 import { errorMessage } from "../lib/errorMessage.ts";
@@ -22,6 +22,7 @@ function PromptLibrary({ onAuthError }: { onAuthError: () => void }) {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [form, setForm] = useState<typeof blank>(blank);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const load = () =>
     api
@@ -81,14 +82,65 @@ function PromptLibrary({ onAuthError }: { onAuthError: () => void }) {
       });
   };
 
+  // Download a skill as a shareable .json bundle.
+  const exportSkill = async (s: Skill) => {
+    try {
+      const bundle = await api.exportSkill(s.id);
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const slug = s.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "skill";
+      a.download = `skill-${slug}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      if (e instanceof AuthError) return onAuthError();
+      toast.error(errorMessage(e, t));
+    }
+  };
+
+  // Read a chosen bundle file, install it, and splice the new skill into view.
+  const importSkill = async (file: File) => {
+    let bundle: unknown;
+    try {
+      bundle = JSON.parse(await file.text());
+    } catch {
+      toast.error(t("skills_import_bad_file"));
+      return;
+    }
+    try {
+      const saved = await api.importSkill(bundle);
+      setSkills((prev) => [...prev, saved]);
+      toast.success(t("skills_import_done").replace("{name}", saved.name));
+    } catch (e) {
+      if (e instanceof AuthError) return onAuthError();
+      toast.error(errorMessage(e, t));
+    }
+  };
+
   return (
     <Card
       title={t("skills_library")}
       right={
         editing ? null : (
-          <Button variant="primary" onClick={startNew}>
-            {t("skills_new")}
-          </Button>
+          <div className="flex gap-1.5">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void importSkill(file);
+                e.target.value = "";
+              }}
+            />
+            <Button onClick={() => importInputRef.current?.click()}>{t("skills_import")}</Button>
+            <Button variant="primary" onClick={startNew}>
+              {t("skills_new")}
+            </Button>
+          </div>
         )
       }
     >
@@ -165,6 +217,7 @@ function PromptLibrary({ onAuthError }: { onAuthError: () => void }) {
                 <p className="mt-1 line-clamp-2 font-mono text-xs text-fg-faint">{s.prompt}</p>
               </div>
               <div className="flex shrink-0 gap-1.5">
+                <Button onClick={() => exportSkill(s)}>{t("skills_export")}</Button>
                 <Button onClick={() => startEdit(s)}>{t("edit")}</Button>
                 <Button variant="danger" onClick={() => del(s.id)}>
                   {t("delete")}

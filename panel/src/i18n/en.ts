@@ -154,6 +154,10 @@ export const en = {
   // Skills view
   skills_title: "Skills",
   skills_new: "+ New skill",
+  skills_export: "Export",
+  skills_import: "Import",
+  skills_import_bad_file: "That file is not a valid skill bundle.",
+  skills_import_done: "Imported \u201c{name}\u201d.",
   skills_name: "Name",
   skills_desc: "Description",
   skills_body: "Prompt body",

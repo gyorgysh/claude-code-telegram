@@ -301,6 +301,13 @@ curl -X PUT -H "$AUTH" -H "Content-Type: application/json" $BASE/api/skills/<id>
 
 # Delete
 curl -X DELETE -H "$AUTH" $BASE/api/skills/<id>
+
+# Export a skill as a shareable JSON bundle (kind: "myhq.skill")
+curl -H "$AUTH" $BASE/api/skills/<id>/export > skill-deploy-site.json
+
+# Import a bundle (installs a new skill; name collisions get an " (imported)" suffix)
+curl -X POST -H "$AUTH" -H "Content-Type: application/json" $BASE/api/skills/import \
+  -d @skill-deploy-site.json
 ```
 
 ### Main agent (Atlas)

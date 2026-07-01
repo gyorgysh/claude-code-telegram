@@ -722,6 +722,7 @@ export function TasksView({ onAuthError }: { onAuthError: () => void }) {
                       selectMode={selectMode}
                       selected={selected.has(tk.id)}
                       onToggleSelect={() => toggleSelect(tk.id)}
+                      leads={leads}
                     />
                   ))
                 )}
@@ -870,6 +871,7 @@ function Card({
   selectMode,
   selected,
   onToggleSelect,
+  leads,
 }: {
   task: Task;
   allTasks: Task[];
@@ -888,6 +890,8 @@ function Card({
   selectMode: boolean;
   selected: boolean;
   onToggleSelect: () => void;
+  /** Enabled Leads, for a per-card "delegate as …" picker (empty = auto-route). */
+  leads: Worker[];
 }) {
   const { t } = useI18n();
   const [editing, setEditing] = useState(false);
@@ -905,6 +909,8 @@ function Card({
   const [fullLogOpen, setFullLogOpen] = useState(false);
   const [liveLogOpen, setLiveLogOpen] = useState(false);
   const liveLogRef = useRef<HTMLDivElement>(null);
+  // Which Lead to delegate this card to; empty = auto-route (existing behaviour).
+  const [delegateLeadId, setDelegateLeadId] = useState("");
 
   const running = live?.status === "running" || task.delegate?.status === "running";
   const dstatus = live?.status ?? task.delegate?.status;
@@ -936,7 +942,7 @@ function Card({
     onChange();
   };
   const delegate = async () => {
-    await api.delegateTask(task.id).catch(() => {});
+    await api.delegateTask(task.id, delegateLeadId || undefined).catch(() => {});
     // Optimistic move to "doing" if we're in backlog — the WS event will confirm.
     if (task.column === "backlog") onChange();
   };
@@ -1286,12 +1292,30 @@ function Card({
       )}
 
       {!selectMode && !running && !isDone && !dstatus && (
-        <button
-          onClick={delegate}
-          className="mt-2 flex min-h-[44px] w-full items-center justify-center rounded border border-line text-xs text-fg-dim hover:bg-surface-2 hover:text-fg"
-        >
-          {t("tasks_delegate")}
-        </button>
+        <div className="mt-2 flex gap-1.5">
+          <button
+            onClick={delegate}
+            className="flex min-h-[44px] flex-1 items-center justify-center rounded border border-line text-xs text-fg-dim hover:bg-surface-2 hover:text-fg"
+          >
+            {t("tasks_delegate")}
+          </button>
+          {leads.length > 0 && (
+            <select
+              value={delegateLeadId}
+              onChange={(e) => setDelegateLeadId(e.target.value)}
+              title={t("tasks_delegate_as")}
+              aria-label={t("tasks_delegate_as")}
+              className="min-h-[44px] shrink-0 rounded border border-line bg-surface px-1.5 text-xs text-fg-dim"
+            >
+              <option value="">{t("tasks_bulk_delegate_auto")}</option>
+              {leads.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
       )}
       </div>
     </div>

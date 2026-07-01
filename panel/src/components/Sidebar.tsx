@@ -491,7 +491,7 @@ export function Sidebar({
         title={it.hintKey ? `${t(it.labelKey)} — ${t(it.hintKey)}` : t(it.labelKey)}
         aria-label={it.hintKey ? `${t(it.labelKey)}: ${t(it.hintKey)}` : t(it.labelKey)}
         aria-current={active ? "page" : undefined}
-        className={`flex w-full items-center gap-2 rounded-lg border-l-2 px-2.5 py-1.5 text-xs transition-colors 2xl:gap-2.5 2xl:py-2 2xl:text-sm ${
+        className={`flex w-full items-center gap-2 rounded-lg border-l-2 px-2.5 py-1.5 text-xs transition-colors ${
           active
             ? "border-accent bg-accent/10 text-accent"
             : "border-transparent text-fg-dim hover:bg-surface-2 hover:text-fg"
@@ -516,7 +516,7 @@ export function Sidebar({
   return (
     <div className="flex h-full flex-col bg-surface">
       {/* Wordmark */}
-      <div className="flex h-12 items-center gap-2 border-b border-line px-4 2xl:h-14">
+      <div className="flex h-12 items-center gap-2 border-b border-line px-4">
         {logoUrl ? (
           <span className="flex items-center gap-2">
             <img src={logoUrl} alt={brandName} className="h-6 w-6 rounded object-contain" />
@@ -535,11 +535,11 @@ export function Sidebar({
           headings. On the narrow tablet icon rail (md, not expanded) only
           icons render; labels are hidden via labelCls. Mobile uses the
           bottom nav + More drawer instead. */}
-      <nav className="flex-1 overflow-y-auto px-2 py-2 2xl:py-3">
+      <nav className="flex-1 overflow-y-auto px-2 py-2">
         {NAV.map((group, gi) => (
-          <div key={group.headingKey} className={gi > 0 ? "mt-2.5 2xl:mt-4" : ""}>
+          <div key={group.headingKey} className={gi > 0 ? "mt-2.5" : ""}>
             <div
-              className={`mono-xs mb-0.5 px-2.5 font-medium uppercase tracking-widest text-fg-faint 2xl:mb-1 ${labelCls}`}
+              className={`mono-xs mb-0.5 px-2.5 font-medium uppercase tracking-widest text-fg-faint ${labelCls}`}
             >
               {t(group.headingKey)}
             </div>
@@ -549,7 +549,7 @@ export function Sidebar({
       </nav>
 
       {/* Footer controls */}
-      <div className="border-t border-line p-1.5 space-y-0.5 2xl:p-2">
+      <div className="border-t border-line p-1.5 space-y-0.5">
         {/* Utility / meta links (Status, Updates, Backup, Remote, Feedback):
             demoted out of the main nav into a compact icon row so the
             high-traffic groups above stay short. Labels appear inline only when
@@ -594,7 +594,7 @@ export function Sidebar({
               onClick={onToggleTheme}
               title={t("theme_toggle")}
               aria-label={t("theme_toggle")}
-              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-fg-dim transition-colors hover:bg-surface-2 hover:text-fg 2xl:gap-2.5 2xl:py-2 2xl:text-sm"
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-fg-dim transition-colors hover:bg-surface-2 hover:text-fg"
             >
               <span className="flex h-5 w-5 shrink-0 items-center justify-center leading-none">
                 <ThemeIcon className="h-[18px] w-[18px]" strokeWidth={1.75} />
@@ -616,7 +616,7 @@ export function Sidebar({
           title={t("nav_settings")}
           aria-label={t("nav_settings")}
           aria-current={tab === "settings" || isSettingsChild(tab) ? "page" : undefined}
-          className={`flex w-full items-center gap-2 rounded-lg border-l-2 px-2.5 py-1.5 text-xs transition-colors 2xl:gap-2.5 2xl:py-2 2xl:text-sm ${
+          className={`flex w-full items-center gap-2 rounded-lg border-l-2 px-2.5 py-1.5 text-xs transition-colors ${
             tab === "settings" || isSettingsChild(tab)
               ? "border-accent bg-accent/10 text-accent"
               : "border-transparent text-fg-dim hover:bg-surface-2 hover:text-fg"

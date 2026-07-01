@@ -812,6 +812,7 @@ export const hu: Translations = {
   tasks_queue_cleared: "{n} várakozó kártya törölve ✓",
   tasks_running_for: "fut már {t}",
   tasks_delegate: "Delegálás ügynöknek",
+  tasks_delegate_as: "Delegálás egy adott vezetőnek (üres = automatikus)",
   tasks_waiting_prereq: "⏳ előfeltételekre vár",
   tasks_retry: "Újra",
   tasks_retry_resume: "Folytatás újra",

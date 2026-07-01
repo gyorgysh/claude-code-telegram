@@ -808,6 +808,7 @@ export const en = {
   tasks_queue_cleared: "Cleared {n} queued cards ✓",
   tasks_running_for: "running for {t}",
   tasks_delegate: "Delegate to agent",
+  tasks_delegate_as: "Delegate to a specific Lead (blank = auto-route)",
   tasks_waiting_prereq: "⏳ waiting on prerequisites",
   tasks_retry: "Retry",
   tasks_retry_resume: "Resume & retry",

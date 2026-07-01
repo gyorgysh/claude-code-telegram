@@ -232,7 +232,7 @@ export function App() {
   return (
     <div className="flex min-h-full">
       {/* Desktop / tablet sidebar — icon rail on md, full on lg. */}
-      <aside className="sticky top-0 hidden h-dvh w-16 shrink-0 border-r border-line md:block lg:w-60 xl:w-72">
+      <aside className="sticky top-0 hidden h-dvh w-16 shrink-0 border-r border-line md:block lg:w-60 xl:w-72 2xl:w-80">
         <Sidebar
           tab={tab}
           onSelect={select}

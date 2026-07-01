@@ -44,6 +44,14 @@ const WRITE_TOOLS = new Set<string>([
   "github_comment_issue",
   "github_create_pr",
   "github_put_file",
+  // Jira
+  "jira_create_issue",
+  "jira_transition_issue",
+  "jira_comment_issue",
+  // Linear
+  "linear_create_issue",
+  "linear_update_issue_state",
+  "linear_comment_issue",
   // PostgreSQL
   "postgres_execute",
   // SQLite
@@ -1767,6 +1775,427 @@ function githubMcp(token: string, scope: ConnectorScope) {
 }
 
 // ---------------------------------------------------------------------------
+// Jira Cloud (REST API v3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a Jira credential of the form `email:api-token@site.atlassian.net`
+ * into the site base URL and a Basic-auth header value. The token itself may
+ * contain neither `@` nor `:` in practice (Atlassian tokens are opaque URL-safe
+ * strings), so we split on the *last* `@` for the host and the *first* `:` for
+ * the email/token boundary.
+ */
+function parseJiraCredential(
+  cred: string,
+): { base: string; auth: string } | { error: string } {
+  const at = cred.lastIndexOf("@");
+  if (at === -1) return { error: "Jira credential must look like email:api-token@your-site.atlassian.net" };
+  const userPart = cred.slice(0, at);
+  let host = cred.slice(at + 1).trim();
+  const colon = userPart.indexOf(":");
+  if (colon === -1) return { error: "Jira credential is missing the ':' between email and API token." };
+  const email = userPart.slice(0, colon).trim();
+  const token = userPart.slice(colon + 1).trim();
+  if (!email || !token || !host) return { error: "Jira credential is incomplete (need email, token, and site host)." };
+  host = host.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  const auth = "Basic " + Buffer.from(`${email}:${token}`).toString("base64");
+  return { base: `https://${host}`, auth };
+}
+
+interface JiraIssue {
+  key?: string;
+  fields?: {
+    summary?: string;
+    status?: { name?: string };
+    assignee?: { displayName?: string } | null;
+    issuetype?: { name?: string };
+    priority?: { name?: string };
+    description?: unknown;
+  };
+}
+
+/** Flatten Atlassian Document Format (ADF) into plain text, best-effort. */
+function adfToText(node: unknown): string {
+  if (!node || typeof node !== "object") return "";
+  const n = node as { type?: string; text?: string; content?: unknown[] };
+  if (n.type === "text" && typeof n.text === "string") return n.text;
+  if (Array.isArray(n.content)) {
+    const sep = n.type === "paragraph" || n.type === "heading" ? "\n" : "";
+    return n.content.map(adfToText).join("") + sep;
+  }
+  return "";
+}
+
+/** Wrap plain text as a minimal ADF doc for issue bodies / comments. */
+function textToAdf(s: string) {
+  return {
+    type: "doc",
+    version: 1,
+    content: [{ type: "paragraph", content: [{ type: "text", text: s }] }],
+  };
+}
+
+function jiraMcp(credential: string, scope: ConnectorScope) {
+  const parsed = parseJiraCredential(credential);
+  // If the credential is malformed, every tool returns the parse error rather
+  // than throwing at build time (keeps the connector list resilient).
+  const ready = "base" in parsed ? parsed : undefined;
+  const credError = "error" in parsed ? parsed.error : undefined;
+  const headers: Record<string, string> = ready
+    ? { Authorization: ready.auth, Accept: "application/json", "Content-Type": "application/json" }
+    : {};
+  const api = (path: string) => `${ready?.base ?? ""}/rest/api/3${path}`;
+
+  return createSdkMcpServer({
+    name: "jira",
+    version: "1.0.0",
+    tools: scopeTools([
+      tool(
+        "jira_list_projects",
+        "List Jira projects visible to the account. Returns project keys and names.",
+        { limit: z.number().int().min(1).max(100).optional().describe("Max projects (default 50).") },
+        async (a) => {
+          if (credError) return text(credError);
+          const params = new URLSearchParams({ maxResults: String(a.limit ?? 50) });
+          const res = await fetch(api(`/project/search?${params}`), { headers });
+          if (!res.ok) return text(await asError(res));
+          const data = (await res.json()) as { values?: Array<{ key?: string; name?: string }> };
+          const lines = (data.values ?? []).map((p) => `- ${p.key} · ${p.name ?? ""}`);
+          return text(lines.join("\n") || "No projects.");
+        },
+      ),
+      tool(
+        "jira_search_issues",
+        "Search issues with a JQL query (e.g. 'project = ENG AND status = \"In Progress\" ORDER BY updated DESC'). " +
+          "Returns issue keys, summaries, status, and assignee.",
+        {
+          jql: z.string().describe("A Jira Query Language (JQL) string."),
+          limit: z.number().int().min(1).max(100).optional().describe("Max issues (default 30)."),
+        },
+        async (a) => {
+          if (credError) return text(credError);
+          const params = new URLSearchParams({
+            jql: a.jql,
+            maxResults: String(a.limit ?? 30),
+            fields: "summary,status,assignee,issuetype,priority",
+          });
+          const res = await fetch(api(`/search?${params}`), { headers });
+          if (!res.ok) return text(await asError(res));
+          const data = (await res.json()) as { issues?: JiraIssue[]; total?: number };
+          const lines = (data.issues ?? []).map(
+            (i) =>
+              `- ${i.key} [${i.fields?.status?.name ?? "?"}] ${i.fields?.summary ?? ""}` +
+              `${i.fields?.assignee ? ` · @${i.fields.assignee.displayName}` : " · unassigned"}`,
+          );
+          const header = data.total != null ? `${data.total} match(es):\n` : "";
+          return text(header + (lines.join("\n") || "No matching issues."));
+        },
+      ),
+      tool(
+        "jira_get_issue",
+        "Read one issue's full detail (summary, status, type, priority, assignee, description).",
+        { key: z.string().describe("Issue key, e.g. ENG-123.") },
+        async (a) => {
+          if (credError) return text(credError);
+          const res = await fetch(api(`/issue/${encodeURIComponent(a.key)}`), { headers });
+          if (!res.ok) return text(await asError(res));
+          const i = (await res.json()) as JiraIssue;
+          const f = i.fields ?? {};
+          const desc = adfToText(f.description).trim();
+          const out = [
+            `${i.key}: ${f.summary ?? ""}`,
+            `Status: ${f.status?.name ?? "?"} · Type: ${f.issuetype?.name ?? "?"} · Priority: ${f.priority?.name ?? "?"}`,
+            `Assignee: ${f.assignee?.displayName ?? "unassigned"}`,
+            desc ? `\n${desc.slice(0, 4000)}${desc.length > 4000 ? "\n[truncated]" : ""}` : "",
+          ];
+          return text(out.filter(Boolean).join("\n"));
+        },
+      ),
+      tool(
+        "jira_list_transitions",
+        "List the status transitions available for an issue (needed to move it). " +
+          "Returns transition ids and target status names to feed jira_transition_issue.",
+        { key: z.string().describe("Issue key, e.g. ENG-123.") },
+        async (a) => {
+          if (credError) return text(credError);
+          const res = await fetch(api(`/issue/${encodeURIComponent(a.key)}/transitions`), { headers });
+          if (!res.ok) return text(await asError(res));
+          const data = (await res.json()) as { transitions?: Array<{ id?: string; name?: string; to?: { name?: string } }> };
+          const lines = (data.transitions ?? []).map((tr) => `- ${tr.id} → ${tr.to?.name ?? tr.name ?? "?"}`);
+          return text(lines.join("\n") || "No transitions available.");
+        },
+      ),
+      tool(
+        "jira_create_issue",
+        "Create a new issue. Requires the project key, issue type name, and a summary.",
+        {
+          project: z.string().describe("Project key, e.g. ENG."),
+          summary: z.string(),
+          issueType: z.string().optional().describe("Issue type name (default Task)."),
+          description: z.string().optional(),
+        },
+        async (a) => {
+          if (credError) return text(credError);
+          const body = {
+            fields: {
+              project: { key: a.project },
+              summary: a.summary,
+              issuetype: { name: a.issueType ?? "Task" },
+              ...(a.description ? { description: textToAdf(a.description) } : {}),
+            },
+          };
+          const res = await fetch(api("/issue"), { method: "POST", headers, body: JSON.stringify(body) });
+          if (!res.ok) return text(await asError(res));
+          const created = (await res.json()) as { key?: string };
+          return text(`Created ${created.key ?? "issue"}${ready ? ` · ${ready.base}/browse/${created.key}` : ""}.`);
+        },
+      ),
+      tool(
+        "jira_transition_issue",
+        "Move an issue to a new status by transition id (get ids from jira_list_transitions).",
+        {
+          key: z.string().describe("Issue key, e.g. ENG-123."),
+          transitionId: z.string().describe("Transition id from jira_list_transitions."),
+        },
+        async (a) => {
+          if (credError) return text(credError);
+          const res = await fetch(api(`/issue/${encodeURIComponent(a.key)}/transitions`), {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ transition: { id: a.transitionId } }),
+          });
+          if (!res.ok) return text(await asError(res));
+          return text(`Transitioned ${a.key}.`);
+        },
+      ),
+      tool(
+        "jira_comment_issue",
+        "Add a comment to an issue.",
+        { key: z.string().describe("Issue key, e.g. ENG-123."), body: z.string() },
+        async (a) => {
+          if (credError) return text(credError);
+          const res = await fetch(api(`/issue/${encodeURIComponent(a.key)}/comment`), {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ body: textToAdf(a.body) }),
+          });
+          if (!res.ok) return text(await asError(res));
+          return text(`Commented on ${a.key}.`);
+        },
+      ),
+    ], scope),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Linear (GraphQL API)
+// ---------------------------------------------------------------------------
+
+const LINEAR_BASE = "https://api.linear.app/graphql";
+
+interface LinearGraphQLError {
+  message?: string;
+}
+
+/**
+ * Run a Linear GraphQL query/mutation with the API key. Returns the `data`
+ * payload or a compact error string. Linear returns HTTP 200 with an `errors`
+ * array on GraphQL-level failures, so we surface those explicitly.
+ */
+async function linearGql<T>(
+  key: string,
+  query: string,
+  variables?: Record<string, unknown>,
+): Promise<T | { error: string }> {
+  let res: Response;
+  try {
+    res = await fetch(LINEAR_BASE, {
+      method: "POST",
+      headers: { Authorization: key, "Content-Type": "application/json" },
+      body: JSON.stringify({ query, variables }),
+    });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+  if (!res.ok) return { error: await asError(res) };
+  const json = (await res.json()) as { data?: T; errors?: LinearGraphQLError[] };
+  if (json.errors?.length) {
+    return { error: json.errors.map((e) => e.message ?? "GraphQL error").join("; ") };
+  }
+  return json.data as T;
+}
+
+function linearMcp(key: string, scope: ConnectorScope) {
+  return createSdkMcpServer({
+    name: "linear",
+    version: "1.0.0",
+    tools: scopeTools([
+      tool(
+        "linear_list_teams",
+        "List Linear teams (with their ids and keys) — needed to create issues.",
+        {},
+        async () => {
+          const data = await linearGql<{ teams?: { nodes?: Array<{ id: string; key: string; name: string }> } }>(
+            key,
+            `query { teams(first: 50) { nodes { id key name } } }`,
+          );
+          if ("error" in data) return text(data.error);
+          const lines = (data.teams?.nodes ?? []).map((t) => `- ${t.key} · ${t.name} (id: ${t.id})`);
+          return text(lines.join("\n") || "No teams.");
+        },
+      ),
+      tool(
+        "linear_list_projects",
+        "List Linear projects with their ids and current state.",
+        { limit: z.number().int().min(1).max(100).optional().describe("Max projects (default 50).") },
+        async (a) => {
+          const data = await linearGql<{ projects?: { nodes?: Array<{ id: string; name: string; state: string }> } }>(
+            key,
+            `query ($n: Int!) { projects(first: $n) { nodes { id name state } } }`,
+            { n: a.limit ?? 50 },
+          );
+          if ("error" in data) return text(data.error);
+          const lines = (data.projects?.nodes ?? []).map((p) => `- ${p.name} [${p.state}] (id: ${p.id})`);
+          return text(lines.join("\n") || "No projects.");
+        },
+      ),
+      tool(
+        "linear_search_issues",
+        "Search issues by a text term (matches title/description). Returns identifiers, " +
+          "titles, state, and assignee.",
+        {
+          term: z.string().describe("Free-text search term."),
+          limit: z.number().int().min(1).max(100).optional().describe("Max issues (default 30)."),
+        },
+        async (a) => {
+          const data = await linearGql<{
+            issueSearch?: { nodes?: Array<{ identifier: string; title: string; state?: { name?: string }; assignee?: { name?: string } | null }> };
+          }>(
+            key,
+            `query ($q: String!, $n: Int!) {
+              issueSearch(query: $q, first: $n) {
+                nodes { identifier title state { name } assignee { name } }
+              }
+            }`,
+            { q: a.term, n: a.limit ?? 30 },
+          );
+          if ("error" in data) return text(data.error);
+          const lines = (data.issueSearch?.nodes ?? []).map(
+            (i) => `- ${i.identifier} [${i.state?.name ?? "?"}] ${i.title}${i.assignee ? ` · @${i.assignee.name}` : " · unassigned"}`,
+          );
+          return text(lines.join("\n") || "No matching issues.");
+        },
+      ),
+      tool(
+        "linear_get_issue",
+        "Read one issue's full detail by its identifier (e.g. ENG-123).",
+        { identifier: z.string().describe("Issue identifier, e.g. ENG-123.") },
+        async (a) => {
+          const data = await linearGql<{
+            issue?: { identifier: string; title: string; description?: string; state?: { name?: string }; assignee?: { name?: string } | null; priorityLabel?: string };
+          }>(
+            key,
+            `query ($id: String!) {
+              issue(id: $id) { identifier title description state { name } assignee { name } priorityLabel }
+            }`,
+            { id: a.identifier },
+          );
+          if ("error" in data) return text(data.error);
+          const i = data.issue;
+          if (!i) return text("Issue not found.");
+          const desc = (i.description ?? "").trim();
+          return text(
+            [
+              `${i.identifier}: ${i.title}`,
+              `State: ${i.state?.name ?? "?"} · Priority: ${i.priorityLabel ?? "?"} · Assignee: ${i.assignee?.name ?? "unassigned"}`,
+              desc ? `\n${desc.slice(0, 4000)}${desc.length > 4000 ? "\n[truncated]" : ""}` : "",
+            ].filter(Boolean).join("\n"),
+          );
+        },
+      ),
+      tool(
+        "linear_list_states",
+        "List the workflow states (with ids) for a team — needed to move an issue's state.",
+        { teamId: z.string().describe("Team id from linear_list_teams.") },
+        async (a) => {
+          const data = await linearGql<{
+            team?: { states?: { nodes?: Array<{ id: string; name: string; type: string }> } };
+          }>(
+            key,
+            `query ($id: String!) { team(id: $id) { states { nodes { id name type } } } }`,
+            { id: a.teamId },
+          );
+          if ("error" in data) return text(data.error);
+          const lines = (data.team?.states?.nodes ?? []).map((s) => `- ${s.name} [${s.type}] (id: ${s.id})`);
+          return text(lines.join("\n") || "No states.");
+        },
+      ),
+      tool(
+        "linear_create_issue",
+        "Create a new issue in a team. Requires the team id (from linear_list_teams) and a title.",
+        {
+          teamId: z.string().describe("Team id from linear_list_teams."),
+          title: z.string(),
+          description: z.string().optional(),
+        },
+        async (a) => {
+          const data = await linearGql<{ issueCreate?: { success?: boolean; issue?: { identifier?: string; url?: string } } }>(
+            key,
+            `mutation ($input: IssueCreateInput!) {
+              issueCreate(input: $input) { success issue { identifier url } }
+            }`,
+            { input: { teamId: a.teamId, title: a.title, description: a.description } },
+          );
+          if ("error" in data) return text(data.error);
+          const issue = data.issueCreate?.issue;
+          return text(
+            data.issueCreate?.success
+              ? `Created ${issue?.identifier ?? "issue"}${issue?.url ? ` · ${issue.url}` : ""}.`
+              : "Linear reported the create did not succeed.",
+          );
+        },
+      ),
+      tool(
+        "linear_update_issue_state",
+        "Move an issue to a new workflow state by state id (get ids from linear_list_states).",
+        {
+          issueId: z.string().describe("Issue id or identifier (e.g. ENG-123)."),
+          stateId: z.string().describe("Target workflow state id from linear_list_states."),
+        },
+        async (a) => {
+          const data = await linearGql<{ issueUpdate?: { success?: boolean } }>(
+            key,
+            `mutation ($id: String!, $input: IssueUpdateInput!) {
+              issueUpdate(id: $id, input: $input) { success }
+            }`,
+            { id: a.issueId, input: { stateId: a.stateId } },
+          );
+          if ("error" in data) return text(data.error);
+          return text(data.issueUpdate?.success ? `Updated ${a.issueId}.` : "Linear reported the update did not succeed.");
+        },
+      ),
+      tool(
+        "linear_comment_issue",
+        "Add a comment to an issue.",
+        {
+          issueId: z.string().describe("Issue id or identifier (e.g. ENG-123)."),
+          body: z.string(),
+        },
+        async (a) => {
+          const data = await linearGql<{ commentCreate?: { success?: boolean } }>(
+            key,
+            `mutation ($input: CommentCreateInput!) { commentCreate(input: $input) { success } }`,
+            { input: { issueId: a.issueId, body: a.body } },
+          );
+          if ("error" in data) return text(data.error);
+          return text(data.commentCreate?.success ? `Commented on ${a.issueId}.` : "Linear reported the comment did not succeed.");
+        },
+      ),
+    ], scope),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Databases (PostgreSQL + SQLite)
 // ---------------------------------------------------------------------------
 
@@ -2150,6 +2579,10 @@ export function buildConnectorMcps(): Record<string, McpServer | ExternalMcpServ
   if (slackToken) out.slack = slackMcp(slackToken, connectorScope("slack"));
   const githubToken = credentialFor("github");
   if (githubToken) out.github = githubMcp(githubToken, connectorScope("github"));
+  const jiraCred = credentialFor("jira");
+  if (jiraCred) out.jira = jiraMcp(jiraCred, connectorScope("jira"));
+  const linearKey = credentialFor("linear");
+  if (linearKey) out.linear = linearMcp(linearKey, connectorScope("linear"));
   if (connectorIsEnabled("unreal-engine")) {
     // Credential is optional — if set it overrides the default editor URL.
     const urlOverride = credentialFor("unreal-engine");
@@ -2174,4 +2607,4 @@ export function buildConnectorMcps(): Record<string, McpServer | ExternalMcpServ
 }
 
 /** Names of the live connectors that have wired MCP servers (for the panel). */
-export const LIVE_CONNECTORS = ["notion", "gcal", "gmail", "gdrive", "apple-calendar", "apple-mail", "slack", "github", "unreal-engine", "unity", "postgres", "sqlite"] as const;
+export const LIVE_CONNECTORS = ["notion", "gcal", "gmail", "gdrive", "apple-calendar", "apple-mail", "slack", "github", "jira", "linear", "unreal-engine", "unity", "postgres", "sqlite"] as const;

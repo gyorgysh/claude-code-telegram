@@ -37,6 +37,8 @@ export const CONNECTOR_HELP: Record<string, ConnectorHelpShape> = {
   "apple-mail": { steps: 4, readTools: 3, writeTools: 2, tip: true },
   slack: { steps: 6, readTools: 3, writeTools: 3, tip: true },
   github: { steps: 6, readTools: 5, writeTools: 5, tip: true },
+  jira: { steps: 5, readTools: 4, writeTools: 3, tip: true },
+  linear: { steps: 4, readTools: 5, writeTools: 3, tip: true },
   "unreal-engine": { steps: 6, readTools: 4, writeTools: 4, tip: true },
   unity: { steps: 6, readTools: 4, writeTools: 4, tip: true },
   postgres: { steps: 4, readTools: 3, writeTools: 2, tip: true },

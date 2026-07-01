@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { CheckCircle2, XCircle, Info, X, type LucideIcon } from "lucide-react";
 import { useI18n } from "../lib/useI18n";
 import { actOnToast, dismissToast, useToasts, type ToastVariant } from "../lib/useToast.ts";
@@ -263,8 +264,10 @@ export function ModelSelect({
   const [fetched, setFetched] = useState<string[]>([]);
   const [fetching, setFetching] = useState(false);
   const [active, setActive] = useState(0);
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
 
   // Merge fetched models (first, they're the most relevant) with the static
   // suggestions, de-duped and preserving order.
@@ -278,10 +281,37 @@ export function ModelSelect({
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      // The options list renders in a portal (to escape any ancestor's
+      // overflow-hidden), so it's outside `ref`'s DOM subtree — check it too.
+      if (
+        ref.current &&
+        !ref.current.contains(target) &&
+        !(listRef.current && listRef.current.contains(target))
+      ) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  // Track the input's on-screen position while open so the portalled options
+  // list can be placed under it with `position: fixed`, immune to clipping by
+  // any ancestor's `overflow-hidden` (e.g. the Settings Accordion).
+  useLayoutEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const rect = ref.current?.getBoundingClientRect();
+      if (rect) setCoords({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
   }, [open]);
 
   const doFetch = async () => {
@@ -364,33 +394,37 @@ export function ModelSelect({
             }}
           />
         </button>
-        {open && options.length > 0 && (
-          <ul
-            role="listbox"
-            className="absolute z-40 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-line bg-surface p-1 shadow-xl"
-          >
-            {options.map((m, i) => {
-              const selected = m === value;
-              return (
-                <li key={m}>
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={selected}
-                    onMouseEnter={() => setActive(i)}
-                    onClick={() => pick(m)}
-                    className={`mono flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors ${
-                      i === active ? "bg-accent/10 text-accent" : "text-fg hover:bg-surface-2"
-                    }`}
-                  >
-                    <span className="truncate">{m}</span>
-                    {selected && <CheckCircle2 size={14} className="shrink-0 text-accent" />}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+        {open && options.length > 0 && coords &&
+          createPortal(
+            <ul
+              ref={listRef}
+              role="listbox"
+              className="fixed z-50 max-h-60 overflow-y-auto rounded-lg border border-line bg-surface p-1 shadow-xl"
+              style={{ top: coords.top, left: coords.left, width: coords.width }}
+            >
+              {options.map((m, i) => {
+                const selected = m === value;
+                return (
+                  <li key={m}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={selected}
+                      onMouseEnter={() => setActive(i)}
+                      onClick={() => pick(m)}
+                      className={`mono flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors ${
+                        i === active ? "bg-accent/10 text-accent" : "text-fg hover:bg-surface-2"
+                      }`}
+                    >
+                      <span className="truncate">{m}</span>
+                      {selected && <CheckCircle2 size={14} className="shrink-0 text-accent" />}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>,
+            document.body,
+          )}
       </div>
       {onFetch && (
         <Button onClick={() => void doFetch()} disabled={disabled || fetching} className="shrink-0">

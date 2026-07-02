@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { config as loadEnv } from "dotenv";
 import { z } from "zod";
+import { isValidLanguage } from "./core/languages.js";
 
 loadEnv();
 
@@ -89,7 +90,13 @@ const schema = z.object({
   // project collector handles them server-side; override to point at your own.
   FEEDBACK_URL: z.string().url().default("https://gyorgy.sh/myhq_feedback"),
   // Default language for agent responses (BCP 47 tag, e.g. "en", "hu", "fr").
-  DEFAULT_LANGUAGE: z.string().min(2).default("en"),
+  // Fall back to English on an unsupported code rather than propagating an
+  // invalid value into the "Respond in <lang>" prompt block or /lang display.
+  DEFAULT_LANGUAGE: z
+    .string()
+    .min(2)
+    .default("en")
+    .transform((v) => (isValidLanguage(v) ? v : "en")),
   // Auto-generate skills from expensive/long turns (off by default).
   // Post-turn reflection: after a substantive turn, a short autonomous reflection
   // run distils a durable fact (→ memory) and/or a reusable procedure (→ skills).

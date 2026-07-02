@@ -521,10 +521,15 @@ export class TaskDelegator {
       // On success, write a hot memory so the agent knows this task was done.
       // Useful for git commit messages and context across sessions.
       if (!res.isError) {
-        const summary = (res.text ?? "").trim().slice(0, 400);
+        // Sanitise before persisting: the card title is attacker-controllable
+        // (PANEL_TOKEN) and res.text can carry text the run fetched from the web,
+        // and this warm entry is later injected into system prompts on recall —
+        // so strip heading/delimiter injection vectors, same as the run prompt.
+        const safeTitle = sanitizeCardField(title, 200);
+        const summary = sanitizeCardField(res.text ?? "", 400);
         const by = lead ? ` (by ${lead.name})` : "";
         memory.create({
-          text: `Task completed${by}: ${title}${summary ? `. ${summary}` : ""}`,
+          text: `Task completed${by}: ${safeTitle}${summary ? `. ${summary}` : ""}`,
           tags: ["task", "completed"],
           salience: 0.8,
           tier: "warm",

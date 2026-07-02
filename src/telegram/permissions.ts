@@ -54,6 +54,9 @@ interface Batch {
   ids: string[];
   /** Telegram message id once the batch has been posted (undefined while buffering). */
   messageId?: number;
+  /** True from the moment flush() commits to sending until messageId is set, so a
+   *  second flush racing the in-flight sendMessage can't post a duplicate. */
+  sending?: boolean;
   /** Debounce timer; fires to post (or, if already posted, no-op). */
   flushTimer?: NodeJS.Timeout;
   /** When the first request in this batch arrived (caps the buffering window). */
@@ -159,18 +162,30 @@ export class PermissionManager {
   /** Post the buffered batch as one grouped message. */
   private async flush(chatId: number): Promise<void> {
     const batch = this.batches.get(chatId);
-    if (!batch || batch.messageId !== undefined) return;
+    if (!batch || batch.messageId !== undefined || batch.sending) return;
     batch.flushTimer = undefined;
     const live = batch.ids.filter((id) => this.pending.get(id) && !this.pending.get(id)!.settled);
     if (live.length === 0) {
       this.batches.delete(chatId);
       return;
     }
-    const msg = await this.tg.sendMessage(chatId, this.text(batch), {
-      parse_mode: "HTML",
-      ...Markup.inlineKeyboard(this.keyboard(batch)),
-    });
+    // Claim the send before awaiting: a late request() can re-arm flushTimer and
+    // fire a second flush() while this sendMessage is in flight — the messageId
+    // guard alone wouldn't stop it (id isn't set until the await resolves),
+    // producing two grouped messages with one orphaned keyboard.
+    batch.sending = true;
+    let msg;
+    try {
+      msg = await this.tg.sendMessage(chatId, this.text(batch), {
+        parse_mode: "HTML",
+        ...Markup.inlineKeyboard(this.keyboard(batch)),
+      });
+    } catch (err) {
+      batch.sending = false; // let a later flush retry rather than wedge the batch
+      throw err;
+    }
     batch.messageId = msg.message_id;
+    batch.sending = false;
 
     // Mirror to Web Push so a closed panel tab gets an OS-level prompt. Approval
     // still happens in Telegram (or the panel); this is just an alert to act.
@@ -290,6 +305,10 @@ export class PermissionManager {
 
     const entry = this.pending.get(id);
     if (!entry || entry.settled) return t("appr_expired", lang);
+    // Scope to the pressing chat: with several ALLOWED_USER_IDS, one operator must
+    // not resolve another's pending approval by crafting a callback carrying its
+    // id. The 32-bit random id already makes this hard; this closes it outright.
+    if (chatId !== undefined && entry.chatId !== chatId) return t("appr_expired", lang);
 
     clearTimeout(entry.timeout);
     // Whitelist the action before casting: a crafted callback could carry an

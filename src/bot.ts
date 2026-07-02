@@ -102,11 +102,11 @@ export function buildBot(): Telegraf {
       await ctx.answerCbQuery(toast.slice(0, 200)).catch(() => {});
     } else if (data && loops.isLoopCallback(data)) {
       log.debug("Loop button pressed", { chatId: ctx.chat?.id, data });
-      const toast = await loops.resolve(data);
+      const toast = await loops.resolve(data, ctx.chat?.id);
       await ctx.answerCbQuery(toast.slice(0, 200)).catch(() => {});
     } else if (data && asks.isAskCallback(data)) {
       log.debug("AskQuestion button pressed", { chatId: ctx.chat?.id, data });
-      const toast = await asks.resolve(data);
+      const toast = await asks.resolve(data, ctx.chat?.id);
       await ctx.answerCbQuery(toast.slice(0, 200)).catch(() => {});
     } else if (data && isGitCallback(data) && ctx.chat) {
       log.debug("Git button pressed", { chatId: ctx.chat.id, data });

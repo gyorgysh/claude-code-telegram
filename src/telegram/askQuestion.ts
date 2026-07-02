@@ -172,7 +172,7 @@ export class AskQuestionManager {
   }
 
   /** Resolve (or progress) a pending question from a callback_query; returns a toast. */
-  async resolve(data: string): Promise<string> {
+  async resolve(data: string, chatId?: number): Promise<string> {
     if (Buffer.byteLength(data, "utf8") > CALLBACK_MAX_BYTES) return t("ask_expired");
     const segs = data.split(":");
     if (segs.length < 3 || segs.length > 4) return t("ask_expired");
@@ -180,6 +180,9 @@ export class AskQuestionManager {
     if (!isHexId(id)) return t("ask_expired");
     const entry = this.pending.get(id);
     if (!entry) return t("ask_expired");
+    // Scope to the pressing chat so one allow-listed operator can't answer
+    // another's question by crafting a callback with its id.
+    if (chatId !== undefined && entry.chatId !== chatId) return t("ask_expired");
     const { question } = entry;
     const lang = langForChat(entry.chatId);
 

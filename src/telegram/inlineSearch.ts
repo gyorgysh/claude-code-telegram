@@ -128,6 +128,15 @@ export async function handleInlineQuery(ctx: Context): Promise<void> {
     await ctx.answerInlineQuery(results, { cache_time: CACHE_SECONDS, is_personal: true });
   } catch (err) {
     log.warn("Inline query failed", { error: err instanceof Error ? err.message : String(err) });
-    await ctx.answerInlineQuery([], { cache_time: CACHE_SECONDS, is_personal: true }).catch(() => {});
+    // Empty results with no explanation just look like "no matches" to the
+    // user. Surface a visible notice instead via the switch-to-PM button,
+    // the only text Telegram lets an inline answer carry on failure.
+    await ctx
+      .answerInlineQuery([], {
+        cache_time: 0,
+        is_personal: true,
+        button: { text: "⚠️ Search failed, tap to open chat", start_parameter: "inline_search_failed" },
+      })
+      .catch(() => {});
   }
 }

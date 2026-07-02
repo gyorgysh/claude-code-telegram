@@ -105,7 +105,14 @@ export class AskQuestionManager {
       // leaving the SDK turn blocked forever on the canUseTool promise — that
       // would wedge the session busy until the user noticed and sent /stop.
       log.warn("AskUserQuestion send failed — using default", { chatId, header: question.header, error: String(err) });
-      resolve(`${question.options[0]?.label ?? t("ask_no_answer")} (question could not be delivered)`);
+      const fallback = question.options[0]?.label ?? t("ask_no_answer");
+      // Best-effort plain-text notice: the original send may have failed on
+      // formatting or an oversized keyboard, so a bare message has a real
+      // chance of getting through even when the rich one didn't.
+      await this.tg
+        .sendMessage(chatId, `⚠️ Couldn't show the question "${question.header}" — defaulted to "${fallback}".`)
+        .catch(() => {});
+      resolve(`${fallback} (question could not be delivered)`);
       return;
     }
 

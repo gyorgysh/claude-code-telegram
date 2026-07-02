@@ -96,6 +96,7 @@ export const en = {
   git_review_caption: "Review the changes, then choose an action:",
   git_confirm_discard_toast: "Confirm discard?",
   git_cancelled: "Cancelled",
+  git_review_expired: "This diff is no longer active — run /diff again.",
   git_auto_commit_msg: "Update via Telegram, {iso}",
   git_committed: "✅ Committed.\n<pre>{out}</pre>",
   git_commit_failed: "⚠️ Commit failed.\n<pre>{out}</pre>",

@@ -9,7 +9,7 @@ import { selfUpdateMcp } from "../mcp/selfUpdate.js";
 import { buildConnectorMcps } from "../mcp/connectorsMcp.js";
 import { buildImageGenMcps } from "../mcp/imageGenMcp.js";
 import { webhookMcps } from "../mcp/webhookMcp.js";
-import { getTask, setDelegate, updateTask, listTasks, archiveTask, prepareRetry, getTaskRunConfig, blockingPrereqs, consumeResumeSession } from "./tasks.js";
+import { getTask, setDelegate, updateTask, listTasks, archiveTask, prepareRetry, getTaskRunConfig, blockingPrereqs, consumeResumeSession, onTaskColumnChange } from "./tasks.js";
 import { memory } from "./memory.js";
 import { workers, type Worker } from "./workers.js";
 import { getSkill } from "./skills.js";
@@ -112,6 +112,16 @@ export class TaskDelegator {
   private paused = false;
   private broadcast: Broadcaster = () => {};
   private notify: Notifier = () => {};
+
+  constructor() {
+    // A prerequisite card moved to done/archive from the panel or MCP calls
+    // updateTask/reorderTasks, which don't touch the delegator — so a card held on
+    // that prerequisite would otherwise wait until some unrelated run settled
+    // (or a restart marked it stale). Re-check the blocked set on any column
+    // change so dependents release promptly. Registered in the constructor rather
+    // than start() because start() only runs when the panel is enabled.
+    onTaskColumnChange(() => this.releaseUnblocked());
+  }
 
   start(broadcast: Broadcaster): void {
     this.broadcast = broadcast;
@@ -511,10 +521,15 @@ export class TaskDelegator {
       // On success, write a hot memory so the agent knows this task was done.
       // Useful for git commit messages and context across sessions.
       if (!res.isError) {
-        const summary = (res.text ?? "").trim().slice(0, 400);
+        // Sanitise before persisting: the card title is attacker-controllable
+        // (PANEL_TOKEN) and res.text can carry text the run fetched from the web,
+        // and this warm entry is later injected into system prompts on recall —
+        // so strip heading/delimiter injection vectors, same as the run prompt.
+        const safeTitle = sanitizeCardField(title, 200);
+        const summary = sanitizeCardField(res.text ?? "", 400);
         const by = lead ? ` (by ${lead.name})` : "";
         memory.create({
-          text: `Task completed${by}: ${title}${summary ? `. ${summary}` : ""}`,
+          text: `Task completed${by}: ${safeTitle}${summary ? `. ${summary}` : ""}`,
           tags: ["task", "completed"],
           salience: 0.8,
           tier: "warm",

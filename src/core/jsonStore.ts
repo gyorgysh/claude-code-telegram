@@ -46,8 +46,25 @@ export function loadJson<T>(file: string, fallback: T): T {
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
       log.error("Failed to read store; using fallback", { file, error: errText(err) });
+      // The file exists but won't parse (truncated by a crash mid-write, a manual
+      // edit, disk corruption). Move it aside before the first mutation triggers a
+      // saveJson that would atomically overwrite — and permanently destroy — the
+      // recoverable bytes. Best-effort; we still fall back to empty either way.
+      quarantineCorrupt(file);
     }
     return fallback;
+  }
+}
+
+/** Rename an unparseable store to `<file>.corrupt-<ts>` so it isn't overwritten. */
+function quarantineCorrupt(file: string): void {
+  try {
+    const src = dataPath(file);
+    const dest = `${src}.corrupt-${Date.now()}`;
+    renameSync(src, dest);
+    log.warn("Quarantined corrupt store", { file, saved: dest });
+  } catch {
+    /* best effort — if we can't move it, saveJson will overwrite it later */
   }
 }
 

@@ -311,7 +311,11 @@ const SECRET_PATTERNS: Array<[RegExp, string]> = [
   [/\b(npm_)[A-Za-z0-9]{16,}/g, `$1${REDACTED}`],
   // JWTs (header.payload.signature, base64url) — e.g. a Bearer eyJ… token.
   [/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, REDACTED],
-  [/\b\d{6,}:[A-Za-z0-9_-]{30,}\b/g, REDACTED], // telegram bot token id:secret
+  // Telegram bot token `id:secret`. No leading \b: on the wire the token appears
+  // as `…/bot<digits>:<secret>/…`, where the `t` of "bot" abuts the digits so a
+  // word boundary never matches — that let full tokens leak from request-URL
+  // error messages. Match an optional `bot` prefix and drop the anchors.
+  [/(?:bot)?\d{6,}:[A-Za-z0-9_-]{30,}/g, REDACTED],
   // key/value pairs: token=…, "api_key":"…", password: "…". Optional quotes around
   // the key and (independently) the value, so it catches both shell and JSON forms.
   [

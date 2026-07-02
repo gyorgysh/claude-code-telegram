@@ -82,7 +82,14 @@ ask() {
 # terminal we decline (so an unattended pipe never does anything destructive).
 confirm() {
   local prompt="$1" def="${2:-Y}" ans=""
-  [ "${MYHQ_YES:-0}" = "1" ] && return 0
+  # MYHQ_YES auto-accepts DEFAULT-yes prompts only. A default-No confirm guards a
+  # destructive/overwrite action (e.g. "reconfigure the existing .env?") — auto-
+  # accepting it would let an unattended re-run clobber saved credentials, so it
+  # is still declined under MYHQ_YES.
+  if [ "${MYHQ_YES:-0}" = "1" ]; then
+    [ "$def" = "N" ] && return 1
+    return 0
+  fi
   [ -z "$TTY" ] && return 1
   local hint="[Y/n]"; [ "$def" = "N" ] && hint="[y/N]"
   printf '%s %s ' "$prompt" "$hint" >"$TTY"
@@ -589,9 +596,12 @@ install_tunnel_cli() {
         # ngrok publishes an apt repo; fall back to the raw binary otherwise.
         if [ "${PKG:-}" = "apt" ] || command -v apt-get >/dev/null 2>&1; then
           need_sudo
+          # Install the key into a dedicated keyring and scope it to the ngrok repo
+          # via signed-by, rather than dropping it in trusted.gpg.d (where it would
+          # be trusted to sign ANY apt repository).
           curl -fsSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc \
-            | $SUDO tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null 2>&1 || true
-          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" \
+            | $SUDO tee /usr/share/keyrings/ngrok.asc >/dev/null 2>&1 || true
+          echo "deb [signed-by=/usr/share/keyrings/ngrok.asc] https://ngrok-agent.s3.amazonaws.com buster main" \
             | $SUDO tee /etc/apt/sources.list.d/ngrok.list >/dev/null 2>&1 || true
           $SUDO apt-get update -y >/dev/null 2>&1 || true
           $SUDO apt-get install -y ngrok >/dev/null 2>&1 || true

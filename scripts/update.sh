@@ -16,6 +16,7 @@ cd "$APP_DIR"
 
 say() { printf '• %s\n' "$*"; }
 ok()  { printf '✓ %s\n' "$*"; }
+err() { printf '✖ %s\n' "$*" >&2; }
 
 REF="${1:-$(git rev-parse --abbrev-ref HEAD)}"
 
@@ -103,10 +104,22 @@ restart_if_service() {
     *) return 1 ;;
   esac
   say "Restarting the service…"
-  "$APP_DIR/scripts/agentctl.sh" restart
+  # Check the restart explicitly. Because this runs as an `if` condition, `set -e`
+  # is disabled inside it, so a failed `agentctl restart` (e.g. launchctl kickstart
+  # from an SSH session with no GUI domain, or missing sudo) would otherwise fall
+  # through to "Service restarted." and update.sh would exit 0 — the in-panel
+  # updater then reports success while the OLD code keeps running.
+  if ! "$APP_DIR/scripts/agentctl.sh" restart; then
+    err "Service restart FAILED — the new build is in place but the running process was NOT restarted. Restart manually: $APP_DIR/scripts/agentctl.sh restart"
+    return 2
+  fi
   ok "Service restarted."
 }
 
-if restart_if_service; then :; else
-  ok "Build complete. No service installed — restart your manual run to pick up changes."
-fi
+restart_rc=0
+restart_if_service || restart_rc=$?   # `|| …` keeps set -e from exiting on 1/2
+case "$restart_rc" in
+  0) : ;;                                   # restarted (message already printed)
+  2) exit 1 ;;                              # restart failed (error already printed)
+  *) ok "Build complete. No service installed — restart your manual run to pick up changes." ;;
+esac

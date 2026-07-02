@@ -93,10 +93,21 @@ export class AskQuestionManager {
     const text = renderQuestion(question, lang);
     const selected = new Set<number>();
 
-    const msg = await this.tg.sendMessage(chatId, text, {
-      parse_mode: "HTML",
-      ...this.keyboard(id, question, selected, lang),
-    });
+    let msg;
+    try {
+      msg = await this.tg.sendMessage(chatId, text, {
+        parse_mode: "HTML",
+        ...this.keyboard(id, question, selected, lang),
+      });
+    } catch (err) {
+      // If the question can't even be posted (flood limit, network blip, an
+      // over-long option list), resolve with the default answer rather than
+      // leaving the SDK turn blocked forever on the canUseTool promise — that
+      // would wedge the session busy until the user noticed and sent /stop.
+      log.warn("AskUserQuestion send failed — using default", { chatId, header: question.header, error: String(err) });
+      resolve(`${question.options[0]?.label ?? t("ask_no_answer")} (question could not be delivered)`);
+      return;
+    }
 
     const timeout = setTimeout(() => {
       const entry = this.pending.get(id);
@@ -161,7 +172,7 @@ export class AskQuestionManager {
   }
 
   /** Resolve (or progress) a pending question from a callback_query; returns a toast. */
-  async resolve(data: string): Promise<string> {
+  async resolve(data: string, chatId?: number): Promise<string> {
     if (Buffer.byteLength(data, "utf8") > CALLBACK_MAX_BYTES) return t("ask_expired");
     const segs = data.split(":");
     if (segs.length < 3 || segs.length > 4) return t("ask_expired");
@@ -169,6 +180,9 @@ export class AskQuestionManager {
     if (!isHexId(id)) return t("ask_expired");
     const entry = this.pending.get(id);
     if (!entry) return t("ask_expired");
+    // Scope to the pressing chat so one allow-listed operator can't answer
+    // another's question by crafting a callback with its id.
+    if (chatId !== undefined && entry.chatId !== chatId) return t("ask_expired");
     const { question } = entry;
     const lang = langForChat(entry.chatId);
 

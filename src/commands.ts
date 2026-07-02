@@ -189,7 +189,7 @@ export function registerCommands(bot: Telegraf): void {
 
   bot.command("pwd", async (ctx) => {
     const s = sessions.get(ctx.chat.id);
-    await ctx.replyWithHTML(`📂 <code>${s.cwd}</code>`);
+    await ctx.replyWithHTML(`📂 <code>${escapeHtml(s.cwd)}</code>`);
   });
 
   bot.command("cd", async (ctx) => {
@@ -208,7 +208,7 @@ export function registerCommands(bot: Telegraf): void {
     s.cwd = target;
     sessions.save();
     log.info("Command /cd", { chatId: ctx.chat.id, cwd: target });
-    await ctx.replyWithHTML(t("cmd_cd_done", lang, { path: target }));
+    await ctx.replyWithHTML(t("cmd_cd_done", lang, { path: escapeHtml(target) }));
   });
 
   bot.command("diff", async (ctx) => {
@@ -271,7 +271,12 @@ export function registerCommands(bot: Telegraf): void {
       await ctx.reply(t("cmd_disallow_cleared", lang));
       return;
     }
-    const had = s.sessionAllowedTools.delete(arg) || s.allowedBashCmds.delete(arg);
+    // Evaluate BOTH deletes (not short-circuit `||`): a name can live in both the
+    // tool allow-list (via /allow) and the Bash cmd allow-list (via the button),
+    // and removing only the first would leave the Bash auto-allow silently firing.
+    const removedTool = s.sessionAllowedTools.delete(arg);
+    const removedCmd = s.allowedBashCmds.delete(arg);
+    const had = removedTool || removedCmd;
     sessions.save();
     log.info("Command /disallow", { chatId: ctx.chat.id, arg, had });
     await ctx.replyWithHTML(
@@ -473,7 +478,7 @@ export function registerCommands(bot: Telegraf): void {
     const s = sessions.get(ctx.chat.id);
     const lines = [
       `<b>Status</b>`,
-      `📂 <code>${s.cwd}</code>`,
+      `📂 <code>${escapeHtml(s.cwd)}</code>`,
       `🧠 ${config.ATLAS_NAME} · <code>${mainSettingsView().effectiveModel}</code>`,
       `🔒 autonomy: <b>${s.autonomy}</b>`,
       `🔗 session: <code>${s.sessionId ?? t("cmd_status_new_session", lang)}</code>`,
@@ -766,8 +771,11 @@ export function registerCommands(bot: Telegraf): void {
       const msg = formatCouncilTelegram(session);
       // Delete the ack and send the full result.
       await ctx.telegram.deleteMessage(ctx.chat.id, ack.message_id).catch(() => {});
+      // Escape first (the proposal + model-written reasons are embedded raw and
+      // may contain <, >, & — which would 400 the HTML send and lose the result),
+      // then apply the bold/italic conversion so the generated tags survive.
       await ctx.replyWithHTML(
-        msg
+        escapeHtml(msg)
           .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
           .replace(/_(.+?)_/g, "<i>$1</i>"),
       );

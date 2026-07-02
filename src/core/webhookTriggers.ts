@@ -213,6 +213,14 @@ class WebhookTriggerStore {
       log.warn("Webhook trigger signature mismatch", { id });
       return { ok: false, status: 401, error: "invalid signature" };
     }
+    // Replay guard: a valid signed request is otherwise valid forever, so anyone
+    // who observes one delivery (proxy logs, a leaked capture) could re-send it
+    // repeatedly, each time spawning an autonomous bypassPermissions run. Reject a
+    // signature we've already accepted within the window.
+    if (isReplay(id, signature)) {
+      log.warn("Webhook trigger replay rejected", { id });
+      return { ok: false, status: 409, error: "duplicate delivery" };
+    }
 
     const body = rawBody.slice(0, MAX_BODY_CHARS);
     const prompt = body.trim()
@@ -234,6 +242,29 @@ class WebhookTriggerStore {
     log.info("Webhook trigger fired", { id, name: t.name, taskId: card.id });
     return { ok: true, status: 202, taskId: card.id };
   }
+}
+
+/**
+ * Replay guard: remembers recently-accepted signatures (keyed per trigger) so an
+ * observed signed delivery can't be re-fired repeatedly. In-memory and TTL-bounded
+ * — a genuine duplicate delivery within the window is rare, and the cost of a
+ * false reject (one skipped event) is far lower than an unbounded replay of
+ * autonomous host-capable runs.
+ */
+const REPLAY_TTL_MS = 10 * 60 * 1000;
+const seenSignatures = new Map<string, number>();
+
+function isReplay(id: string, signature: string): boolean {
+  const norm = signature.startsWith("sha256=") ? signature.slice(7) : signature;
+  const key = `${id}:${norm}`;
+  const now = Date.now();
+  if (seenSignatures.size > 500) {
+    for (const [k, ts] of seenSignatures) if (now - ts > REPLAY_TTL_MS) seenSignatures.delete(k);
+  }
+  const seen = seenSignatures.get(key);
+  if (seen !== undefined && now - seen < REPLAY_TTL_MS) return true;
+  seenSignatures.set(key, now);
+  return false;
 }
 
 /**

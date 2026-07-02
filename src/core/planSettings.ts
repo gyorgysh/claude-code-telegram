@@ -85,7 +85,14 @@ export function billingPeriodStart(billingDay: number): string {
     // Haven't reached the billing day this month yet, step back one month.
     candidate.setMonth(candidate.getMonth() - 1);
   }
-  return candidate.toISOString().slice(0, 10);
+  // Format from LOCAL calendar components. toISOString() would convert to UTC and
+  // return the previous day for any UTC+ timezone (local midnight of the Nth is
+  // the (N-1)th in UTC), which shifted the period start a day early and inflated
+  // every period-spend / cap-percentage comparison for half the world.
+  const y = candidate.getFullYear();
+  const m = String(candidate.getMonth() + 1).padStart(2, "0");
+  const d = String(candidate.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 /** Days remaining until the next billing cycle reset. */

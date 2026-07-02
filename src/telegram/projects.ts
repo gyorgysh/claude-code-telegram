@@ -1,5 +1,6 @@
 import { existsSync, statSync } from "node:fs";
 import { basename } from "node:path";
+import { createHash } from "node:crypto";
 import { Markup, type Telegram } from "telegraf";
 import { sessions, type Session } from "../session/manager.js";
 import { log } from "../logger.js";
@@ -7,13 +8,22 @@ import { escapeHtml } from "./formatting.js";
 import { CALLBACK_MAX_BYTES } from "./callback.js";
 import { t, langForChat } from "./i18n/index.js";
 
+/** Stable short id for a project path. Buttons key on this instead of the array
+ *  index so a list that changed since the menu was rendered (a removal from
+ *  another /projects message, a panel edit) can't make a press target the wrong
+ *  directory. */
+function projHash(dir: string): string {
+  return createHash("sha256").update(dir).digest("hex").slice(0, 12);
+}
+
 /** Build the projects keyboard: one row per saved dir (switch + remove), plus add. */
 function projectsKeyboard(s: Session, lang: string) {
-  const rows = s.projects.map((dir, i) => {
+  const rows = s.projects.map((dir) => {
     const here = dir === s.cwd ? "✓ " : "";
+    const h = projHash(dir);
     return [
-      Markup.button.callback(`${here}📂 ${basename(dir) || dir}`, `proj:go:${i}`),
-      Markup.button.callback(t("proj_remove_btn", lang), `proj:rm:${i}`),
+      Markup.button.callback(`${here}📂 ${basename(dir) || dir}`, `proj:go:${h}`),
+      Markup.button.callback(t("proj_remove_btn", lang), `proj:rm:${h}`),
     ];
   });
   const saved = s.projects.includes(s.cwd);
@@ -49,14 +59,16 @@ export async function resolveProjectCallback(
   data: string,
   messageId: number | undefined,
 ): Promise<string> {
-  // Validate structure: "proj:add" (2 parts) or "proj:go|rm:<idx>" (3 parts).
+  // Validate structure: "proj:add" (2 parts) or "proj:go|rm:<hash>" (3 parts).
   if (Buffer.byteLength(data, "utf8") > CALLBACK_MAX_BYTES) return "";
   const segs = data.split(":");
   if (segs.length < 2 || segs.length > 3) return "";
-  const [, action, idxRaw] = segs;
+  const [, action, hash] = segs;
   const s = sessions.get(chatId);
   const lang = langForChat(chatId);
-  const idx = Number(idxRaw);
+  // Resolve by content hash, not array position, so the target is exactly the dir
+  // the button was rendered for even if the list changed meanwhile.
+  const dir = hash ? s.projects.find((d) => projHash(d) === hash) : undefined;
   let toast = "";
 
   if (action === "add") {
@@ -68,13 +80,12 @@ export async function resolveProjectCallback(
       log.info("Project saved", { chatId, cwd: s.cwd });
       toast = t("proj_saved", lang, { name: basename(s.cwd) });
     }
-  } else if (action === "rm" && Number.isInteger(idx) && s.projects[idx]) {
-    const [removed] = s.projects.splice(idx, 1);
+  } else if (action === "rm" && dir) {
+    s.projects = s.projects.filter((d) => d !== dir);
     sessions.save();
-    log.info("Project removed", { chatId, dir: removed });
-    toast = t("proj_removed", lang, { name: basename(removed) });
-  } else if (action === "go" && Number.isInteger(idx) && s.projects[idx]) {
-    const dir = s.projects[idx];
+    log.info("Project removed", { chatId, dir });
+    toast = t("proj_removed", lang, { name: basename(dir) });
+  } else if (action === "go" && dir) {
     if (!existsSync(dir) || !statSync(dir).isDirectory()) {
       return t("proj_gone", lang);
     }

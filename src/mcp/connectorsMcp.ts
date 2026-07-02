@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { createSdkMcpServer, tool, type SdkMcpToolDefinition } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { ImapFlow } from "imapflow";
@@ -120,6 +121,24 @@ function text(s: string) {
   return { content: [{ type: "text" as const, text: s }] };
 }
 
+/** Strip CR/LF from an email header value to block header injection: a subject or
+ *  recipient containing "\r\nBcc: attacker@x" would otherwise inject headers into
+ *  the raw RFC-822 message we assemble for Gmail. */
+function mailHeader(v: string): string {
+  return v.replace(/[\r\n]+/g, " ").trim();
+}
+
+/** Escape iCalendar text values (RFC 5545 §3.3.11): backslash, semicolon, comma,
+ *  and newlines — so a summary/description/location can't inject extra iCal
+ *  properties or components into a VEVENT we build. */
+function icalText(v: string): string {
+  return v
+    .replace(/\\/g, "\\\\")
+    .replace(/;/g, "\\;")
+    .replace(/,/g, "\\,")
+    .replace(/\r\n|\r|\n/g, "\\n");
+}
+
 // ---------------------------------------------------------------------------
 // Notion
 // ---------------------------------------------------------------------------
@@ -167,8 +186,7 @@ function notionMcp(token: string, scope: ConnectorScope) {
       ),
       tool(
         "notion_query_database",
-        "Query a Notion database, returning its rows (pages). Optionally filter " +
-          "by a property and value (equals match on title/rich_text/select).",
+        "Query a Notion database, returning its rows (pages), up to pageSize.",
         {
           databaseId: z.string(),
           pageSize: z.number().int().min(1).max(100).optional(),
@@ -424,9 +442,10 @@ function gmailMcp(token: string, scope: ConnectorScope) {
           const listData = (await listRes.json()) as { messages?: { id: string }[]; resultSizeEstimate?: number };
           const ids = listData.messages ?? [];
           if (!ids.length) return text("No messages found.");
-          // Fetch snippets for each (batch via individual requests, max 20)
+          // Fetch metadata for each up to the requested maxResults (honour the
+          // arg instead of a hardcoded 20, which silently truncated larger asks).
           const fetched = await Promise.all(
-            ids.slice(0, 20).map((m) =>
+            ids.slice(0, a.maxResults ?? 20).map((m) =>
               fetch(`${GMAIL_BASE}/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`, { headers })
                 .then((r) => (r.ok ? (r.json() as Promise<GmailMessage>) : null))
                 .catch(() => null),
@@ -507,10 +526,10 @@ function gmailMcp(token: string, scope: ConnectorScope) {
           const from = profile.emailAddress ?? "me";
           const lines = [
             `From: ${from}`,
-            `To: ${a.to}`,
-            ...(a.cc ? [`Cc: ${a.cc}`] : []),
-            ...(a.bcc ? [`Bcc: ${a.bcc}`] : []),
-            `Subject: ${a.subject}`,
+            `To: ${mailHeader(a.to)}`,
+            ...(a.cc ? [`Cc: ${mailHeader(a.cc)}`] : []),
+            ...(a.bcc ? [`Bcc: ${mailHeader(a.bcc)}`] : []),
+            `Subject: ${mailHeader(a.subject)}`,
             "MIME-Version: 1.0",
             "Content-Type: text/plain; charset=utf-8",
             "",
@@ -547,9 +566,9 @@ function gmailMcp(token: string, scope: ConnectorScope) {
         },
         async (a) => {
           const lines = [
-            `To: ${a.to}`,
-            ...(a.cc ? [`Cc: ${a.cc}`] : []),
-            `Subject: ${a.subject}`,
+            `To: ${mailHeader(a.to)}`,
+            ...(a.cc ? [`Cc: ${mailHeader(a.cc)}`] : []),
+            `Subject: ${mailHeader(a.subject)}`,
             "MIME-Version: 1.0",
             "Content-Type: text/plain; charset=utf-8",
             "",
@@ -757,8 +776,10 @@ function gdriveMcp(token: string, scope: ConnectorScope) {
             ...(a.description ? { description: a.description } : {}),
           };
           if (a.content !== undefined) {
-            // Multipart upload
-            const boundary = "boundary_gdrive_upload";
+            // Multipart upload. Use a random boundary so file content that happens
+            // to contain the delimiter string can't corrupt the body or smuggle an
+            // extra part that overrides the JSON metadata.
+            const boundary = `myhq_gdrive_${randomBytes(16).toString("hex")}`;
             const body = [
               `--${boundary}`,
               "Content-Type: application/json; charset=UTF-8",
@@ -921,9 +942,9 @@ function buildVEvent(uid: string, summary: string, dtstart: string, dtend: strin
     `DTSTAMP:${fmtDt(new Date().toISOString())}`,
     `DTSTART:${fmtDt(dtstart)}`,
     `DTEND:${fmtDt(dtend)}`,
-    `SUMMARY:${summary}`,
-    ...(description ? [`DESCRIPTION:${description}`] : []),
-    ...(location ? [`LOCATION:${location}`] : []),
+    `SUMMARY:${icalText(summary)}`,
+    ...(description ? [`DESCRIPTION:${icalText(description)}`] : []),
+    ...(location ? [`LOCATION:${icalText(location)}`] : []),
     "END:VEVENT",
     "END:VCALENDAR",
   ].join("\r\n");
@@ -2294,12 +2315,27 @@ async function pgRun(
   conn: string,
   sql: string,
   params: unknown[] | undefined,
+  readonly = false,
 ): Promise<{ rows: Record<string, unknown>[]; rowCount: number | null } | { error: string }> {
   const pg = await loadPg();
   if (!pg) return { error: "PostgreSQL driver (pg) is not installed on the host." };
   const client = new pg.Client({ connectionString: conn });
   try {
     await client.connect();
+    if (readonly) {
+      // Enforce read-only at the transaction layer rather than by inspecting the
+      // SQL text: Postgres rejects ANY write inside a READ ONLY transaction,
+      // including data-modifying CTEs (`WITH x AS (DELETE … RETURNING *) SELECT …`)
+      // and `SELECT … INTO`, which a leading-keyword check (assertReadOnlySql)
+      // lets through. Roll back afterwards — a read query commits nothing anyway.
+      await client.query("BEGIN TRANSACTION READ ONLY");
+      try {
+        const res = await client.query(sql, params);
+        return { rows: (res.rows ?? []) as Record<string, unknown>[], rowCount: res.rowCount };
+      } finally {
+        await client.query("ROLLBACK").catch(() => {});
+      }
+    }
     const res = await client.query(sql, params);
     return { rows: (res.rows ?? []) as Record<string, unknown>[], rowCount: res.rowCount };
   } catch (err) {
@@ -2329,6 +2365,7 @@ function postgresMcp(conn: string, scope: ConnectorScope) {
             conn,
             `SELECT table_schema, table_name, table_type FROM information_schema.tables WHERE ${where} ORDER BY table_schema, table_name`,
             a.schema ? [a.schema] : undefined,
+            true,
           );
           if ("error" in r) return text(`Error: ${r.error}`);
           return text(formatRows(r.rows));
@@ -2351,6 +2388,7 @@ function postgresMcp(conn: string, scope: ConnectorScope) {
              WHERE table_schema = $1 AND table_name = $2
              ORDER BY ordinal_position`,
             [schema, a.table],
+            true,
           );
           if ("error" in cols) return text(`Error: ${cols.error}`);
           if (!cols.rows.length) return text(`No such table ${schema}.${a.table}.`);
@@ -2361,6 +2399,7 @@ function postgresMcp(conn: string, scope: ConnectorScope) {
              JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
              WHERE i.indrelid = ($1)::regclass AND i.indisprimary`,
             [`${schema}.${a.table}`],
+            true,
           );
           let out = `Columns of ${schema}.${a.table}:\n${formatRows(cols.rows)}`;
           if (!("error" in pk) && pk.rows.length) {
@@ -2381,7 +2420,7 @@ function postgresMcp(conn: string, scope: ConnectorScope) {
         async (a) => {
           const bad = assertReadOnlySql(a.sql);
           if (bad) return text(`Rejected: ${bad}`);
-          const r = await pgRun(conn, a.sql, a.params);
+          const r = await pgRun(conn, a.sql, a.params, true);
           if ("error" in r) return text(`Error: ${r.error}`);
           return text(formatRows(r.rows));
         },

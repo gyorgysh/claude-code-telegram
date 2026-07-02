@@ -30,9 +30,15 @@ registerRoute(
   }),
 );
 
+// Responses that carry plaintext secrets must NEVER be written to the disk-backed
+// Cache Storage: a cached entry outlives the panel token (clearToken can't reach
+// what it doesn't know about) and is readable via DevTools. These paths fall
+// through to a plain (uncached) network fetch below.
+const SENSITIVE_API = /\/(reveal|password|secret|export|backup)(\/|$)/i;
+
 // API: network-first so data stays fresh, cached fallback only when offline.
 registerRoute(
-  ({ url }) => url.pathname.startsWith("/api"),
+  ({ url }) => url.pathname.startsWith("/api") && !SENSITIVE_API.test(url.pathname),
   new NetworkFirst({
     cacheName: "api-cache",
     networkTimeoutSeconds: 10,
@@ -81,17 +87,17 @@ self.addEventListener("push", (event: PushEvent) => {
     data = { body: event.data?.text() };
   }
   const title = data.title || "MyHQ";
-  event.waitUntil(
-    self.registration.showNotification(title, {
-      body: data.body || "",
-      tag: data.tag,
-      // Re-alert even when a same-tag notification is already on screen.
-      renotify: Boolean(data.tag),
-      icon: "/pwa-192x192.png",
-      badge: "/pwa-192x192.png",
-      data: { url: data.url || "/", kind: data.kind },
-    }),
-  );
+  // `renotify` is a real Notification option (re-alert on a same-tag notification)
+  // but is missing from the DOM lib types in use, so widen the type locally.
+  const options: NotificationOptions & { renotify?: boolean } = {
+    body: data.body || "",
+    tag: data.tag,
+    renotify: Boolean(data.tag),
+    icon: "/pwa-192x192.png",
+    badge: "/pwa-192x192.png",
+    data: { url: data.url || "/", kind: data.kind },
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
 // Clicking a notification focuses an existing panel tab (navigating it to the

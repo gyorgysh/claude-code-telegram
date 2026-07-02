@@ -48,6 +48,15 @@ export function loadSchedules(): Schedule[] {
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
       log.error("Failed to read schedules; starting empty", { error: errText(err) });
+      // Move a corrupt file aside before saveSchedules can overwrite it, so a
+      // crash-truncated schedules.json is recoverable rather than silently lost.
+      try {
+        const dest = `${FILE}.corrupt-${Date.now()}`;
+        renameSync(FILE, dest);
+        log.warn("Quarantined corrupt schedules store", { saved: dest });
+      } catch {
+        /* best effort */
+      }
     }
     return [];
   }

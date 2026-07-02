@@ -7,6 +7,7 @@ import { loadProbeResult } from "./usageProbe.js";
 import { listBackends } from "./backends.js";
 import { log } from "../logger.js";
 import type { Autonomy } from "../session/manager.js";
+import { sessions } from "../session/manager.js";
 
 const FILE = "mainAgent.json";
 
@@ -148,6 +149,7 @@ export function setMainSettings(patch: {
   knownPaths?: Array<{ label: string; path: string }>;
 }): void {
   const s = load();
+  const prevBackend = s.backendId;
   if (patch.model !== undefined) s.model = patch.model.trim() || undefined;
   if (patch.providerId !== undefined) s.providerId = patch.providerId || undefined;
   if (patch.backendId !== undefined) s.backendId = patch.backendId || undefined;
@@ -177,6 +179,15 @@ export function setMainSettings(patch: {
     dryRun: s.dryRun,
     fallbackProviderId: s.fallbackProviderId,
   });
+  // A backend switch invalidates every persisted sessionId: they're resume tokens
+  // for the OLD backend's CLI, so codex/grok would fail to resume a Claude UUID on
+  // every subsequent turn, and only Claude's stale-session text triggers the
+  // auto-recovery path. Wipe them so the next turn starts a fresh session on the
+  // new backend instead of erroring until the user runs /new.
+  if (patch.backendId !== undefined && (s.backendId ?? undefined) !== (prevBackend ?? undefined)) {
+    const { sessions: cleared } = sessions.resetAll();
+    log.info("Backend changed — reset session ids", { from: prevBackend, to: s.backendId, sessions: cleared });
+  }
 }
 
 /** Per-turn overrides for a main (bot) turn: model + provider env + persona, if set.

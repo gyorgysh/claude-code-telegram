@@ -134,6 +134,26 @@ export class WorkerManager {
   private broadcast: Broadcaster = () => {};
   private onChangeCb?: () => void;
 
+  constructor() {
+    // A crash/SIGKILL mid-run leaves runs persisted as "running" forever — only
+    // execute()'s finally settles them, and isRunning() is false after a restart,
+    // so the history shows a perpetual "running" entry and lastRunAt/webhook never
+    // fire. Reconcile on boot, mirroring taskRunner.reconcileStuck for cards.
+    let fixed = 0;
+    for (const r of this.runs) {
+      if (r.status === "running") {
+        r.status = "error";
+        r.error = r.error ?? "Interrupted by a restart before completion.";
+        r.endedAt = r.endedAt ?? Date.now();
+        fixed++;
+      }
+    }
+    if (fixed > 0) {
+      saveJson<RunFile>(RUNS_FILE, { version: 1, runs: this.runs });
+      log.warn("Reconciled interrupted worker runs on boot", { count: fixed });
+    }
+  }
+
   /** Notify on any registry mutation (create/update/remove), so a watcher (the
    *  Lead bot manager) can reconcile live without a restart. Wired in index.ts
    *  to keep telegraf out of this module. */

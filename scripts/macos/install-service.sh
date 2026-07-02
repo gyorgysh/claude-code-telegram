@@ -52,7 +52,14 @@ cat > "$PLIST" <<EOF
     <key>PATH</key><string>${SERVICE_PATH}</string>
   </dict>
   <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
+  <!-- Relaunch only on crash / unsuccessful exit, not after a clean exit(0). An
+       unconditional <true/> also relaunches a deliberate graceful shutdown,
+       fighting an in-progress restart/update. -->
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key><false/>
+    <key>Crashed</key><true/>
+  </dict>
   <key>StandardOutPath</key><string>${LOG}</string>
   <key>StandardErrorPath</key><string>${LOG}</string>
   <key>ExitTimeOut</key><integer>85</integer>

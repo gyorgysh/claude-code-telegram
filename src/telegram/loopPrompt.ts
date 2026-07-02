@@ -84,19 +84,26 @@ export class LoopPromptManager {
   }
 
   /** Resolve a pending loop prompt from a callback_query; returns a toast. */
-  async resolve(data: string): Promise<string> {
+  async resolve(data: string, chatId?: number): Promise<string> {
     const parts = parseCallback(data, `${CB_PREFIX}:`, 2);
     if (!parts) return t("loop_expired");
     const [id, action] = parts;
     if (!isHexId(id)) return t("loop_expired");
     const entry = this.pending.get(id);
     if (!entry) return t("loop_expired");
+    // Scope to the pressing chat (multi-operator safety), mirroring the approval
+    // and ask flows.
+    if (chatId !== undefined && entry.chatId !== chatId) return t("loop_expired");
 
     clearTimeout(entry.timeout);
     this.pending.delete(id);
 
     const lang = langForChat(entry.chatId);
-    const choice = (action as LoopChoice) ?? "continue";
+    // Whitelist the action rather than trusting the callback payload: parseCallback
+    // guarantees a non-empty string, so `?? "continue"` never fired and a crafted
+    // `loop:<id>:junk` would silence the loop guard for the rest of the turn.
+    // Default to the safe choice (skip) on anything unrecognised.
+    const choice: LoopChoice = action === "skip" || action === "once" || action === "continue" ? action : "skip";
     const label =
       choice === "skip"
         ? t("loop_skipped_toast", lang)

@@ -8,6 +8,7 @@
 
 import { listConnectors } from "./connectors.js";
 import { resolveSecret } from "./vault.js";
+import { safeFetch } from "./safeUrl.js";
 import { saveGeneratedImage, type GalleryImage } from "./gallery.js";
 import { log } from "../logger.js";
 
@@ -143,7 +144,10 @@ async function localSdGenerate(
   const [wStr, hStr] = (size ?? "1024x1024").split("x");
   const width = Number(wStr) || 1024;
   const height = Number(hStr) || 1024;
-  const res = await fetch(`${baseUrl.replace(/\/$/, "")}/sdapi/v1/txt2img`, {
+  // Route through safeFetch: the base URL is an operator-supplied credential, so
+  // validate it against the SSRF guard (which still allows loopback/LAN for a
+  // local model server) rather than trusting it blindly.
+  const res = await safeFetch(`${baseUrl.replace(/\/$/, "")}/sdapi/v1/txt2img`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -165,7 +169,10 @@ async function localSdGenerate(
 }
 
 async function downloadImage(url: string): Promise<{ bytes: Buffer; ext: string }> {
-  const res = await fetch(url);
+  // The URL comes from the provider's JSON response, not a hardcoded host, so
+  // re-validate it through the SSRF guard before fetching (a malicious/compromised
+  // provider response can't point us at an internal/metadata address).
+  const res = await safeFetch(url);
   if (!res.ok) throw new ImageGenError(`Failed to download generated image: HTTP ${res.status}`);
   const arrayBuf = await res.arrayBuffer();
   const contentType = res.headers.get("content-type") || "";

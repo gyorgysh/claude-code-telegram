@@ -368,6 +368,7 @@ export function updateTask(id: string, patch: TaskPatch): Task | undefined {
   const tasks = load();
   const task = tasks.find((t) => t.id === id);
   if (!task) return undefined;
+  const prevColumn = task.column;
   if (patch.title !== undefined) task.title = patch.title.trim() || task.title;
   if (patch.notes !== undefined) task.notes = patch.notes.trim();
   if (isColumn(patch.column)) task.column = patch.column;
@@ -390,6 +391,7 @@ export function updateTask(id: string, patch: TaskPatch): Task | undefined {
   task.updatedAt = Date.now();
   persist(tasks);
   audit("task.update", { id, column: task.column });
+  if (task.column !== prevColumn) columnChangeListener?.(id, task.column);
   return task;
 }
 
@@ -401,15 +403,20 @@ export function getTask(id: string): Task | undefined {
 export function reorderTasks(moves: Array<{ id: string; column: string; order: number }>): Task[] {
   const tasks = load();
   const byId = new Map(tasks.map((t) => [t.id, t]));
+  const columnChanged: Array<{ id: string; column: string }> = [];
   for (const m of moves) {
     const t = byId.get(m.id);
     if (!t) continue;
-    if (isColumn(m.column)) t.column = m.column;
+    if (isColumn(m.column) && m.column !== t.column) {
+      t.column = m.column;
+      columnChanged.push({ id: t.id, column: t.column });
+    }
     t.order = m.order;
     t.updatedAt = Date.now();
   }
   persist(tasks);
   audit("task.reorder", { count: moves.length });
+  for (const c of columnChanged) columnChangeListener?.(c.id, c.column);
   return listTasks();
 }
 
@@ -552,6 +559,18 @@ let recurrenceListener: ((ids: string[]) => void) | undefined;
 /** Register a callback invoked with new card ids each time recurrences fire. */
 export function onRecurrenceFire(fn: (ids: string[]) => void): void {
   recurrenceListener = fn;
+}
+
+/**
+ * Optional sink for card column changes. The task delegator registers one so it
+ * can release cards blocked on a prerequisite the moment that prerequisite is
+ * moved to done/archive from the panel or MCP (which don't otherwise touch it).
+ */
+let columnChangeListener: ((id: string, column: string) => void) | undefined;
+
+/** Register a callback invoked with (id, column) whenever a card's column changes. */
+export function onTaskColumnChange(fn: (id: string, column: string) => void): void {
+  columnChangeListener = fn;
 }
 
 /**

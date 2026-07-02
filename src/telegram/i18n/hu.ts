@@ -85,6 +85,7 @@ export const hu: Record<keyof typeof en, string> = {
   git_review_caption: "Nézd át a változásokat, majd válassz egy műveletet:",
   git_confirm_discard_toast: "Biztos elveted?",
   git_cancelled: "Megszakítva",
+  git_review_expired: "Ez a diff már nem aktív — futtasd újra a /diff parancsot.",
   git_auto_commit_msg: "Frissítés Telegramon át, {iso}",
   git_committed: "✅ Commitolva.\n<pre>{out}</pre>",
   git_commit_failed: "⚠️ A commit nem sikerült.\n<pre>{out}</pre>",

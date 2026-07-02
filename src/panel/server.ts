@@ -154,7 +154,13 @@ export async function startPanel(): Promise<(() => Promise<void>) | undefined> {
   // gets no benefit from forging the header: that hop is never trusted.
   const app = Fastify({
     logger: false,
-    bodyLimit: 64 * 1024 * 1024,
+    // Modest global cap. The public, unauthenticated POST /hook/:id and any
+    // non-/api path (served the SPA shell) reach the body reader before the auth
+    // hook, so a large global limit let an unauthenticated caller force the server
+    // to buffer huge bodies (and HMAC over them) with no token or rate limit. The
+    // few routes that legitimately accept large payloads (store imports) raise
+    // their own bodyLimit per-route below.
+    bodyLimit: 1024 * 1024,
     trustProxy: (address) => isLoopback(address),
   });
 
@@ -227,15 +233,17 @@ export async function startPanel(): Promise<(() => Promise<void>) | undefined> {
   // run and data can't be POSTed to an attacker host. The theme bootstrap was moved
   // to an external file (/theme-init.js) so no inline script is needed. style-src
   // allows 'unsafe-inline' because React sets element style attributes at runtime
-  // (inline styles can't exfiltrate data); connect-src includes ws/wss for the
-  // panel's own WebSocket. The other headers are standard hardening.
+  // (inline styles can't exfiltrate data). connect-src is 'self' only: same-origin
+  // covers the panel's own ws(s):// WebSocket, while the bare `ws: wss:` schemes it
+  // used to carry matched ANY host — letting injected script exfiltrate the token
+  // over a WebSocket despite this policy. The other headers are standard hardening.
   const CSP = [
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self'",
-    "connect-src 'self' ws: wss:",
+    "connect-src 'self'",
     "manifest-src 'self'",
     "worker-src 'self'",
     "object-src 'none'",
@@ -476,6 +484,16 @@ const panelRateLimiter =
   config.PANEL_RATE_LIMIT > 0
     ? new TokenBucketLimiter<string>(config.PANEL_RATE_LIMIT, config.PANEL_RATE_WINDOW_MS)
     : undefined;
+
+/** Per-route body cap for store-import endpoints, which legitimately accept large
+ *  JSON bundles (whole memory/skill/vault/backup stores). Kept off the global
+ *  limit so it doesn't widen the unauthenticated public-route attack surface. */
+const IMPORT_BODY_LIMIT = 64 * 1024 * 1024;
+
+/** Per-IP rate limit for the PUBLIC, unauthenticated POST /hook/:id endpoint, so
+ *  an attacker who can reach the panel can't flood it with signed-or-unsigned
+ *  requests (each files/HMACs a payload). Generous enough for real webhooks. */
+const hookRateLimiter = new TokenBucketLimiter<string>(30, 60_000);
 
 /** True for state-changing HTTP methods that should be rate limited. */
 function isMutatingMethod(method: string): boolean {
@@ -870,7 +888,10 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
   // skips it; authentication is HMAC-SHA256 over the raw request body using the
   // trigger's own secret. Accepts the digest in `X-Signature-256` or GitHub's
   // `X-Hub-Signature-256` header (with or without the `sha256=` prefix).
-  app.post("/hook/:id", async (req, reply) => {
+  app.post("/hook/:id", { bodyLimit: 1024 * 1024 }, async (req, reply) => {
+    if (!hookRateLimiter.tryConsume(clientIp(req))) {
+      return reply.code(429).send({ error: "rate limited" });
+    }
     const { id } = req.params as { id: string };
     const sig =
       (req.headers["x-signature-256"] as string | undefined) ??
@@ -1090,7 +1111,7 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
     if (!bundle) return reply.code(404).send({ error: "not found" });
     return bundle;
   });
-  app.post("/api/skills/import", async (req, reply) => {
+  app.post("/api/skills/import", { bodyLimit: IMPORT_BODY_LIMIT }, async (req, reply) => {
     const res = importSkill(req.body);
     if ("error" in res) return reply.code(400).send({ error: res.error });
     return res.skill;
@@ -1250,7 +1271,7 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
     return dump;
   });
   // Merge an exported dump; dedup by text. Body is the export object or a bare array.
-  app.post("/api/memories/import", async (req, reply) => {
+  app.post("/api/memories/import", { bodyLimit: IMPORT_BODY_LIMIT }, async (req, reply) => {
     const body = req.body as { entries?: unknown } | unknown[];
     const rawEntries = Array.isArray(body) ? body : (body?.entries as unknown);
     if (!Array.isArray(rawEntries))
@@ -1455,7 +1476,7 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
       return reply.code(400).send({ error: err instanceof Error ? err.message : "export failed" });
     }
   });
-  app.post("/api/vault/import-backup", async (req, reply) => {
+  app.post("/api/vault/import-backup", { bodyLimit: IMPORT_BODY_LIMIT }, async (req, reply) => {
     const { blob, passphrase } = (req.body as { blob?: string; passphrase?: string }) ?? {};
     if (!blob || !passphrase) return reply.code(400).send({ error: "blob and passphrase required" });
     try {
@@ -1480,7 +1501,7 @@ function registerApi(app: FastifyInstance, hub: PanelHub): void {
       return reply.code(400).send({ error: err instanceof Error ? err.message : "export failed" });
     }
   });
-  app.post("/api/backup/import", async (req, reply) => {
+  app.post("/api/backup/import", { bodyLimit: IMPORT_BODY_LIMIT }, async (req, reply) => {
     const { archive, passphrase, includeVault } =
       (req.body as { archive?: string; passphrase?: string; includeVault?: boolean }) ?? {};
     if (!archive || !passphrase)

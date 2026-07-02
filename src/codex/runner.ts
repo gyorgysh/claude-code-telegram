@@ -20,7 +20,7 @@ import { log } from "../logger.js";
 export async function runTurn(opts: RunOptions): Promise<RunResult> {
   const args = ["exec"];
   if (opts.resume) args.push("resume", opts.resume);
-  args.push(opts.prompt, "--json", "--skip-git-repo-check");
+  args.push("--json", "--skip-git-repo-check");
   if (!opts.resume) {
     args.push("--cd", opts.cwd);
     // Codex has no separate interactive-approval flag in `exec` mode (it's
@@ -33,6 +33,12 @@ export async function runTurn(opts: RunOptions): Promise<RunResult> {
     }
   }
   if (opts.model) args.push("--model", opts.model);
+  // Terminate flag parsing with `--` and pass the prompt as the final positional.
+  // Codex is a clap CLI: without this, a prompt beginning with `-` (an ordinary
+  // "- bullet" message) is rejected as an unknown flag, and text that matches a
+  // real flag (e.g. `--dangerously-bypass-approvals-and-sandbox`) would be parsed
+  // as one — flag injection that drops the sandbox, the only safety knob here.
+  args.push("--", opts.prompt);
 
   interface CodexItem {
     type?: string;

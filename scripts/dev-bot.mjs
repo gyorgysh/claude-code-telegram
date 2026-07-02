@@ -50,9 +50,19 @@ let startedAt = 0;
 function startChild() {
   restarting = false;
   startedAt = Date.now();
+  // On Windows `tsx` is a .cmd shim, which spawn() can't launch without a shell
+  // (it emits an ENOENT/EINVAL `error` event) — so `npm run dev` was broken there.
+  // Use a shell on win32, matching doctor.mjs.
   child = spawn("tsx", [ENTRY], {
     stdio: "inherit",
+    shell: process.platform === "win32",
     env: { ...process.env, CCT_DEV_GUARD: "1" },
+  });
+  child.on("error", (err) => {
+    // No listener here would crash the whole watcher on a spawn failure.
+    console.error(`[dev] failed to spawn tsx: ${err.message}`);
+    child = null;
+    restarting = false;
   });
   child.on("exit", (code, signal) => {
     child = null;

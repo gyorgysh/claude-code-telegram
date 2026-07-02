@@ -32,13 +32,12 @@ export function t(
   vars?: Record<string, string | number>,
 ): string {
   const catalog = CATALOGS[resolveCatalog(lang)] ?? en;
-  let s = catalog[key] ?? en[key] ?? key;
-  if (vars) {
-    for (const [k, v] of Object.entries(vars)) {
-      s = s.split(`{${k}}`).join(String(v));
-    }
-  }
-  return s;
+  const s = catalog[key] ?? en[key] ?? key;
+  if (!vars) return s;
+  // Single pass over the template: replace each {placeholder} once, so a value
+  // substituted earlier can't have its own literal "{other}" text consumed by a
+  // later variable's substitution (the old sequential .split/.join could).
+  return s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
 }
 
 /**

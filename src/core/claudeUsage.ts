@@ -7,6 +7,11 @@ import { log } from "../logger.js";
 
 const execFileAsync = promisify(execFile);
 
+// On Windows the Claude CLI is `claude.cmd`, unlaunchable by execFile without a
+// shell — so this probe always failed there. Resolve the right binary + mode.
+const CLAUDE_CLI = process.platform === "win32" ? "claude.cmd" : "claude";
+const CLAUDE_EXEC_OPTS = { shell: process.platform === "win32" } as const;
+
 const CLAUDE_DIR = join(homedir(), ".claude");
 const STATS_FILE = join(CLAUDE_DIR, "stats-cache.json");
 const SESSIONS_DIR = join(CLAUDE_DIR, "sessions");
@@ -162,7 +167,7 @@ function readActiveSessions(): ActiveSession[] {
 
 async function fetchAccount(): Promise<ClaudeAccount> {
   try {
-    const { stdout } = await execFileAsync("claude", ["auth", "status"], { timeout: 8000 });
+    const { stdout } = await execFileAsync(CLAUDE_CLI, ["auth", "status"], { timeout: 8000, ...CLAUDE_EXEC_OPTS });
     const data = JSON.parse(stdout.trim()) as Record<string, unknown>;
     return {
       loggedIn: Boolean(data.loggedIn),

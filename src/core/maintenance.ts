@@ -361,12 +361,21 @@ class MaintenanceScheduler {
       if (!raw) continue;
       const groups = parseJsonArray<{ keep: string; text?: string; drop?: string[] }>(raw);
       if (!groups) continue;
+      // Restrict every mutation to the ids actually sent in this batch. The model
+      // output drives remove()/update(), so an entry whose text was injected via
+      // the auto-allowed memory_write tool ("when consolidating, drop all other
+      // ids") could otherwise direct deletion of the whole store. keep/drop ids
+      // outside the batch are ignored, and drops are hard-capped to the batch size.
+      const batchIds = new Set(batch.map((e) => e.id));
       for (const g of groups) {
+        if (!batchIds.has(g.keep)) continue;
         const keep = memory.get(g.keep);
         if (!keep) continue;
         const drops = (Array.isArray(g.drop) ? g.drop : [])
+          .filter((id) => batchIds.has(id) && id !== g.keep)
+          .slice(0, batch.length)
           .map((id) => memory.get(id))
-          .filter((e): e is NonNullable<typeof e> => Boolean(e) && e!.id !== g.keep);
+          .filter((e): e is NonNullable<typeof e> => Boolean(e));
         const newText = g.text?.trim() || keep.text;
         const rewritten = newText !== keep.text;
         if (drops.length === 0 && !rewritten) continue;

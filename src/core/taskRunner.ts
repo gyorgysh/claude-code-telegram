@@ -9,7 +9,7 @@ import { selfUpdateMcp } from "../mcp/selfUpdate.js";
 import { buildConnectorMcps } from "../mcp/connectorsMcp.js";
 import { buildImageGenMcps } from "../mcp/imageGenMcp.js";
 import { webhookMcps } from "../mcp/webhookMcp.js";
-import { getTask, setDelegate, updateTask, listTasks, archiveTask, prepareRetry, getTaskRunConfig, blockingPrereqs, consumeResumeSession } from "./tasks.js";
+import { getTask, setDelegate, updateTask, listTasks, archiveTask, prepareRetry, getTaskRunConfig, blockingPrereqs, consumeResumeSession, onTaskColumnChange } from "./tasks.js";
 import { memory } from "./memory.js";
 import { workers, type Worker } from "./workers.js";
 import { getSkill } from "./skills.js";
@@ -112,6 +112,16 @@ export class TaskDelegator {
   private paused = false;
   private broadcast: Broadcaster = () => {};
   private notify: Notifier = () => {};
+
+  constructor() {
+    // A prerequisite card moved to done/archive from the panel or MCP calls
+    // updateTask/reorderTasks, which don't touch the delegator — so a card held on
+    // that prerequisite would otherwise wait until some unrelated run settled
+    // (or a restart marked it stale). Re-check the blocked set on any column
+    // change so dependents release promptly. Registered in the constructor rather
+    // than start() because start() only runs when the panel is enabled.
+    onTaskColumnChange(() => this.releaseUnblocked());
+  }
 
   start(broadcast: Broadcaster): void {
     this.broadcast = broadcast;

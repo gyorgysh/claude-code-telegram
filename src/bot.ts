@@ -775,8 +775,7 @@ async function handleUserPrompt(
             void tg
               .sendMessage(
                 chatId,
-                `🔁 <b>Loop detected</b> — stopped an autonomous run after <b>${name}</b> ` +
-                  `repeated the same call ${loop.count}× to avoid burning tokens.`,
+                t("bot_loop_aborted", langForChat(chatId), { name, count: loop.count }),
                 { parse_mode: "HTML" },
               )
               .catch(() => {});
@@ -806,7 +805,14 @@ async function handleUserPrompt(
       });
     }
 
-    await streamer.finalize();
+    try {
+      await streamer.finalize();
+    } catch (err) {
+      // A finalize failure (a Telegram send/edit rejecting) must not discard the
+      // rest of a successful turn — usage accounting, the summary report, and the
+      // success webhook all follow below. Log and continue on the success path.
+      log.warn("Streamer finalize failed (continuing)", { chatId, error: errText(err) });
+    }
     const turnUsage = {
       costUsd: res.costUsd ?? 0,
       durationMs: res.durationMs ?? 0,
@@ -937,7 +943,10 @@ async function handleUserPrompt(
     if (mirror) chatBridge.mirrorBusy(false);
     if (retryStale) {
       // Kick off a fresh turn now that busy is cleared and sessionId is gone.
-      void handleUserPrompt(permissions, loops, asks, chatId, prompt, tg, opts);
+      // Go through runUserPrompt (not handleUserPrompt directly) so a throw in the
+      // retry's setup still clears busy and notifies the user — a raw call would
+      // leave the chat wedged busy plus an unhandled rejection.
+      runUserPrompt(permissions, loops, asks, chatId, prompt, tg, opts);
     }
   }
 }

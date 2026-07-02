@@ -30,9 +30,15 @@ registerRoute(
   }),
 );
 
+// Responses that carry plaintext secrets must NEVER be written to the disk-backed
+// Cache Storage: a cached entry outlives the panel token (clearToken can't reach
+// what it doesn't know about) and is readable via DevTools. These paths fall
+// through to a plain (uncached) network fetch below.
+const SENSITIVE_API = /\/(reveal|password|secret|export|backup)(\/|$)/i;
+
 // API: network-first so data stays fresh, cached fallback only when offline.
 registerRoute(
-  ({ url }) => url.pathname.startsWith("/api"),
+  ({ url }) => url.pathname.startsWith("/api") && !SENSITIVE_API.test(url.pathname),
   new NetworkFirst({
     cacheName: "api-cache",
     networkTimeoutSeconds: 10,

@@ -13,6 +13,10 @@ export function setToken(token: string): void {
 
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
+  // Drop the service worker's cached API responses on sign-out. Sensitive routes
+  // aren't cached at all (see sw.ts), but purging api-cache here guarantees no
+  // previously-fetched data lingers on disk once the token is gone.
+  if (typeof caches !== "undefined") void caches.delete("api-cache").catch(() => {});
 }
 
 export class AuthError extends Error {}

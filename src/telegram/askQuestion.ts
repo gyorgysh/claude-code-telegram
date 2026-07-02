@@ -93,10 +93,21 @@ export class AskQuestionManager {
     const text = renderQuestion(question, lang);
     const selected = new Set<number>();
 
-    const msg = await this.tg.sendMessage(chatId, text, {
-      parse_mode: "HTML",
-      ...this.keyboard(id, question, selected, lang),
-    });
+    let msg;
+    try {
+      msg = await this.tg.sendMessage(chatId, text, {
+        parse_mode: "HTML",
+        ...this.keyboard(id, question, selected, lang),
+      });
+    } catch (err) {
+      // If the question can't even be posted (flood limit, network blip, an
+      // over-long option list), resolve with the default answer rather than
+      // leaving the SDK turn blocked forever on the canUseTool promise — that
+      // would wedge the session busy until the user noticed and sent /stop.
+      log.warn("AskUserQuestion send failed — using default", { chatId, header: question.header, error: String(err) });
+      resolve(`${question.options[0]?.label ?? t("ask_no_answer")} (question could not be delivered)`);
+      return;
+    }
 
     const timeout = setTimeout(() => {
       const entry = this.pending.get(id);

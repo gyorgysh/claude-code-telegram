@@ -11,6 +11,8 @@ import { memoryMcp } from "./memory.js";
 import { createTasksMcp } from "./tasks.js";
 import { skillsMcp } from "./skills.js";
 import { workers } from "../core/workers.js";
+import { getTaskRunConfig } from "../core/tasks.js";
+import { LoopDetector } from "../core/loopDetector.js";
 import { suggestions } from "../core/suggestions.js";
 import { getSkill } from "../core/skills.js";
 import { getProvider } from "../core/providers.js";
@@ -23,6 +25,10 @@ import { dataPath } from "../core/jsonStore.js";
 import type { Autonomy } from "../session/manager.js";
 
 const DELEGATIONS_FILE = dataPath("delegations.jsonl");
+
+/** Cap on the delegated run's returned text, so a verbose Lead can't blow the
+ *  calling agent's context window when the output is folded back in. */
+const DELEGATE_OUTPUT_CAP = 100_000;
 
 /** Append one record to the delegation log. */
 function logDelegation(record: Record<string, unknown>): void {
@@ -144,6 +150,20 @@ export function createCrewMcp(opts: CrewMcpOptions) {
           const abort = new AbortController();
           const startedAt = Date.now();
           let output = "";
+          // Bound the delegated run the same way taskRunner does: an unattended
+          // Lead turn otherwise has no timeout, no loop guard, and no output cap,
+          // so a hung backend or an agentic loop burns tokens indefinitely and a
+          // verbose run floods the calling agent's context when returned.
+          const { timeoutMs } = getTaskRunConfig();
+          const timeoutTimer =
+            timeoutMs > 0
+              ? setTimeout(() => {
+                  log.warn("crew_delegate timed out, aborting", { leadId: args.leadId, timeoutMs });
+                  abort.abort();
+                }, timeoutMs)
+              : undefined;
+          const loopDetector = new LoopDetector(config.LOOP_THRESHOLD);
+          let loopAborted = false;
           try {
             const res = await getBackend(lead.backendId).runTurn({
               prompt,
@@ -159,8 +179,14 @@ export function createCrewMcp(opts: CrewMcpOptions) {
                 if (AUTO_ALLOWED_TOOLS.has(name)) return { behavior: "allow", updatedInput: input };
                 return { behavior: "deny", message: "Tool not permitted for delegated lead." };
               },
-              onText: (delta) => { output += delta; },
-              onToolUse: () => {},
+              onText: (delta) => { output = (output + delta).slice(-DELEGATE_OUTPUT_CAP); },
+              onToolUse: (name, input) => {
+                if (!loopAborted && loopDetector.record(name, input).isLoop) {
+                  loopAborted = true;
+                  log.warn("crew_delegate loop detected, aborting", { leadId: args.leadId, tool: name });
+                  abort.abort();
+                }
+              },
               onSessionId: () => {},
             });
             const durationMs = Date.now() - startedAt;
@@ -178,6 +204,8 @@ export function createCrewMcp(opts: CrewMcpOptions) {
             const msg = err instanceof Error ? err.message : String(err);
             log.error("crew_delegate failed", { leadId: args.leadId, error: msg });
             return { content: [{ type: "text", text: `Delegation failed: ${msg}` }] };
+          } finally {
+            if (timeoutTimer) clearTimeout(timeoutTimer);
           }
         },
       ),

@@ -35,14 +35,18 @@ sudo tee "$UNIT" >/dev/null <<EOF
 Description=Claude Code Telegram agent
 After=network-online.target
 Wants=network-online.target
+# Stop respawning after 5 failures in 5 min so a config error (missing .env vars →
+# exit 1) enters a failed state instead of crash-looping every 3s forever.
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
 User=$RUN_USER
 WorkingDirectory=$APP_DIR
-Environment=NODE_BIN=$NODE_BIN
-Environment=PATH=$NODE_DIR:/usr/local/bin:/usr/bin:/bin
-ExecStart=$NODE_BIN $APP_DIR/dist/index.js
+Environment="NODE_BIN=$NODE_BIN"
+Environment="PATH=$NODE_DIR:/usr/local/bin:/usr/bin:/bin"
+ExecStart="$NODE_BIN" "$APP_DIR/dist/index.js"
 Restart=on-failure
 RestartSec=3
 # Allow up to 85 s for graceful drain (30 s turn wait + 40 s hold + 3 s backstop).
@@ -55,7 +59,7 @@ EOF
 SUDOERS="/etc/sudoers.d/${SERVICE}"
 echo "• Allowing $RUN_USER to manage $SERVICE without a password…"
 sudo tee "$SUDOERS" >/dev/null <<EOF
-$RUN_USER ALL=(root) NOPASSWD: $SYSTEMCTL start $SERVICE, $SYSTEMCTL stop $SERVICE, $SYSTEMCTL restart $SERVICE, $SYSTEMCTL status $SERVICE
+$RUN_USER ALL=(root) NOPASSWD: $SYSTEMCTL start $SERVICE, $SYSTEMCTL stop $SERVICE, $SYSTEMCTL restart $SERVICE, $SYSTEMCTL status $SERVICE, $SYSTEMCTL enable $SERVICE, $SYSTEMCTL disable $SERVICE
 EOF
 sudo chmod 0440 "$SUDOERS"
 sudo visudo -cf "$SUDOERS" >/dev/null

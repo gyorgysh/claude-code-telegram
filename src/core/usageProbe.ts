@@ -30,6 +30,12 @@ import { log } from "../logger.js";
 
 const execFileAsync = promisify(execFile);
 
+// On Windows the Claude CLI ships as `claude.cmd`, which execFile can't launch
+// without a shell (ENOENT) — so token refresh / login probing always failed there
+// and reported logged-out even when logged in. Resolve the right binary + mode.
+const CLAUDE_CLI = process.platform === "win32" ? "claude.cmd" : "claude";
+const CLAUDE_EXEC_OPTS = { shell: process.platform === "win32" } as const;
+
 const STATS_FILE = join(homedir(), ".claude", "stats-cache.json");
 // Windows/Linux: the Claude CLI writes its OAuth token to this file instead of
 // the macOS Keychain. Same JSON shape as the Keychain blob ({ claudeAiOauth }).
@@ -243,7 +249,7 @@ async function getAccessToken(): Promise<string | null> {
   if (Date.now() > expiresAt - 60_000) {
     log.debug("OAuth token near expiry — triggering refresh via claude auth status");
     try {
-      await execFileAsync("claude", ["auth", "status"], { timeout: 10_000 });
+      await execFileAsync(CLAUDE_CLI, ["auth", "status"], { timeout: 10_000, ...CLAUDE_EXEC_OPTS });
       // Re-read the keychain after the CLI has refreshed it.
       creds = await readStoredCredentials();
     } catch {
@@ -376,7 +382,7 @@ async function probeViaOAuth(token: string): Promise<ProbeResult> {
 async function probeViaFallback(): Promise<ProbeResult> {
   let accountInfo: { loggedIn: boolean; email?: string; subscriptionType?: string } = { loggedIn: false };
   try {
-    const { stdout } = await execFileAsync("claude", ["auth", "status"], { timeout: 8000 });
+    const { stdout } = await execFileAsync(CLAUDE_CLI, ["auth", "status"], { timeout: 8000, ...CLAUDE_EXEC_OPTS });
     const d = JSON.parse(stdout.trim()) as Record<string, unknown>;
     accountInfo = {
       loggedIn: Boolean(d.loggedIn),

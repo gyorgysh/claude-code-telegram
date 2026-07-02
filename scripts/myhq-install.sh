@@ -596,9 +596,12 @@ install_tunnel_cli() {
         # ngrok publishes an apt repo; fall back to the raw binary otherwise.
         if [ "${PKG:-}" = "apt" ] || command -v apt-get >/dev/null 2>&1; then
           need_sudo
+          # Install the key into a dedicated keyring and scope it to the ngrok repo
+          # via signed-by, rather than dropping it in trusted.gpg.d (where it would
+          # be trusted to sign ANY apt repository).
           curl -fsSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc \
-            | $SUDO tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null 2>&1 || true
-          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" \
+            | $SUDO tee /usr/share/keyrings/ngrok.asc >/dev/null 2>&1 || true
+          echo "deb [signed-by=/usr/share/keyrings/ngrok.asc] https://ngrok-agent.s3.amazonaws.com buster main" \
             | $SUDO tee /etc/apt/sources.list.d/ngrok.list >/dev/null 2>&1 || true
           $SUDO apt-get update -y >/dev/null 2>&1 || true
           $SUDO apt-get install -y ngrok >/dev/null 2>&1 || true

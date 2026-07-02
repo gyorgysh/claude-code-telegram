@@ -200,8 +200,9 @@ export function speechText(markdown: string): string {
 /**
  * Synthesize `markdown` and deliver it to `chatId` as a spoken message. Opus
  * output is sent as a true Telegram voice note; WAV (when transcoding wasn't
- * possible) goes as an audio file. Best-effort: logs and swallows any failure
- * so a TTS hiccup never breaks the (already-sent) text reply.
+ * possible) goes as an audio file. Never throws: a TTS hiccup can't break the
+ * (already-sent) text reply, but the chat gets a short notice instead of a
+ * silent drop.
  */
 export async function sendVoiceReply(tg: Telegram, chatId: number, markdown: string): Promise<void> {
   const spoken = speechText(markdown);
@@ -216,14 +217,19 @@ export async function sendVoiceReply(tg: Telegram, chatId: number, markdown: str
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     log.warn("Voice reply failed", { chatId, error: message });
+    let hint: string;
     if (message.includes("terms acceptance")) {
       const url = message.match(/https?:\/\/\S+/)?.[0]?.replace(/[)\].,]+$/, "");
-      const hint = `Voice reply failed: the TTS model needs one-time terms acceptance in the provider console before it'll work.${url ? ` Accept them here: ${url}` : ""}`;
-      try {
-        await tg.sendMessage(chatId, hint);
-      } catch {
-        // best-effort notice only; a failure here isn't worth surfacing further
-      }
+      hint = `Voice reply failed: the TTS model needs one-time terms acceptance in the provider console before it'll work.${url ? ` Accept them here: ${url}` : ""}`;
+    } else if (message.includes("VOICE_MESSAGES_FORBIDDEN")) {
+      hint = "Voice reply failed: your Telegram privacy settings block voice messages from this bot. Enable them in Telegram under Settings > Privacy and Security > Voice Messages.";
+    } else {
+      hint = `Voice reply failed: ${message}`;
+    }
+    try {
+      await tg.sendMessage(chatId, hint);
+    } catch {
+      // best-effort notice only; a failure here isn't worth surfacing further
     }
   }
 }

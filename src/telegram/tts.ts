@@ -22,12 +22,15 @@ export function ttsSetupHint(): string {
 }
 
 /**
- * Telegram voice messages must be OGG/Opus. OpenAI's /audio/speech can return
- * Opus directly. xAI and Piper only emit WAV, which we transcode to Opus/OGG
- * via ffmpeg (same runtime dependency already used to decode incoming voice
- * notes for Vosk) so replies still arrive as a real voice note; if ffmpeg is
- * unavailable or `sendVoiceNotes` is off, the WAV is sent as a plain audio file
- * instead. The caller picks the send method from `format`.
+ * Telegram voice messages must be OGG/Opus. None of the backends are assumed
+ * to emit that directly — "openai" covers arbitrary OpenAI-compatible
+ * providers (Groq, proxies, etc.) whose supported `response_format` values
+ * vary and can't be assumed to include opus, so all backends emit WAV and we
+ * transcode to Opus/OGG via ffmpeg (same runtime dependency already used to
+ * decode incoming voice notes for Vosk) so replies still arrive as a real
+ * voice note; if ffmpeg is unavailable or `sendVoiceNotes` is off, the WAV is
+ * sent as a plain audio file instead. The caller picks the send method from
+ * `format`.
  */
 export interface SpeechResult {
   audio: Buffer;
@@ -40,9 +43,12 @@ export async function synthesizeSpeech(text: string): Promise<SpeechResult> {
   const clipped = text.slice(0, TTS_MAX_CHARS).trim();
   if (!clipped) throw new Error("Nothing to speak.");
   const resolved = resolveVoiceSettings();
-  if (resolved.tts.engine === "openai") return { audio: await synthesizeOpenAI(clipped), format: "ogg" };
-
-  const wav = resolved.tts.engine === "piper" ? await synthesizePiper(clipped) : await synthesizeXai(clipped);
+  const wav =
+    resolved.tts.engine === "openai"
+      ? await synthesizeOpenAI(clipped)
+      : resolved.tts.engine === "piper"
+        ? await synthesizePiper(clipped)
+        : await synthesizeXai(clipped);
   if (!resolved.sendVoiceNotes) return { audio: wav, format: "wav" };
   try {
     const opus = await transcodeToOgg(wav);
@@ -58,7 +64,7 @@ export async function synthesizeSpeech(text: string): Promise<SpeechResult> {
 /** Cap how much text we send to TTS so a long reply doesn't run for minutes. */
 const TTS_MAX_CHARS = 2000;
 
-/** Synthesize via an OpenAI-compatible /audio/speech endpoint, returning Opus. */
+/** Synthesize via an OpenAI-compatible /audio/speech endpoint, returning WAV. */
 async function synthesizeOpenAI(text: string): Promise<Buffer> {
   const { tts } = resolveVoiceSettings();
   if (!tts.apiKey) {
@@ -74,7 +80,7 @@ async function synthesizeOpenAI(text: string): Promise<Buffer> {
       model: tts.model,
       voice: tts.voice,
       input: text,
-      response_format: "opus",
+      response_format: "wav",
     }),
   });
   if (!res.ok) {
